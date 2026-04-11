@@ -115,7 +115,13 @@ static u8 calcSum(u8* data, size_t len) {
 }
 
 extern int famicom_getErrorChan() {
+#ifdef TARGET_PC
+    /* PC skips the card path so errorChan stays -1; aMR_SetSlotString would
+     * then always display "Card B". Report the real save slot instead. */
+    return mCD_GetThisLandSlotNo();
+#else
     return errorChan;
+#endif
 }
 
 static void famicom_save_data_setup(FamicomSaveDataHeader* header, u32 size, u8* identifier) {

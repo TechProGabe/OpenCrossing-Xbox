@@ -10,6 +10,7 @@ PCSettings g_pc_settings = {
     .msaa          = 4,
     .preload_textures = 0,
     .disable_resetti = 0,
+    .nes_aspect = 1,
 };
 
 static const char* SETTINGS_FILE = "settings.ini";
@@ -35,7 +36,10 @@ static const char* DEFAULT_SETTINGS =
     "\n"
     "[Gameplay]\n"
     "# Disable Mr. Resetti: 0 = normal, 1 = disable\n"
-    "disable_resetti = 0\n";
+    "disable_resetti = 0\n"
+    "\n"
+    "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n"
+    "nes_aspect = 1\n";
 
 static const char* skip_ws(const char* s) {
     while (*s == ' ' || *s == '\t') s++;
@@ -68,6 +72,8 @@ static void apply_setting(const char* key, const char* value) {
         if (val >= 0 && val <= 2) g_pc_settings.preload_textures = val;
     } else if (strcmp(key, "disable_resetti") == 0) {
         if (val == 0 || val == 1) g_pc_settings.disable_resetti = val;
+    } else if (strcmp(key, "nes_aspect") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.nes_aspect = val;
     }
 }
 
@@ -106,8 +112,16 @@ void pc_settings_save(void) {
     fprintf(f, "[Gameplay]\n");
     fprintf(f, "# Disable Mr. Resetti: 0 = normal, 1 = disable\n");
     fprintf(f, "disable_resetti = %d\n", g_pc_settings.disable_resetti);
+    fprintf(f, "\n");
+    fprintf(f, "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n");
+    fprintf(f, "nes_aspect = %d\n", g_pc_settings.nes_aspect);
     fclose(f);
     printf("[Settings] Saved %s\n", SETTINGS_FILE);
+}
+
+/* Accessor for TUs that can't include pc_settings.h (pc_nes_fixnes.c). */
+int pc_settings_get_nes_aspect(void) {
+    return g_pc_settings.nes_aspect;
 }
 
 void pc_settings_apply(void) {

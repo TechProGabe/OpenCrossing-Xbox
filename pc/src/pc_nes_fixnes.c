@@ -40,6 +40,11 @@
 /* From pc_gx.c — restore game's GL state after NES emulation */
 extern void pc_gx_restore_after_nes(void);
 
+/* Externed directly (not via headers) to avoid fixNES symbol clashes. */
+extern int g_pc_window_w;
+extern int g_pc_window_h;
+extern int pc_settings_get_nes_aspect(void);
+
 /* ======================================================================
  * Global variables required by fixNES modules (normally in main.c)
  * ====================================================================== */
@@ -364,7 +369,31 @@ void pc_fixnes_render_frame(uint16_t *fb) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 256, 224, 0,
                  GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, fb + 256 * 8);
 
-    /* Draw fullscreen quad */
+    /* 0 = stretch to window, 1 = centered 4:3 with pillar/letterbox. */
+    int win_w = g_pc_window_w;
+    int win_h = g_pc_window_h;
+    int vp_w, vp_h, vp_x, vp_y;
+    if (pc_settings_get_nes_aspect() == 0) {
+        vp_w = win_w; vp_h = win_h; vp_x = 0; vp_y = 0;
+    } else if (win_w * 3 > win_h * 4) {
+        vp_h = win_h;
+        vp_w = (win_h * 4) / 3;
+        vp_x = (win_w - vp_w) / 2;
+        vp_y = 0;
+    } else {
+        vp_w = win_w;
+        vp_h = (win_w * 3) / 4;
+        vp_x = 0;
+        vp_y = (win_h - vp_h) / 2;
+    }
+
+    /* Clear full window first so the bars are black, not stale pixels. */
+    glDisable(GL_SCISSOR_TEST);
+    glViewport(0, 0, win_w, win_h);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glViewport(vp_x, vp_y, vp_w, vp_h);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
     glUseProgram(fixnes_shader);
@@ -374,4 +403,6 @@ void pc_fixnes_render_frame(uint16_t *fb) {
     glBindVertexArray(fixnes_vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
+
+    glViewport(0, 0, win_w, win_h);
 }
