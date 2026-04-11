@@ -780,10 +780,15 @@ int mCD_InitGameStart_bg(int player_no, int card_private_idx, int start_cond, s3
                 Common_Set(player_no, mPr_FOREIGNER);
                 OSReport("[PC] InitGameStart: INCOMING_FOREIGNER — player is visiting\n");
             } else if (start_cond == mCD_START_COND_OUTGOING_FOREIGNER) {
-                /* Returning home — passport data used to restore */
-                Common_Set(now_private, &l_mcd_foreigner_file.file.priv);
-                Common_Set(player_no, mPr_FOREIGNER);
-                OSReport("[PC] InitGameStart: OUTGOING_FOREIGNER — player returning\n");
+                /* Returning home. Matches m_card.c:4780 (GC case 4): merge
+                 * the session passport back into the matching home save slot
+                 * — this restores player_no/now_private and carries visit
+                 * inventory changes into the home save. */
+                Private_c* foreigner = mPr_GetForeignerP();
+                mPr_CopyPrivateInfo(foreigner, &l_mcd_foreigner_file.file.priv);
+                mPr_LoadPak_and_SetPrivateInfo2(foreigner, (u8)player_no);
+                OSReport("[PC] InitGameStart: OUTGOING_FOREIGNER — landed player_no=%d\n",
+                         Common_Get(player_no));
             }
         } else if (start_cond == mCD_START_COND_0 || start_cond == mCD_START_COND_2) {
             mSDI_StartDataInit(gamePT, player_no, mSDI_INIT_MODE_NEW);
@@ -842,60 +847,135 @@ int mCD_SaveHome_bg(int param_1, int* chan) {
 
 /* --- Travel / Station functions --- */
 
-/* Check if travel is possible via Card B.
- * Called when player talks to Porter at the train station. */
-int mCD_CheckStation_bg(s32* chan) {
-    /* Always report our save is on Card A */
-    if (chan) *chan = mCD_SLOT_A;
+/* Read a GCI's Save_t into `out` (byte-swapped). Returns TRUE on success. */
+static int pc_read_gci_land_info(const char* path, Save_t* out) {
+    FILE* fp;
+    CARDDir hdr;
+    u8* file_data;
+    int ok = FALSE;
 
-    /* Scan Card B for a valid town */
-    if (pc_card_b_find_town()) {
-        /* Try to read it and verify it's a different town */
-        Save_t temp_save;
-        FILE* fp = fopen(l_card_b_gci_path, "rb");
-        if (fp) {
-            CARDDir hdr;
-            u8* file_data = NULL;
+    fp = fopen(path, "rb");
+    if (!fp) return FALSE;
 
-            if (fread(&hdr, GCI_HEADER_SIZE, 1, fp) == 1 &&
-                memcmp(hdr.gameName, "GAF", 3) == 0) {
-                file_data = (u8*)malloc(GCI_FILE_DATA_SIZE);
-            }
-
-            if (file_data && fread(file_data, GCI_FILE_DATA_SIZE, 1, fp) == 1) {
+    if (fread(&hdr, GCI_HEADER_SIZE, 1, fp) == 1 &&
+        memcmp(hdr.gameName, "GAF", 3) == 0) {
+        file_data = (u8*)malloc(GCI_FILE_DATA_SIZE);
+        if (file_data) {
+            if (fread(file_data, GCI_FILE_DATA_SIZE, 1, fp) == 1) {
                 Save_t* save_src = (Save_t*)(file_data + GCI_SAVE_MAIN_OFFSET);
-                memcpy(&temp_save, save_src, sizeof(Save_t));
-                pc_save_bswap(&temp_save, PC_BSWAP_FROM_BE);
-
-                if (mLd_CheckId(temp_save.land_info.id)) {
-                    if (!mLd_CheckThisLand(temp_save.land_info.name, temp_save.land_info.id)) {
-                        /* Different valid town on Card B — travel possible! */
-                        OSReport("[PC] CheckStation: Card B has town '%.*s' (id=0x%04X) — travel available\n",
-                                 8, temp_save.land_info.name, temp_save.land_info.id);
-                        if (chan) *chan = mCD_SLOT_B;
-                        free(file_data);
-                        fclose(fp);
-                        return mCD_TRANS_ERR_NONE_NEXTLAND;
-                    } else {
-                        OSReport("[PC] CheckStation: Card B has same town as Card A\n");
-                    }
-                } else {
-                    OSReport("[PC] CheckStation: Card B has invalid land_info\n");
-                }
+                memcpy(out, save_src, sizeof(Save_t));
+                pc_save_bswap(out, PC_BSWAP_FROM_BE);
+                ok = TRUE;
             }
+            free(file_data);
+        }
+    }
+    fclose(fp);
+    return ok;
+}
 
-            if (file_data) free(file_data);
-            fclose(fp);
+/* Scan the "other" card for a travel-eligible town.
+ *  - Resident: scan Card B for a different town.
+ *  - Foreigner: scan Card A for the home town. */
+int mCD_CheckStation_bg(s32* chan) {
+    int is_foreigner = mLd_PlayerManKindCheck();
+
+    if (is_foreigner) {
+        Save_t temp_save;
+        if (chan) *chan = mCD_SLOT_B;
+        if (pc_read_gci_land_info(PC_GCI_PATH, &temp_save)) {
+            if (mLd_CheckId(temp_save.land_info.id) &&
+                !mLd_CheckThisLand(temp_save.land_info.name, temp_save.land_info.id)) {
+                OSReport("[PC] CheckStation: Card A has home town '%.*s' (id=0x%04X) — return available\n",
+                         8, temp_save.land_info.name, temp_save.land_info.id);
+                if (chan) *chan = mCD_SLOT_A;
+                return mCD_TRANS_ERR_NONE_NEXTLAND;
+            }
+            OSReport("[PC] CheckStation: Card A has same town as current (unexpected)\n");
+        } else {
+            OSReport("[PC] CheckStation: could not read Card A save\n");
+        }
+        return mCD_TRANS_ERR_NONE;
+    }
+
+    if (chan) *chan = mCD_SLOT_A;
+    if (pc_card_b_find_town()) {
+        Save_t temp_save;
+        if (pc_read_gci_land_info(l_card_b_gci_path, &temp_save)) {
+            if (mLd_CheckId(temp_save.land_info.id)) {
+                if (!mLd_CheckThisLand(temp_save.land_info.name, temp_save.land_info.id)) {
+                    OSReport("[PC] CheckStation: Card B has town '%.*s' (id=0x%04X) — travel available\n",
+                             8, temp_save.land_info.name, temp_save.land_info.id);
+                    if (chan) *chan = mCD_SLOT_B;
+                    return mCD_TRANS_ERR_NONE_NEXTLAND;
+                }
+                OSReport("[PC] CheckStation: Card B has same town as Card A\n");
+            } else {
+                OSReport("[PC] CheckStation: Card B has invalid land_info\n");
+            }
         }
     }
 
-    /* No Card B or invalid — no travel available */
     return mCD_TRANS_ERR_NONE;
 }
 
-/* Save current state and load the other town from Card B.
- * Called after player confirms they want to travel. */
+/* Persist current town and load the "other" town into l_keepSave.
+ *  - Resident: save home (Card A, marked away) + load Card B → l_keepSave.
+ *  - Foreigner: save visited town (Card B) + load Card A → l_keepSave. */
 int mCD_SaveStation_NextLand_bg(s32* chan) {
+    int is_foreigner = mLd_PlayerManKindCheck();
+
+    if (is_foreigner) {
+        /* Record departure info (visited town) for Rover. */
+        {
+            mCD_persistent_data_c* persistant = Common_GetPointer(travel_persistent_data);
+            int i;
+            memcpy(&persistant->land, Save_GetPointer(land_info), sizeof(mLd_land_info_c));
+            for (i = 0; i < PLAYER_NUM; i++) {
+                mPr_CopyPersonalID(&persistant->pid[i], &Save_Get(private_data[i]).player_ID);
+            }
+        }
+
+        /* Refresh passport from Now_Private so visit-time changes carry home. */
+        {
+            Private_c* current_priv = Now_Private;
+            if (current_priv) {
+                mPr_CopyPrivateInfo(&l_mcd_foreigner_file.file.priv, current_priv);
+                l_mcd_foreigner_file.file.checksum = 0;
+                l_mcd_foreigner_file.file.checksum =
+                    mFRm_GetFlatCheckSum((u16*)&l_mcd_foreigner_file.file,
+                                         sizeof(mCD_foreigner_c),
+                                         l_mcd_foreigner_file.file.checksum);
+                OSReport("[PC] SaveStation_NextLand(return): refreshed passport for '%.*s'\n",
+                         PLAYER_NAME_LEN, l_mcd_foreigner_file.file.priv.player_ID.player_name);
+            }
+        }
+
+        /* Persist visited-town state to its Card B GCI. */
+        if (l_card_b_gci_path[0] != '\0') {
+            char tmp_path[320];
+            snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", l_card_b_gci_path);
+            if (!pc_save_write_gci_to(l_card_b_gci_path, tmp_path)) {
+                OSReport("[PC] SaveStation_NextLand(return): failed to save visited town\n");
+                if (chan) *chan = mCD_SLOT_B;
+                return mCD_TRANS_ERR_IOERROR;
+            }
+        } else {
+            OSReport("[PC] SaveStation_NextLand(return): no Card B path cached\n");
+        }
+
+        if (!pc_save_read_gci_to_keep(PC_GCI_PATH)) {
+            OSReport("[PC] SaveStation_NextLand(return): failed to load home town\n");
+            if (chan) *chan = mCD_SLOT_A;
+            return mCD_TRANS_ERR_CORRUPT;
+        }
+
+        l_mcd_keep_startCond = mCD_START_COND_OUTGOING_FOREIGNER;
+
+        if (chan) *chan = mCD_SLOT_A;
+        return mCD_TRANS_ERR_NONE;
+    }
+
     if (chan) *chan = mCD_SLOT_A;
 
     /* Must have a Card B town path from prior CheckStation */
