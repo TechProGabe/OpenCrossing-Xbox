@@ -292,6 +292,11 @@ void memPPUSet8(uint16_t addr, uint8_t val)
 
 #define DEBUG_MEM_DUMP 0
 
+uint8_t *memGetMainMem()
+{
+	return Main_Mem;
+}
+
 void memDumpMainMem()
 {
 	#if DEBUG_MEM_DUMP

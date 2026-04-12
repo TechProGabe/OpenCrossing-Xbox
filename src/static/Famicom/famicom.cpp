@@ -14,6 +14,9 @@ extern "C" {
     extern unsigned char* emuPrgRAM;
     extern unsigned int emuPrgRAMsize;
 
+    /* fixNES WRAM → sp->wram sync for high-score persistence */
+    void pc_fixnes_sync_wram(unsigned char* dst_wram);
+
     /* Card slot for current town (A=0 home, B=1 visiting) */
     int mCD_GetThisLandSlotNo(void);
 }
@@ -2210,6 +2213,13 @@ static int famicom_rom_load() {
         /* Initialize fixNES with the loaded ROM, then load battery RAM save */
         pc_fixnes_init(famicomCommon.nesromp, nesrom_buffer_size);
         pc_sync_bbramp_to_prgram();
+        /* Fill sp->wram with 0xFF so the HSC UNSET→SET check doesn't
+         * prematurely match all-zero initial values before the NES game
+         * boots and writes its own defaults. On GC, ksNesReset leaves
+         * wram[0x000..0x1FF] as heap garbage, achieving the same effect.
+         * The first forward sync (after fixNES runs a few frames) will
+         * overwrite this with real Main_Mem data. */
+        memset(famicomCommon.sp->wram, 0xFF, KS_NES_WRAM_SIZE);
 #endif
         OSReport("ksNesReset() OK PC=%x, prg_size = 0x%x, chr_size = 0x%x\n",
             famicomCommon.sp->PC, famicomCommon.sp->prg_size, famicomCommon.sp->chr_size);
@@ -2384,6 +2394,11 @@ static int ksnes_thread_exec(u32 flags) {
         pc_fixnes_set_input(buttons);
         unsigned short* fb = pc_fixnes_frame();
         pc_fixnes_render_frame(fb);
+        /* Sync fixNES internal RAM → ksNes wram every 2 frames so
+         * nesinfo_update_highscore can detect high-score changes. */
+        if (famicomCommon.sp != nullptr && (turbo_counter & 1) == 0) {
+            pc_fixnes_sync_wram(famicomCommon.sp->wram);
+        }
     }
     return 0;
 #endif

@@ -310,6 +310,22 @@ void pc_fixnes_init(uint8_t *ines_data, int ines_size) {
     fixnes_audio_pos = 0;
 }
 
+void pc_fixnes_write_wram(unsigned int ofs, const uint8_t *data, unsigned int size) {
+    /* Targeted write to fixNES internal RAM — used by update_highscore_raw
+     * to inject saved high scores into the running NES game. */
+    uint8_t *mem = memGetMainMem();
+    if (mem && data && ofs + size <= 0x800)
+        memcpy(mem + ofs, data, size);
+}
+
+void pc_fixnes_sync_wram(uint8_t *dst_wram) {
+    /* Copy fixNES internal 2KB RAM → ksNes sp->wram so
+     * nesinfo_update_highscore can detect high-score changes. */
+    uint8_t *src = memGetMainMem();
+    if (src && dst_wram)
+        memcpy(dst_wram, src, 0x800);
+}
+
 void pc_fixnes_set_input(uint8_t buttons) {
     /* buttons: bit0=A, bit1=B, bit2=Select, bit3=Start,
      *          bit4=Up, bit5=Down, bit6=Left, bit7=Right

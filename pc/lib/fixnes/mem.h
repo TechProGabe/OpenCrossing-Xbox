@@ -19,5 +19,6 @@ void memSet8(uint16_t addr, uint8_t val);
 uint8_t memPPUGet8(uint16_t addr);
 void memPPUSet8(uint16_t addr, uint8_t val);
 void memDumpMainMem();
+uint8_t *memGetMainMem();
 
 #endif
