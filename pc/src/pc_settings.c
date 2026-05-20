@@ -7,6 +7,7 @@ PCSettings g_pc_settings = {
     .window_height = PC_SCREEN_HEIGHT,
     .fullscreen    = 0,
     .vsync         = 0,
+    .max_fps       = 60,
     .msaa          = 4,
     .preload_textures = 0,
     .disable_resetti = 0,
@@ -27,6 +28,9 @@ static const char* DEFAULT_SETTINGS =
     "\n"
     "# Vertical sync: 0 = off, 1 = on\n"
     "vsync = 0\n"
+    "\n"
+    "# Max FPS: 60, 120, 180, 240, or 0 for unlimited\n"
+    "max_fps = 60\n"
     "\n"
     "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n"
     "msaa = 4\n"
@@ -70,6 +74,10 @@ static void apply_setting(const char* key, const char* value) {
         if (val >= 0 && val <= 2) g_pc_settings.fullscreen = val;
     } else if (strcmp(key, "vsync") == 0) {
         if (val == 0 || val == 1) g_pc_settings.vsync = val;
+    } else if (strcmp(key, "max_fps") == 0) {
+        if (val == 0 || val == 60 || val == 120 || val == 180 || val == 240) {
+            g_pc_settings.max_fps = val;
+        }
     } else if (strcmp(key, "msaa") == 0) {
         if (val == 0 || val == 2 || val == 4 || val == 8)
             g_pc_settings.msaa = val;
@@ -81,6 +89,23 @@ static void apply_setting(const char* key, const char* value) {
         if (val == 0 || val == 1) g_pc_settings.nes_aspect = val;
     } else if (strcmp(key, "master_volume") == 0) {
         if (val >= 0 && val <= 100) g_pc_settings.master_volume = val;
+    }
+}
+
+static void apply_frame_limit_setting(void) {
+    int max_fps;
+
+    if (g_pc_frame_limit_override >= 0) {
+        g_pc_settings.max_fps = g_pc_frame_limit_override;
+        g_pc_frame_limit_override = -1;
+    }
+
+    max_fps = g_pc_settings.max_fps;
+
+    if (max_fps <= 0) {
+        g_frame_limiter = 0;
+    } else {
+        g_frame_limiter = (u32)max_fps;
     }
 }
 
@@ -108,6 +133,9 @@ void pc_settings_save(void) {
     fprintf(f, "\n");
     fprintf(f, "# Vertical sync: 0 = off, 1 = on\n");
     fprintf(f, "vsync = %d\n", g_pc_settings.vsync);
+    fprintf(f, "\n");
+    fprintf(f, "# Max FPS: 60, 120, 180, 240, or 0 for unlimited\n");
+    fprintf(f, "max_fps = %d\n", g_pc_settings.max_fps);
     fprintf(f, "\n");
     fprintf(f, "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n");
     fprintf(f, "msaa = %d\n", g_pc_settings.msaa);
@@ -138,7 +166,9 @@ int pc_settings_get_nes_aspect(void) {
 /* --- Resolution preset table (shared) ---
  * Ordered by width then height. The desktop's native size is injected at
  * first use (de-duplicated against the static list) so the user can snap
- * to whatever their monitor is running.*/
+ * to whatever their monitor is running. Multiple presets share widths now
+ * (e.g. 1280x720 vs 1280x960), so cycling is index-based rather than the
+ * old width-comparison. */
 #define RES_MAX 32
 static int res_w_tbl[RES_MAX];
 static int res_h_tbl[RES_MAX];
@@ -220,6 +250,8 @@ void pc_settings_cycle_resolution(int* width, int* height, int dir) {
 }
 
 void pc_settings_apply(void) {
+    apply_frame_limit_setting();
+
     if (!g_pc_window) return;
 
     int w = g_pc_settings.window_width;
@@ -265,15 +297,16 @@ void pc_settings_apply(void) {
     SDL_GL_SetSwapInterval(g_pc_settings.vsync);
     pc_platform_update_window_size();
 
-    printf("[Settings] Applied: %dx%d fullscreen=%d vsync=%d msaa=%d\n",
+    printf("[Settings] Applied: %dx%d fullscreen=%d vsync=%d max_fps=%d msaa=%d\n",
            g_pc_settings.window_width, g_pc_settings.window_height,
-           g_pc_settings.fullscreen, g_pc_settings.vsync, g_pc_settings.msaa);
+           g_pc_settings.fullscreen, g_pc_settings.vsync, g_pc_settings.max_fps, g_pc_settings.msaa);
 }
 
 void pc_settings_load(void) {
     FILE* f = fopen(SETTINGS_FILE, "r");
     if (!f) {
         write_defaults(SETTINGS_FILE);
+        apply_frame_limit_setting();
         printf("[Settings] Created default %s\n", SETTINGS_FILE);
         return;
     }
@@ -298,8 +331,10 @@ void pc_settings_load(void) {
         }
     }
     fclose(f);
-    printf("[Settings] Loaded %s: %dx%d fullscreen=%d vsync=%d msaa=%d preload_textures=%d\n",
+    apply_frame_limit_setting();
+
+    printf("[Settings] Loaded %s: %dx%d fullscreen=%d vsync=%d max_fps=%d msaa=%d preload_textures=%d\n",
            SETTINGS_FILE, g_pc_settings.window_width, g_pc_settings.window_height,
-           g_pc_settings.fullscreen, g_pc_settings.vsync, g_pc_settings.msaa,
+           g_pc_settings.fullscreen, g_pc_settings.vsync, g_pc_settings.max_fps, g_pc_settings.msaa,
            g_pc_settings.preload_textures);
 }

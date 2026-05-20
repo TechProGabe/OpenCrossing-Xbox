@@ -96,18 +96,22 @@ static void eTumbleDust_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eTumbleDust_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->timer <= 30) {
-        xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-        xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    if (effect->lifetime <= 30.0f) {
+        f32 dt = (f32)game->graph->dt_num_60fps_frames;
+        f32 d80 = powf(sqrtf(0.8f), dt);
+        f32 d95 = powf(sqrtf(0.95f), dt);
 
-        // why check this again??
-        if (effect->timer <= 30) {
-            // @cleanup - remove the sqrtfs here, way too much unnecessary work
-            effect->acceleration.y *= sqrtf(0.8f);
-            effect->velocity.y *= sqrtf(0.95f);
-            effect->velocity.x *= sqrtf(0.8f);
-            effect->velocity.z *= sqrtf(0.8f);
-        }
+        effect->velocity.x += effect->acceleration.x * dt;
+        effect->velocity.y += effect->acceleration.y * dt;
+        effect->velocity.z += effect->acceleration.z * dt;
+        effect->position.x += effect->velocity.x * dt;
+        effect->position.y += effect->velocity.y * dt;
+        effect->position.z += effect->velocity.z * dt;
+
+        effect->acceleration.y *= d80;
+        effect->velocity.y *= d95;
+        effect->velocity.x *= d80;
+        effect->velocity.z *= d80;
     }
 }
 
@@ -144,14 +148,25 @@ static u8 eTDT_prim_f[15] = {
 extern Gfx ef_dust01_modelT[];
 
 static void eTumbleDust_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 counter = 30 - effect->timer;
-    int idx = MIN(MAX(counter >> 1, 0), 14);
-    int tex0 = eTDT_2tile_texture_idx[idx].tex0;
-    int tex1 = eTDT_2tile_texture_idx[idx].tex1;
-    u8 a;
+    f32 t = 30.0f - effect->lifetime;
+    f32 k = t * 0.5f;
+    int i, j;
+    f32 frac;
+    int tex0, tex1;
+    u8 prim_f, a;
 
-    effect->scale.x = eEC_CLIP->calc_adjust_proc(counter, 0, 30, 0.005f, effect->offset.x);
-    a = (int)eEC_CLIP->calc_adjust_proc(counter, 8, 30, 255.0f, 120.0f);
+    if (k < 0.0f) k = 0.0f;
+    if (k > 14.0f) k = 14.0f;
+    i = (int)k;
+    if (i > 14) i = 14;
+    j = (i < 14) ? i + 1 : i;
+    frac = k - (f32)i;
+    tex0 = eTDT_2tile_texture_idx[i].tex0;
+    tex1 = eTDT_2tile_texture_idx[i].tex1;
+    prim_f = (u8)(eTDT_prim_f[i] + (eTDT_prim_f[j] - eTDT_prim_f[i]) * frac);
+
+    effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 0.005f, effect->offset.x);
+    a = (int)eEL_CalcAdjust_F(t, 8.0f, 30.0f, 255.0f, 120.0f);
 
     effect->scale.y = effect->scale.z = effect->scale.x;
     
@@ -160,7 +175,7 @@ static void eTumbleDust_dw(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->auto_matrix_xlu_proc(game, &effect->position, &effect->scale);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_1_TXT_SEG, eTDT_texture_table[tex0]);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_2_TXT_SEG, eTDT_texture_table[tex1]);
-    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, eTDT_prim_f[idx], 255, 255, 255, a);
+    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, 255, 255, 255, a);
     gSPDisplayList(NEXT_POLY_XLU_DISP, ef_dust01_modelT);
 
     CLOSE_DISP(game->graph);

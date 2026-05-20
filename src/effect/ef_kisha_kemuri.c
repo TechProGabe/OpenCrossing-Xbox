@@ -46,18 +46,20 @@ static void eKishaK_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eKishaK_mv(eEC_Effect_c* effect, GAME* game) {
-    effect->position.y += eEC_CLIP->calc_adjust_proc(80 - effect->timer, 0, 20, 2.2f, 0.5f);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 80.0f - effect->lifetime;
+    effect->position.y += eEL_CalcAdjust_F(t, 0.0f, 20.0f, 2.2f, 0.5f) * dt;
     if (effect->arg0 == 1) {
-        effect->position.x += effect->acceleration.x;
-        effect->position.z += effect->acceleration.z;
+        effect->position.x += effect->acceleration.x * dt;
+        effect->position.z += effect->acceleration.z * dt;
     }
 }
 
 static void eKishaK_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 80 - effect->timer;
+    f32 t = 80.0f - effect->lifetime;
     xyz_t* scale = &effect->scale;
-    u8 alpha = (int)eEC_CLIP->calc_adjust_proc(timer, 40, 80, 200.0f, 4.0f);
-    f32 new_scale = eEC_CLIP->calc_adjust_proc(timer, 0, 40, 0.003f, 0.027f);
+    u8 alpha = (int)eEL_CalcAdjust_F(t, 40.0f, 80.0f, 200.0f, 4.0f);
+    f32 new_scale = eEL_CalcAdjust_F(t, 0.0f, 40.0f, 0.003f, 0.027f);
 
     scale->x = new_scale;
     scale->y = new_scale;

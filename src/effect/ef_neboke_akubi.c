@@ -53,18 +53,24 @@ static void eNeboke_Akubi_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eNeboke_Akubi_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
-    effect->effect_specific[1] += DEG2SHORT_ANGLE2(11.25f);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+
+    effect->effect_specific[1] += (s16)(DEG2SHORT_ANGLE2(11.25f) * dt);
 }
 
 static void eNeboke_Akubi_dw(eEC_Effect_c* effect, GAME* game) {
     static f32 scale_base[] = { 0.005f, 0.0015f };
-    s16 timer = 80 - effect->timer;
+    f32 t = 80.0f - effect->lifetime;
 
-    effect->scale.x = eEC_CLIP->calc_adjust_proc(timer, 0, 4, 0.0f, scale_base[effect->arg0]);
-    if (timer == 79) {
+    effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 4.0f, 0.0f, scale_base[effect->arg0]);
+    if (t < 1.0f) {
         effect->effect_specific[2] = 200;
         effect->scale.x *= 1.2f;
     } else {

@@ -52,7 +52,8 @@ static void Airplane_Actor_ct(ACTOR* actor, GAME* game) {
     airplane->rotX = 0.0f;
 
     airplane->ground_timer = 0;
-    airplane->wind_frame = 0;
+    airplane->ground_effect_accum = 0.0f;
+    airplane->wind_frame = 0.0f;
     airplane->wind_change_frame = 0;
     airplane->wind = NULL;
 
@@ -82,8 +83,10 @@ static void Airplane_Actor_draw(ACTOR* actor, GAME* game) {
     }
 }
 
-static void aAp_RubberMove(f32* now, f32 target, f32 step) {
-    *now += step * (target - *now);
+static void aAp_RubberMove(f32* now, f32 target, f32 step, GAME* game) {
+    f32 dt_step = 1.0f - powf(1.0f - step, (f32)game->graph->dt_num_60fps_frames);
+
+    *now += dt_step * (target - *now);
 }
 
 static void aAp_FallByWall(ACTOR* actor) {
@@ -99,20 +102,24 @@ static void aAp_GroundFriction(ACTOR* actor, GAME* game) {
     AIRPLANE_ACTOR* airplane = (AIRPLANE_ACTOR*)actor;
     if (actor->bg_collision_check.result.on_ground) {
         /* slow down speed since we're on the ground */
-        aAp_RubberMove(&airplane->speed, 0.0f, 0.6f);
+        aAp_RubberMove(&airplane->speed, 0.0f, 0.6f, game);
 
         if (airplane->speed < 1.0f) {
             airplane->speed = 0.0f;
             airplane->status = aAp_STATUS_STOP_FLY_MOVE;
 
-            if (airplane->ground_timer >= 5) {
-                airplane->ground_timer = 0;
+            int ticks = graph_dt_60hz_ticks(game, &airplane->ground_effect_accum);
+            int t;
+            for (t = 0; t < ticks; t++) {
+                if (airplane->ground_timer >= 5) {
+                    airplane->ground_timer = 0;
 
-                (*Common_Get(clip.effect_clip)->effect_make_proc)(eEC_EFFECT_DUST, actor->world.position, 1,
-                                                                  actor->world.angle.y, game, actor->npc_id, 0, 8);
+                    (*Common_Get(clip.effect_clip)->effect_make_proc)(eEC_EFFECT_DUST, actor->world.position, 1,
+                                                                      actor->world.angle.y, game, actor->npc_id, 0, 8);
+                }
+
+                airplane->ground_timer++;
             }
-
-            airplane->ground_timer++;
         }
     }
 }
@@ -120,9 +127,9 @@ static void aAp_GroundFriction(ACTOR* actor, GAME* game) {
 static void aAp_FreeFlyMove(ACTOR* actor, GAME* game) {
     AIRPLANE_ACTOR* airplane = (AIRPLANE_ACTOR*)actor;
 
-    aAp_RubberMove(&airplane->speed, 3.0f, 0.01f);
-    aAp_RubberMove(&airplane->rotX, 19.0f, 0.045f);
-    aAp_RubberMove(&airplane->rotZ, 0.0f, 0.05f);
+    aAp_RubberMove(&airplane->speed, 3.0f, 0.01f, game);
+    aAp_RubberMove(&airplane->rotX, 19.0f, 0.045f, game);
+    aAp_RubberMove(&airplane->rotZ, 0.0f, 0.05f, game);
     aAp_GroundFriction(actor, game);
     aAp_FallByWall(actor);
 }
@@ -131,8 +138,8 @@ static void aAp_SomerFlyMove(ACTOR* actor, GAME* game) {
     AIRPLANE_ACTOR* airplane = (AIRPLANE_ACTOR*)actor;
     switch (airplane->tilt_status) {
         case aAp_TILT_DOWN: {
-            aAp_RubberMove(&airplane->rotX, -89.0f, 0.2f);
-            aAp_RubberMove(&airplane->speed, 9.0f, 0.1f);
+            aAp_RubberMove(&airplane->rotX, -89.0f, 0.2f, game);
+            aAp_RubberMove(&airplane->speed, 9.0f, 0.1f, game);
 
             if (airplane->rotX < -87.0f) {
                 airplane->tilt_status = aAp_TILT_UP;
@@ -143,8 +150,8 @@ static void aAp_SomerFlyMove(ACTOR* actor, GAME* game) {
         }
 
         case aAp_TILT_UP: {
-            aAp_RubberMove(&airplane->rotX, 0.0f, 0.04f);
-            aAp_RubberMove(&airplane->speed, 10.0f, 0.1f);
+            aAp_RubberMove(&airplane->rotX, 0.0f, 0.04f, game);
+            aAp_RubberMove(&airplane->speed, 10.0f, 0.1f, game);
 
             if (ABS(airplane->rotX) < 3.0f) {
                 airplane->status = aAp_STATUS_FREE_FLY_MOVE;
@@ -224,10 +231,11 @@ static void aAp_StopFlyMove(ACTOR* actor, GAME* game) {
 
 static void aAp_FallFlyMove(ACTOR* actor, GAME* game) {
     AIRPLANE_ACTOR* airplane = (AIRPLANE_ACTOR*)actor;
-    aAp_RubberMove(&airplane->rotX, 60.0f, 0.04f);
-    aAp_RubberMove(&airplane->speed, 5.0f, 0.02f);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    aAp_RubberMove(&airplane->rotX, 60.0f, 0.04f, game);
+    aAp_RubberMove(&airplane->speed, 5.0f, 0.02f, game);
 
-    actor->world.position.y -= 0.15f;
+    actor->world.position.y -= 0.15f * dt;
 
     if (actor->bg_collision_check.result.on_ground) {
         Common_Get(clip.effect_clip)
@@ -239,10 +247,11 @@ static void aAp_FallFlyMove(ACTOR* actor, GAME* game) {
 
 static void aAp_FallFlyMove2(ACTOR* actor, GAME* game) {
     AIRPLANE_ACTOR* airplane = (AIRPLANE_ACTOR*)actor;
-    aAp_RubberMove(&airplane->rotX, 70.0f, 0.15f);
-    aAp_RubberMove(&airplane->speed, 10.0f, 0.02f);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    aAp_RubberMove(&airplane->rotX, 70.0f, 0.15f, game);
+    aAp_RubberMove(&airplane->speed, 10.0f, 0.02f, game);
 
-    actor->world.position.y -= 0.15f;
+    actor->world.position.y -= 0.15f * dt;
 
     if (actor->bg_collision_check.result.on_ground) {
         Common_Get(clip.effect_clip)
@@ -252,13 +261,13 @@ static void aAp_FallFlyMove2(ACTOR* actor, GAME* game) {
     }
 }
 
-static void aAp_LeanAirplane(AIRPLANE_ACTOR* airplane) {
+static void aAp_LeanAirplane(AIRPLANE_ACTOR* airplane, GAME* game) {
     if (airplane->status == aAp_STATUS_FREE_FLY_MOVE) {
-        aAp_RubberMove(&airplane->rotZ, 0.0f, 0.05f);
+        aAp_RubberMove(&airplane->rotZ, 0.0f, 0.05f, game);
     } else if (airplane->rotY_min - airplane->rotY > 0.0f) {
-        aAp_RubberMove(&airplane->rotZ, 50.0f, 0.05f);
+        aAp_RubberMove(&airplane->rotZ, 50.0f, 0.05f, game);
     } else {
-        aAp_RubberMove(&airplane->rotZ, -50.0f, 0.05f);
+        aAp_RubberMove(&airplane->rotZ, -50.0f, 0.05f, game);
     }
 }
 
@@ -275,12 +284,12 @@ static void aAp_WindSystem(ACTOR* actor, GAME* game) {
     AIRPLANE_ACTOR* airplane = (AIRPLANE_ACTOR*)actor;
     xyz_t dir = { 0.0f, 1.0f, 0.0f };
 
-    airplane->wind_frame++;
+    airplane->wind_frame += (f32)game->graph->dt_num_60fps_frames;
     if (airplane->wind_frame > airplane->wind_change_frame) {
         int table_rng = fqrand() * 4.0f;
         int change_frame_rng = fqrand() * 10.0f;
 
-        airplane->wind_frame = 0;
+        airplane->wind_frame = 0.0f;
         airplane->wind_change_frame = wind_change_frame_table[change_frame_rng];
         airplane->wind = wind_table[table_rng];
     }
@@ -294,12 +303,14 @@ static void aAp_WindSystem(ACTOR* actor, GAME* game) {
 }
 
 static void aAp_CommonHandle(ACTOR* actor, AIRPLANE_ACTOR* airplane, GAME* game) {
-    aAp_LeanAirplane(airplane);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+
+    aAp_LeanAirplane(airplane, game);
 
     actor->speed = airplane->speed * cosf_table(DEG2RAD(airplane->rotX));
     airplane->y_speed = airplane->speed * sinf_table(DEG2RAD(airplane->rotX));
 
-    actor->world.position.y -= airplane->y_speed;
+    actor->world.position.y -= airplane->y_speed * dt;
     actor->world.angle.y = RAD2SHORTANGLE(DEG2RAD(airplane->rotY));
     actor->shape_info.rotation.y = RAD2SHORTANGLE(DEG2RAD(airplane->rotY));
 
@@ -319,7 +330,7 @@ static void aAp_CommonHandle(ACTOR* actor, AIRPLANE_ACTOR* airplane, GAME* game)
         case aAp_STATUS_FALL_FLY_MOVE:
         case aAp_STATUS_FALL_FLY_MOVE2:
         case aAp_STATUS_SOMER_FLY_MOVE: {
-            aAp_RubberMove(&airplane->rotY, airplane->rotY_goal, 0.07f);
+            aAp_RubberMove(&airplane->rotY, airplane->rotY_goal, 0.07f, game);
             actor->shape_info.draw_shadow = TRUE;
             break;
         }

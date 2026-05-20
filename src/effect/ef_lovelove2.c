@@ -38,9 +38,10 @@ static void eLL2_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eLL2_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 112 - effect->timer;
-    effect->effect_specific[1] += DEG2SHORT_ANGLE(10.55f);
-    effect->position.y += eEC_CLIP->calc_adjust_proc(timer, 0, 28, 1.0f, 0.1f);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 112.0f - effect->lifetime;
+    effect->effect_specific[1] += (s16)(DEG2SHORT_ANGLE(10.55f) * dt);
+    effect->position.y += eEL_CalcAdjust_F(t, 0.0f, 28.0f, 1.0f, 0.1f) * dt;
 }
 
 static void eLL2_dw(eEC_Effect_c* effect, GAME* game) {
@@ -48,15 +49,15 @@ static void eLL2_dw(eEC_Effect_c* effect, GAME* game) {
     u8 alpha;
 
     xyz_t* scale = &effect->scale;
-    s16 timer = 112 - effect->timer;
+    f32 t = 112.0f - effect->lifetime;
     s16 angle = effect->effect_specific[1];
     f32 sin = sin_s(angle);
     f32 cos = cos_s(angle);
 
-    temp1 = eEC_CLIP->calc_adjust_proc(timer, 0, 30, 0.003f, 0.014f);
-    temp2 = eEC_CLIP->calc_adjust_proc(timer, 0, 30, 1.0125f, 0.6375f);
-    temp3 = eEC_CLIP->calc_adjust_proc(timer, 0, 30, 0.037499964f, 0.412499964f);
-    alpha = (s8)eEC_CLIP->calc_adjust_proc(timer, 96, 112, 255.0f, 0.0f);
+    temp1 = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 0.003f, 0.014f);
+    temp2 = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 1.0125f, 0.6375f);
+    temp3 = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 0.037499964f, 0.412499964f);
+    alpha = (s8)eEL_CalcAdjust_F(t, 96.0f, 112.0f, 255.0f, 0.0f);
 
     scale->x = temp1 * (temp3 + ((sin + 1.0f) * 0.5f * (temp2 - temp3)));
     scale->y = temp1 * (temp3 + ((cos + 1.0f) * 0.5f * (temp2 - temp3)));

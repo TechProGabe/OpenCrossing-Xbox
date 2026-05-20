@@ -120,16 +120,14 @@ static void eDig_Mud_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eDig_Mud_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-
-    if (effect->timer < 18) {
-        if (effect->effect_specific[2] != 1) {
-            eEC_CLIP->calc_adjust_proc(effect->timer, 0, 18, 0.012f, 0.010f);
-        } else {
-            eEC_CLIP->calc_adjust_proc(effect->timer, 0, 18, 0.006f, 0.005f);
-        }
-    }
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+    /* original called calc_adjust_proc and discarded the result; dead code, dropped. */
 }
 
 extern Gfx ef_anahori02_00_modelT[];
@@ -139,11 +137,11 @@ extern Gfx ef_mogura01_00_modelT[];
 static void eDig_Mud_dw(eEC_Effect_c* effect, GAME* game) {
     int tex_idx;
 
-    if (effect->timer > 18) {
+    if (effect->lifetime > 18.0f) {
         tex_idx = 0;
-    } else if (effect->timer > 14) {
+    } else if (effect->lifetime > 14.0f) {
         tex_idx = 1;
-    } else if (effect->timer > 10) {
+    } else if (effect->lifetime > 10.0f) {
         tex_idx = 2;
     } else {
         tex_idx = 3;

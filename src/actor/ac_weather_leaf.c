@@ -34,9 +34,9 @@ static int aWeatherLeaf_DecideMakeLeafCount(ACTOR* actor, GAME* game) {
     WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actor;
 
     if (weather->current_level == 1) {
-        return (game->frame_counter & 15) == 0;
+        return aWeather_ShouldSpawnEvery(actor, 16.0f);
     }
-    return (game->frame_counter & 7) == 0;
+    return aWeather_ShouldSpawnEvery(actor, 8.0f);
 }
 
 static void aWeatherLeaf_make(ACTOR* actor, GAME* game) {

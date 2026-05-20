@@ -145,6 +145,7 @@ void okera_dig_down_process(MUSEUM_INSECT_PRIVATE_DATA* actor, GAME* game) {
         Common_Get(clip.effect_clip)->effect_make_proc(84, p, 2, actor->_68.y, game, -1, 0, v);
         actor->_6E = 6;
     }
+
     if (!add_calc_short_angle2(&actor->_68.x, DEG2SHORT_ANGLE(90), CALC_EASE2(0.5f), DEG2SHORT_ANGLE(5),
                                DEG2SHORT_ANGLE(1.25f))) {
         actor->_1C.y -= 0.2f;
@@ -168,8 +169,10 @@ void okera_dig_wait_process(MUSEUM_INSECT_PRIVATE_DATA* actor, GAME* game) {
     if (actor->_6E-- < 0) {
         int i;
         okera_dig_up_process_init(actor, game);
+
         for (i = 3; i < 6; i++) {
-            Common_Get(clip.effect_clip)->effect_make_proc(84, actor->_1C, 2, actor->_68.y, game, -1, 0, i | 0x4000);
+            Common_Get(clip.effect_clip)
+                ->effect_make_proc(84, actor->_1C, 2, actor->_68.y, game, -1, 0, i | 0x4000);
         }
     }
 }

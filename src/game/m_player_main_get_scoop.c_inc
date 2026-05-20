@@ -189,7 +189,7 @@ static int Player_actor_MessageControl_Get_scoop(ACTOR* actor, int end_flag) {
     int choice;
 
     if (main_scoop->timer < 86.0f) {
-        main_scoop->timer += 1.0f;
+        main_scoop->timer += (f32)gamePT->graph->dt_num_60fps_frames;
         return -1;
     }
 

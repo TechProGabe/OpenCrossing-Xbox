@@ -43,7 +43,7 @@ static void aNSS_enter_walk_back_deck(ACTOR* actorx, GAME* game) {
 
 static void aNSS_enter_turn_back_deck(ACTOR* actorx, GAME* game) {
     NPC_SHASHO_ACTOR* shasho_actor = (NPC_SHASHO_ACTOR*)actorx;
-    if (chase_angle(&actorx->shape_info.rotation.y, 0, 0x600) == TRUE) {
+    if (chase_angle(&actorx->shape_info.rotation.y, 0, aNPC_dt_angle_step(0x600)) == TRUE) {
         aNSS_setupAction(actorx, game, aNSS_ACT_ENTER_BACK_DOOR);
 
         shasho_actor->npc_class.draw.main_animation.keyframe.morph_counter = 0.0f;
@@ -116,7 +116,7 @@ static void aNSS_exit_turn_back_deck(ACTOR* actorx, GAME* game) {
         actorx->world.position.z = 70.0f;
     }
 
-    if (chase_angle(&actorx->shape_info.rotation.y, DEG2SHORT_ANGLE(-90.0f), 0x600) == TRUE) {
+    if (chase_angle(&actorx->shape_info.rotation.y, DEG2SHORT_ANGLE(-90.0f), aNPC_dt_angle_step(0x600)) == TRUE) {
         aNSS_setupAction(actorx, game, aNSS_ACT_EXIT_WALK_BACK_DECK);
     }
 

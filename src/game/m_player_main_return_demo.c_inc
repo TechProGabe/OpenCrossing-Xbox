@@ -50,7 +50,7 @@ static void Player_actor_request_proc_index_fromReturn_demo(ACTOR* actor, GAME* 
     f32 max_timer = player->main_data.return_demo.max_timer;
     int prev = player->main_data.return_demo.prev_main_index;
 
-    player->main_data.return_demo.timer += 1.0f;
+    player->main_data.return_demo.timer += (f32)gamePT->graph->dt_num_60fps_frames;
 
     if (player->main_data.return_demo.timer >= max_timer) {
         if (prev != mPlayer_INDEX_DEMO_WAIT) {

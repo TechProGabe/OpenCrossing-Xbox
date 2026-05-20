@@ -36,18 +36,27 @@ void fNNB_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
     xyz_t pos;
     cKF_SkeletonInfo_R_c* keyf = &ftr_actor->keyframe;
 
+    ftr_actor->dynamic_work_f[1] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[1] >= 4.0f) {
+        ftr_actor->dynamic_work_f[1] -= 4.0f;
+    }
+
     if (ftr_actor->dynamic_work_s[0] == 1) {
         if (aFTR_CAN_PLAY_SE(ftr_actor)) {
             sAdo_OngenPos((u32)ftr_actor, 0x50, &ftr_actor->position);
-            if (ftr_actor->dynamic_work_s[2] < 0) {
-                pos = ftr_actor->position;
+            int ticks = graph_dt_60hz_ticks(game, &ftr_actor->dynamic_work_f[0]);
+            int t;
+            for (t = 0; t < ticks; t++) {
+                if (ftr_actor->dynamic_work_s[2] < 0) {
+                    pos = ftr_actor->position;
 
-                pos.y += 18.0f;
+                    pos.y += 18.0f;
 
-                Common_Get(clip).effect_clip->effect_make_proc(0x71, pos, 1, 0, game, 0xFFFF, 6, 0);
-                ftr_actor->dynamic_work_s[2] = (int)(10.0f + RANDOM_F(20.0f));
-            } else {
-                ftr_actor->dynamic_work_s[2]--;
+                    Common_Get(clip).effect_clip->effect_make_proc(0x71, pos, 1, 0, game, 0xFFFF, 6, 0);
+                    ftr_actor->dynamic_work_s[2] = (int)(10.0f + RANDOM_F(20.0f));
+                } else {
+                    ftr_actor->dynamic_work_s[2]--;
+                }
             }
         }
     }
@@ -114,10 +123,10 @@ static int fNNB_DrawAfter(GAME* game, cKF_SkeletonInfo_R_c* keyf, int jointNum, 
 }
 
 void fNNB_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
     cKF_SkeletonInfo_R_c* keyf;
     Mtx* mtx;
     int fctr;
+    int tex_frame = (int)ftr_actor->dynamic_work_f[1];
     s16 ctr;
 
 
@@ -130,16 +139,12 @@ void fNNB_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
     mtx = ftr_actor->skeleton_mtx[fctr & 1];
 
     if(ctr == aFTR_CTR_TYPE_GAME_PLAY){
-        fctr = play->game_frame;
-    }
-
-    if(ctr == aFTR_CTR_TYPE_GAME_PLAY){
         txt_type = ((ftr_actor->dynamic_work_s[1] == 1) || (ctr != 1)) ? 1 : 0;
-        txt = (txt_type != 0) ? fNNB_texture_table[fctr & 3] : int_nog_nabe_fire1_TA_tex_txt;
+        txt = (txt_type != 0) ? fNNB_texture_table[tex_frame & 3] : int_nog_nabe_fire1_TA_tex_txt;
     }
     else if (keyf->frame_control.end_frame == cKF_ba_r_int_nog_nabe.frames) {
         txt_type = ((ftr_actor->dynamic_work_s[1] == 1) || (ctr != 1)) ? 1 : 0;
-        txt = (txt_type != 0) ? fNNB_texture_table[fctr & 3] : int_nog_nabe_fire1_TA_tex_txt;  
+        txt = (txt_type != 0) ? fNNB_texture_table[tex_frame & 3] : int_nog_nabe_fire1_TA_tex_txt;
     }
     else{
         txt = int_nog_nabe_fire1_TA_tex_txt;

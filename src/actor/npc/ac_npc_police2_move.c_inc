@@ -204,7 +204,8 @@ static void aPOL2_search_player(NPC_POLICE2_ACTOR* actor, GAME_PLAY* play) {
         if (ABS(diff_angle) > DEG2SHORT_ANGLE2(90.0f)) {
             aPOL2_setupAction(actor, aPOL2_ACT_TURN);
         } else {
-            chase_angle(&actor->npc_class.actor_class.shape_info.rotation.y, actor->player_angl, DEG2SHORT_ANGLE2(11.25f));
+            chase_angle(&actor->npc_class.actor_class.shape_info.rotation.y, actor->player_angl,
+                        aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
             actor->npc_class.actor_class.world.angle.y = actor->npc_class.actor_class.shape_info.rotation.y;
         }
     }
@@ -224,7 +225,8 @@ static void aPOL2_search_player2(NPC_POLICE2_ACTOR* actor, GAME_PLAY* play) {
         f32 dist = SQ(dX) + SQ(dZ);
         s16 angle = atans_table(dZ, dX);
 
-        chase_angle(&actor->npc_class.actor_class.shape_info.rotation.y, angle, DEG2SHORT_ANGLE2(11.25f));
+        chase_angle(&actor->npc_class.actor_class.shape_info.rotation.y, angle,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
         actor->npc_class.actor_class.world.angle.y = actor->npc_class.actor_class.shape_info.rotation.y;
         if (dist < (SQ(14.0f)+4.0f)) {
             actor->next_zone = aPOL2_get_next_zone(actor->pl_zone, actor->now_zone);
@@ -339,7 +341,8 @@ static void aPOL2_wait(NPC_POLICE2_ACTOR* actor, GAME_PLAY* play) {
     aPOL2_message_ctrl(actor, play);
     if (mDemo_Check(mDemo_TYPE_SPEAK, actorx) == TRUE) {
         if (!mDemo_Check_ListenAble()) {
-            if (chase_angle(&actorx->shape_info.rotation.y, actor->player_angl, DEG2SHORT_ANGLE2(11.25f)) == TRUE) {
+            if (chase_angle(&actorx->shape_info.rotation.y, actor->player_angl,
+                            aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
                 int action;
                 
                 mMld_ActorMakeMelody(actorx);
@@ -359,7 +362,8 @@ static void aPOL2_wait(NPC_POLICE2_ACTOR* actor, GAME_PLAY* play) {
         }
     } else if (mDemo_Check(mDemo_TYPE_TALK, actorx) == TRUE) {
         if (!mDemo_Check_ListenAble()) {
-            if (chase_angle(&actorx->shape_info.rotation.y, actor->player_angl, DEG2SHORT_ANGLE2(11.25f)) == TRUE) {
+            if (chase_angle(&actorx->shape_info.rotation.y, actor->player_angl,
+                            aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
                 mMld_ActorMakeMelody(actorx);
                 mDemo_Set_ListenAble();
                 aPOL2_setupAction(actor, aPOL2_ACT_TALK_END_WAIT);
@@ -431,7 +435,8 @@ static void aPOL2_turn(NPC_POLICE2_ACTOR* actor, GAME_PLAY* play) {
     if (playerx != NULL) {
         s16 angle = actor->player_angl;
 
-        chase_angle(&actor->npc_class.actor_class.shape_info.rotation.y, angle, DEG2SHORT_ANGLE2(11.25f));
+        chase_angle(&actor->npc_class.actor_class.shape_info.rotation.y, angle,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
         actor->npc_class.actor_class.world.angle.y = actor->npc_class.actor_class.shape_info.rotation.y;
         
         if (ABS(angle - actor->npc_class.actor_class.shape_info.rotation.y) <= DEG2SHORT_ANGLE2(90.0f)) {

@@ -126,7 +126,7 @@ extern void aIHT_actor_init(ACTOR* actorx, GAME* game) {
  * 
  * @param insect Pointer to the insect actor
  */
-static void aIHT_anime_proc(aINS_INSECT_ACTOR* insect) {
+static void aIHT_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
     // Animation sequence data for light pulsing
     static f32 aIHT_anim_data[] = {
         // clang-format off
@@ -138,16 +138,17 @@ static void aIHT_anime_proc(aINS_INSECT_ACTOR* insect) {
         1.0f,
         // clang-format on
     };
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
-    if (insect->timer > 0) {
-        insect->timer--;
+    if (insect->timer > 0.0f) {
+        insect->timer -= dt;
         
-        insect->alpha0 += 25;
+        insect->alpha0 += (int)(25.0f * dt);
         if (insect->alpha0 > 255) {
             insect->alpha0 = 255;
         }
 
-        insect->alpha1 -= 25;
+        insect->alpha1 -= (int)(25.0f * dt);
         if (insect->alpha1 < 0) {
             insect->alpha1 = 0;
         }
@@ -209,15 +210,16 @@ static void aIHT_BGcheck(ACTOR* actorx) {
  * @param insect Pointer to the insect actor
  * @param fuwafuwa_flag If TRUE, uses faster/higher amplitude motion
  */
-static void aIHT_fuwafuwa(aINS_INSECT_ACTOR* insect, int fuwafuwa_flag) {
+static void aIHT_fuwafuwa(aINS_INSECT_ACTOR* insect, GAME* game, int fuwafuwa_flag) {
     f32 pos_y;
     f32 sin;
     f32 ofs_y;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (fuwafuwa_flag == FALSE) {
-        aIHT_FLOAT_ANGLE(insect) += (int)((RANDOM_F((f32)0x600) + (f32)0x200) * 0.5f);
+        aIHT_FLOAT_ANGLE(insect) += (int)((RANDOM_F((f32)0x600) + (f32)0x200) * 0.5f * dt);
     } else {
-        aIHT_FLOAT_ANGLE(insect) += 0x400;
+        aIHT_FLOAT_ANGLE(insect) += (int)((f32)0x400 * dt);
         insect->tools_actor.actor_class.speed = 1.5f;
     }
 
@@ -236,13 +238,17 @@ static void aIHT_fuwafuwa(aINS_INSECT_ACTOR* insect, int fuwafuwa_flag) {
  */
 static void aIHT_light_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (insect->tools_actor.init_matrix == TRUE || insect->insect_flags.bit_1 == TRUE) {
         s16 radius;
 
         if (mPlib_get_player_actor_main_index(game) == mPlayer_INDEX_PUTAWAY_NET) {
-            if ((play->game_frame & 1) == 0 && (int)insect->_1E0 > 0) {
-                insect->_1E0 -= 1.0f;
+            if (insect->_1E0 > 0.0f) {
+                insect->_1E0 -= 0.5f * dt;
+                if (insect->_1E0 < 0.0f) {
+                    insect->_1E0 = 0.0f;
+                }
             }
         } else {
             insect->light_step = 0;
@@ -298,10 +304,11 @@ static void aIHT_light_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
  */
 static void aIHT_avoid(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
-    aIHT_fuwafuwa(insect, TRUE);
-    actorx->gravity += 0.75f;
-    actorx->position_speed.y += actorx->gravity;
+    aIHT_fuwafuwa(insect, game, TRUE);
+    actorx->gravity += 0.75f * dt;
+    actorx->position_speed.y += actorx->gravity * dt;
 }
 
 /**
@@ -320,7 +327,7 @@ static void aIHT_fly(ACTOR* actorx, GAME* game) {
     actorx->scale.z = 0.01f;
     insect->target_speed = 1.5f;
     insect->speed_step = 0.1f;
-    aIHT_fuwafuwa(insect, FALSE);
+    aIHT_fuwafuwa(insect, game, FALSE);
 
     if ((fabsf(aIHT_TARGET_X(insect) - actorx->world.position.x) > 30.0f) || (fabsf(aIHT_TARGET_Z(insect) - actorx->world.position.z) > 30.0f)) {
         xyz_t pos;
@@ -462,7 +469,7 @@ static void aIHT_actor_move(ACTOR* actorx, GAME* game) {
 
     aIHT_light_proc(insect, game);
     if (mPlib_get_player_actor_main_index(game) != mPlayer_INDEX_PUTAWAY_NET) {
-        aIHT_anime_proc(insect);
+        aIHT_anime_proc(insect, game);
     }
 
     if ((ACTOR*)mPlib_Get_item_net_catch_label() == actorx) {

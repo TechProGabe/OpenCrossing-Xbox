@@ -27,9 +27,9 @@ static int aWeatherSakura_DecideMakeSakuraCount(ACTOR* actor, GAME* game) {
     WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actor;
 
     if (weather->current_level == 1) {
-        return (game->frame_counter & 7) == 0;
+        return aWeather_ShouldSpawnEvery(actor, 8.0f);
     }
-    return (game->frame_counter & 3) == 0;
+    return aWeather_ShouldSpawnEvery(actor, 4.0f);
 }
 
 static void aWeatherSakura_make(ACTOR* actor, GAME* game) {

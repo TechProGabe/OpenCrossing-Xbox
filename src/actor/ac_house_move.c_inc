@@ -492,7 +492,8 @@ static void aHUS_actor_move(ACTOR* actorx, GAME* game) {
 
     aHUS_set_doorSE(house);
     (*house->action_proc)((STRUCTURE_ACTOR*)house, play);
-    chase_f(&aHUS_GET_LIGHT_PERCENT(house), aHUS_ctrl_light(house), 0.019532442f);
+    chase_f(&aHUS_GET_LIGHT_PERCENT(house), aHUS_ctrl_light(house),
+            0.019532442f * (f32)game->graph->dt_num_60fps_frames);
 }
 
 static void aHUS_actor_init(ACTOR* actorx, GAME* game) {

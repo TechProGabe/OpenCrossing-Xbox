@@ -209,9 +209,11 @@ static void aHC_InitClockAnimation(ACTOR* actorx) {
 
 static void House_Clock_Actor_ct(ACTOR* actorx, GAME* game) {
     HOUSE_CLOCK_ACTOR* house_clock = (HOUSE_CLOCK_ACTOR*)actorx;
+    GAME_PLAY* play = (GAME_PLAY*)game;
 
     if (aHC_SetClockNum(actorx)) {
         aHC_InitClockAnimation(actorx);
+        house_clock->phase_frame = (f32)(play->game_frame % 120);
         house_clock->clock.pos =
             aHC_position_data[house_clock->clock.clock_num].pos; // @cleanup - this is already done in aHC_SetClockNum
 
@@ -220,6 +222,14 @@ static void House_Clock_Actor_ct(ACTOR* actorx, GAME* game) {
             actorx->dw_proc = &House_Clock_Actor_no_draw;
         }
     }
+}
+
+static int aHC_CrossedFrame(f32 prev, f32 now, f32 target) {
+    if (prev <= now) {
+        return prev < target && now >= target;
+    }
+
+    return prev < target || now >= target;
 }
 
 static void House_Clock_Actor_dt(ACTOR* actorx, GAME* game) {
@@ -327,21 +337,22 @@ static void aHC_OperateAnime(ACTOR* actorx, GAME* game) {
     HOUSE_CLOCK_ACTOR* house_clock = (HOUSE_CLOCK_ACTOR*)actorx;
     aHC_clock_c* clock = &house_clock->clock;
     cKF_SkeletonInfo_R_c* kf_p = &clock->keyframe;
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    u32 frame = play->game_frame % 120;
+    f32 prev_frame = house_clock->phase_frame;
+    f32 frame = prev_frame + (f32)game->graph->dt_num_60fps_frames;
 
-    switch (frame) {
-        case 0:
-            cKF_SkeletonInfo_R_init_standard_repeat(kf_p, aHC_draw_data[clock->clock_num].animation, NULL);
-            cKF_SkeletonInfo_R_play(kf_p);
-            kf_p->frame_control.speed = 0.5f;
-            break;
-        case 15:
-            sAdo_OngenTrgStart(NA_SE_12D, &clock->pos);
-            break;
-        case 45:
-            sAdo_OngenTrgStart(NA_SE_12D, &clock->pos);
-            break;
+    while (frame >= 120.0f) {
+        frame -= 120.0f;
+    }
+    house_clock->phase_frame = frame;
+
+    if (aHC_CrossedFrame(prev_frame, frame, 0.0f)) {
+        cKF_SkeletonInfo_R_init_standard_repeat(kf_p, aHC_draw_data[clock->clock_num].animation, NULL);
+        cKF_SkeletonInfo_R_play(kf_p);
+        kf_p->frame_control.speed = 0.5f;
+    }
+
+    if (aHC_CrossedFrame(prev_frame, frame, 15.0f) || aHC_CrossedFrame(prev_frame, frame, 45.0f)) {
+        sAdo_OngenTrgStart(NA_SE_12D, &clock->pos);
     }
 }
 

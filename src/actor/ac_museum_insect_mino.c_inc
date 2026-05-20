@@ -258,14 +258,18 @@ void minsect_mino_mv(MUSEUM_INSECT_PRIVATE_DATA* actor, GAME* game) {
     }
     minsect_mino_furiko(actor, game);
     minsect_mino_hineri(actor, game);
-    if (GETREG(NMREG, 1) && (play->game_frame & 7) == 0) {
-        xyz_t p = actor->_1C;
-        p = actor->_1C;
-        p.y += GETREG(NMREG, 5) * 0.01f;
-        Common_Get(clip.effect_clip)->effect_make_proc(101, p, 1, 0, game, 0x5843, 2, 0);
-        Common_Get(clip.effect_clip)->effect_make_proc(101, actor->_1C, 1, 0, game, 0x5843, 1, 0);
-        Common_Get(clip.effect_clip)->effect_make_proc(101, mino_base_pos, 1, 0, game, 0x5843, 3, 0);
-        Common_Get(clip.effect_clip)->effect_make_proc(101, mino_top_pos, 1, 0, game, 0x5843, 1, 0);
+    {
+        static int effect_timer = 0;
+        if (GETREG(NMREG, 1) && ++effect_timer >= 8) {
+            xyz_t p = actor->_1C;
+            effect_timer = 0;
+            p = actor->_1C;
+            p.y += GETREG(NMREG, 5) * 0.01f;
+            Common_Get(clip.effect_clip)->effect_make_proc(101, p, 1, 0, game, 0x5843, 2, 0);
+            Common_Get(clip.effect_clip)->effect_make_proc(101, actor->_1C, 1, 0, game, 0x5843, 1, 0);
+            Common_Get(clip.effect_clip)->effect_make_proc(101, mino_base_pos, 1, 0, game, 0x5843, 3, 0);
+            Common_Get(clip.effect_clip)->effect_make_proc(101, mino_top_pos, 1, 0, game, 0x5843, 1, 0);
+        }
     }
     actor->_04(actor, game);
 }

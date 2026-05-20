@@ -148,14 +148,8 @@ extern f32 sin_s(s16 angle) {
  * @return TRUE if the angle reaches the target, FALSE otherwise.
  */
 extern int chase_angle(s16* const pValue, const s16 target, s16 step) {
+    /* Frame-locked: min-step floor would dominate dt scaling at high fps. */
     if (step != 0) {
-        const double updateScale = game_GameFrame_2F * gamePT->graph->dt_num_60fps_frames;
-
-        step = (double)step * updateScale;
-        if (step < 1) {
-            step = 1; // don't allow 0 step size
-        }
-
         if ((s16)(*pValue - target) > 0) {
             step = -step;
         }
@@ -186,19 +180,6 @@ extern int chase_angle(s16* const pValue, const s16 target, s16 step) {
  * @return TRUE if the value reaches the target, FALSE otherwise.
  */
 extern int chase_s(s16* const pValue, const s16 target, s16 step) {
-    if (step != 0) {
-        int temp_step = (int)((double)step * gamePT->graph->dt_num_60fps_frames);
-        if (temp_step == 0) {
-            if (step < 0) {
-                temp_step = -1;
-            } else {
-                temp_step = 1;
-            }
-        }
-
-        step = CLAMP(temp_step, SHT_MIN_S, SHT_MAX_S); // clamp between -32768 and 32767. Note that 0 is excluded.
-    }
-
     if (step != 0) {
         if (*pValue > target) {
             step = -step;
@@ -232,19 +213,6 @@ extern int chase_s(s16* const pValue, const s16 target, s16 step) {
  */
 extern int chase_f(f32* const pValue, const f32 target, f32 step) {
     float m_step = step;
-
-    if (m_step != 0) {
-        m_step *= gamePT->graph->dt_num_60fps_frames;
-
-        // Provide a bit of sanity here, this might be too small
-        if (fabsf(m_step) < 0.0001f) {
-            if (step > 0.0f) {
-                m_step = 0.0001f;
-            } else {
-                m_step = -0.0001f;
-            }
-        }
-    }
 
     if (m_step != 0) {
         if (*pValue > target) {
@@ -286,18 +254,8 @@ extern f32 chase_xyz_t(xyz_t* const pValue, const xyz_t* const target, const f32
 
     dist = Math3DVecLength(&diff);
     if (dist > fraction) {
-        const float step = fraction / dist;
-        stepSize = step * gamePT->graph->dt_num_60fps_frames;
+        stepSize = fraction / dist;
 
-        // Provide a bit of sanity here, this might be too small
-        if (fabsf(stepSize) < 0.0001f) {
-            if (step > 0.0f) {
-                stepSize = 0.0001f;
-            } else {
-                stepSize = -0.0001f;
-            }
-        }
-        
         pValue->x += stepSize * diff.x;
         pValue->y += stepSize * diff.y;
         pValue->z += stepSize * diff.z;
@@ -324,21 +282,8 @@ extern f32 chase_xyz_t(xyz_t* const pValue, const xyz_t* const target, const f32
  */
 extern int chase_angle2(s16* const pValue, const s16 limit, const s16 step) {
     const s16 prev = *pValue;
-    s16 m_step = step;
 
-    if (step != 0) {
-        m_step = (double)m_step * gamePT->graph->dt_num_60fps_frames;
-
-        if (m_step == 0) {
-            if (step < 0) {
-                m_step = -1;
-            } else {
-                m_step = 1;
-            }
-        }
-    }
-
-    *pValue += m_step;
+    *pValue += step;
     if (((s16)(*pValue - limit) * (s16)(prev - limit)) <= 0) {
         s32 absDiff = ABS((s16)(*pValue - limit));
 

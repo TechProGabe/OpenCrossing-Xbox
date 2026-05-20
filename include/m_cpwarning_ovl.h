@@ -18,7 +18,7 @@ struct cpwarning_ovl_s {
     u8 diary_edit_mode;
     s16 _06;
     f32 scale;
-    f32 _0C;
+    f32 counter_accum;
 };
 
 extern void mCW_cpwarning_ovl_construct(Submenu* submenu);

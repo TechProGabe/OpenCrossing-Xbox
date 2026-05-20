@@ -4892,9 +4892,9 @@ extern void mNpc_ClearTalkInfo() {
     }
 }
 
-static void mNpc_TimerCountDown(mNpc_Talk_Info_c* talk_info) {
+static void mNpc_TimerCountDown(mNpc_Talk_Info_c* talk_info, int ticks) {
     if (talk_info->timer > 0) {
-        talk_info->timer--;
+        talk_info->timer = ticks >= talk_info->timer ? 0 : talk_info->timer - ticks;
     }
 }
 
@@ -4976,14 +4976,16 @@ extern void mNpc_SetQuestRequestOFF(int animal_idx, int looks) {
     }
 }
 
-static void mNpc_UnlockTimerCountDown(mNpc_Talk_Info_c* talk_info) {
+static void mNpc_UnlockTimerCountDown(mNpc_Talk_Info_c* talk_info, int ticks) {
     if (talk_info != NULL && talk_info->unlock_timer > 0 && talk_info->unlock_timer > (talk_info->reset_timer - 1000)) {
-        talk_info->unlock_timer--;
+        talk_info->unlock_timer = ticks >= talk_info->unlock_timer ? 0 : talk_info->unlock_timer - ticks;
     }
 }
 
 extern void mNpc_TalkInfoMove() {
     mNpc_Talk_Info_c* talk_info_p = l_npc_talk_info;
+    static float talk_timer_accum = 0.0f;
+    int ticks = graph_dt_60hz_ticks(gamePT, &talk_timer_accum);
     int i;
 
     if (mFI_CheckPlayerWade(mFI_WADE_START) == TRUE) {
@@ -4995,8 +4997,8 @@ extern void mNpc_TalkInfoMove() {
 
     talk_info_p = l_npc_talk_info;
     for (i = 0; i < ARRAY_COUNT(l_npc_talk_info); i++) {
-        mNpc_TimerCountDown(talk_info_p);
-        mNpc_UnlockTimerCountDown(talk_info_p);
+        mNpc_TimerCountDown(talk_info_p, ticks);
+        mNpc_UnlockTimerCountDown(talk_info_p, ticks);
 
         if (talk_info_p->unlock_timer == 0 && talk_info_p->reset_timer > 0) {
             talk_info_p->talk_num = 0;

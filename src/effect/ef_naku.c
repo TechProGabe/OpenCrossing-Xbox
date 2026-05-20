@@ -1,5 +1,6 @@
 #include "ef_effect_control.h"
 
+#include "graph.h"
 #include "m_common_data.h"
 
 static void eNaku_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, s16 arg0, s16 arg1);
@@ -33,6 +34,7 @@ static void eNaku_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name
 static void eNaku_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->effect_specific[0] = *(s16*)ct_arg;
     effect->effect_specific[1] = 0;
+    effect->effect_specific[2] = 0;
     effect->timer = 32;
 }
 
@@ -45,10 +47,14 @@ static void eNaku_mv(eEC_Effect_c* effect, GAME* game) {
     prio = effect->prio;
     eEC_CLIP->set_continious_env_proc(effect, 32, 18);
 
-    if ((effect->timer & 1) && (eEC_CLIP != NULL)) {
-        eEC_CLIP->effect_make_proc(eEC_EFFECT_NAMIDA, effect->position, prio, effect->effect_specific[0], &play->game,
-                                   item_name, effect->effect_specific[1] & 1, 0);
-        effect->effect_specific[1]++;
+    {
+        effect->effect_specific[2] += (s16)((f32)game->graph->dt_num_60fps_frames * 100.0f);
+        if (effect->effect_specific[2] >= 200 && eEC_CLIP != NULL) {
+            effect->effect_specific[2] -= 200;
+            eEC_CLIP->effect_make_proc(eEC_EFFECT_NAMIDA, effect->position, prio, effect->effect_specific[0], &play->game,
+                                       item_name, effect->effect_specific[1] & 1, 0);
+            effect->effect_specific[1]++;
+        }
     }
 
     sAdo_OngenPos((u32)effect, 0x2E, &effect->position);

@@ -282,7 +282,7 @@ static void aBRS_actor_move(ACTOR* actor, GAME* game) {
         shop->action_proc(shop, play);
 
         window = (aBRS_ctrl_light(shop) != 0) ? 1.0f : 0.0f;
-        chase_f(&shop->arg0_f, window, 0.019532442f);
+        chase_f(&shop->arg0_f, window, 0.019532442f * (f32)game->graph->dt_num_60fps_frames);
     }
 }
 

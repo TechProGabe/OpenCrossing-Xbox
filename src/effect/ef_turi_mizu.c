@@ -1,5 +1,6 @@
 #include "ef_effect_control.h"
 #include "game_h.h"
+#include "graph.h"
 #include "libc64/qrand.h"
 #include "libu64/u64types.h"
 #include "m_common_data.h"
@@ -88,6 +89,7 @@ static void eTM_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     s16 angle = *angle_p;
 
     effect->effect_specific[5] = angle;
+    effect->effect_specific[4] = 0; /* 30Hz tick counter / phase flag */
     switch (effect->arg0) {
         case 0:
         case 2:
@@ -116,19 +118,16 @@ static void eTM_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
 static void eTM_mv(eEC_Effect_c* effect, GAME* game) {
     s16 i;
-    s16 timer = 16 - effect->timer;
     s16 n_drops = 4;
-    GAME_PLAY* play = (GAME_PLAY*)game;
-
-    // hack for 30FPS->60FPS
-    if (play->game_frame & 1) {
-        return;
-    }
+    static float cycle_accum = 0.0f; /* shared 30Hz tick gate (was play->game_frame & 1) */
+    int tick = graph_dt_period_elapsed(game, &cycle_accum, 2.0f);
 
     switch (effect->arg0) {
         case 0:
         case 2:
-            if (effect->timer == 1) {
+            /* Original fired once at timer==1 (end of life). Use lifetime + phase flag. */
+            if (effect->effect_specific[4] < 1 && effect->lifetime <= 1.0f) {
+                effect->effect_specific[4] = 1;
                 eEC_CLIP->effect_make_proc(eEC_EFFECT_TURI_HAMON, effect->position, 1, effect->effect_specific[5], game, 0, 2, 0);
             }
             break;
@@ -145,9 +144,14 @@ static void eTM_mv(eEC_Effect_c* effect, GAME* game) {
                 n_drops = 2;
             }
 
-            for (i = 0; i < n_drops; i++) {
-                if (effect->effect_specific[i] == timer) {
-                    eEC_CLIP->effect_make_proc(eEC_EFFECT_TURI_SUITEKI, effect->position, 1, 0, game, 0, i, n_drops);
+            if (tick) {
+                /* slot[4] mirrors the legacy (16 - effect->timer) counter offset by +4 for timer==20 start. */
+                s16 timer = effect->effect_specific[4] - 4;
+                effect->effect_specific[4]++;
+                for (i = 0; i < n_drops; i++) {
+                    if (effect->effect_specific[i] == timer) {
+                        eEC_CLIP->effect_make_proc(eEC_EFFECT_TURI_SUITEKI, effect->position, 1, 0, game, 0, i, n_drops);
+                    }
                 }
             }
             break;

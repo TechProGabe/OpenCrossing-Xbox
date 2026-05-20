@@ -202,7 +202,7 @@ void minsect_ari_mv(MUSEUM_INSECT_PRIVATE_DATA* actor, GAME* game) {
 }
 
 void minsect_ari_dw(MUSEUM_INSECT_PRIVATE_DATA* actor, GAME* game) {
-    MUSEUM_INSECT_PRIVATE_DATA* priv = MI_Control_Actor->_1CA0;
+    MUSEUM_INSECT_PRIVATE_DATA* priv = MI_Draw_1CA0 != NULL ? MI_Draw_1CA0 : MI_Control_Actor->_1CA0;
     int i;
     for (i = 0; i < 15; priv++, i++) {
         if (priv->_8C & 1) {

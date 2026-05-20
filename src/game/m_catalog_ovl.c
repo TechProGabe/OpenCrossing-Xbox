@@ -468,6 +468,8 @@ static void mCL_item_data_set(Submenu* submenu, int page_no) {
 
 static void mCL_item_move(mCL_Ovl_c* catalog_ovl) {
     mCL_Item_c* item = catalog_ovl->item_data;
+    static float item_accum = 0.0f;
+    int ticks = graph_dt_60hz_ticks(gamePT, &item_accum);
     int i;
 
     for (i = 0; i < mCL_ITEM_DATA_NUM; i++) {
@@ -482,8 +484,10 @@ static void mCL_item_move(mCL_Ovl_c* catalog_ovl) {
                 if (tex_anim != NULL) {
                     int count = tex_anim->animation_count;
 
-                    item->ftr_actor.tex_animation.frame++;
-                    if (item->ftr_actor.tex_animation.frame >= count || item->ftr_actor.tex_animation.frame < 0) {
+                    item->ftr_actor.tex_animation.frame += ticks;
+                    if (count > 0 && item->ftr_actor.tex_animation.frame >= count) {
+                        item->ftr_actor.tex_animation.frame %= count;
+                    } else if (item->ftr_actor.tex_animation.frame < 0) {
                         item->ftr_actor.tex_animation.frame = 0;
                     }
                 }
@@ -492,7 +496,10 @@ static void mCL_item_move(mCL_Ovl_c* catalog_ovl) {
             if (profile->rig != NULL || (keyframe->skeleton != NULL && keyframe->animation != NULL)) {
                 if (cKF_SkeletonInfo_R_play(keyframe) == cKF_STATE_STOPPED) {
                     if (item->timer != 0) {
-                        item->timer--;
+                        item->timer -= ticks;
+                        if (item->timer < 0) {
+                            item->timer = 0;
+                        }
                     } else {
                         /* Animation is ready to be played in the opposite direction */
                         f32 tmp;
@@ -505,13 +512,13 @@ static void mCL_item_move(mCL_Ovl_c* catalog_ovl) {
                 }
             }
 
-            item->ftr_actor.angle_y += 1.25f; /* Step rotation */
+            item->ftr_actor.angle_y += 1.25f * (f32)gamePT->graph->dt_num_60fps_frames; /* Step rotation */
 
             if (item->ftr_actor.angle_y > 360.0f) {
                 item->ftr_actor.angle_y -= 360.0f;
             }
         } else if (item->gfx_type == 4) {
-            item->timer--;
+            item->timer -= ticks;
             item->pos_y = -90.0f + sin_s(item->timer * DEG2SHORT_ANGLE(6.0f)) * 6.0f;
             item->ftr_actor.position.x = sin_s(item->timer * DEG2SHORT_ANGLE(3.0f)) * 6.0f;
         }
@@ -524,6 +531,12 @@ static void mCL_move_Move(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     submenu->overlay->move_Move_proc(submenu, menu_info);
 }
 
+static f32 mCL_page_accum = 0.0f;
+
+static f32 mCL_page_pos_y(f32 timer) {
+    return 100.0f * sinf_table(timer * 0.078539819f);
+}
+
 static void mCL_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mCL_Ovl_c* catalog_ovl = submenu->overlay->catalog_ovl;
 
@@ -531,10 +544,15 @@ static void mCL_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         menu_info->open_flag = TRUE;
         submenu->overlay->tag_ovl->chg_tag_func_proc(submenu, 14, 0, 0, 0.0f, 0.0f);
     } else if (catalog_ovl->page_timer != 0) {
-        catalog_ovl->page_timer--;
-        menu_info->position[1] = 100.0f * sinf_table((f32)catalog_ovl->page_timer * 0.078539819f); // needs macro?
+        int old_timer = catalog_ovl->page_timer;
+        int ticks = graph_dt_60hz_ticks(gamePT, &mCL_page_accum);
+        catalog_ovl->page_timer -= ticks;
+        if (catalog_ovl->page_timer < 0) {
+            catalog_ovl->page_timer = 0;
+        }
+        menu_info->position[1] = mCL_page_pos_y((f32)catalog_ovl->page_timer);
 
-        if (catalog_ovl->page_timer == 20) {
+        if (old_timer > 20 && catalog_ovl->page_timer <= 20) {
             u8* page_order = catalog_ovl->page_order;
             int i;
 
@@ -590,7 +608,12 @@ static void mCL_catalog_ovl_move(Submenu* submenu) {
     menu_info->pre_move_func(submenu);
     (*ovl_move_proc[menu_info->proc_status])(submenu, menu_info);
 
-    catalog_ovl->counter = (catalog_ovl->counter + 1) % 35;
+    catalog_ovl->counter_accum += gamePT->graph->dt_num_60fps_frames;
+    while (catalog_ovl->counter_accum >= 1.0f) {
+        catalog_ovl->counter = (catalog_ovl->counter + 1) % 35;
+        catalog_ovl->counter_accum -= 1.0f;
+    }
+
     if (catalog_ovl->counter < 17) {
         catalog_ovl->alpha = ((f32)catalog_ovl->counter * 255.0f) / 17.0f;
     } else {
@@ -1267,9 +1290,20 @@ static void mCL_set_dl(Submenu* submenu, mSM_MenuInfo_c* menu_info, GAME* game) 
 
 static void mCL_catalog_ovl_draw(Submenu* submenu, GAME* game) {
     mSM_MenuInfo_c* menu_info = &submenu->overlay->menu_info[mSM_OVL_CATALOG];
+    mCL_Ovl_c* catalog_ovl = submenu->overlay->catalog_ovl;
+    f32 pos_y = menu_info->position[1];
 
     menu_info->pre_draw_func(submenu, game);
+    if (catalog_ovl->page_timer != 0 && mCL_page_accum > 0.0f) {
+        f32 timer = (f32)catalog_ovl->page_timer - mCL_page_accum;
+
+        if (timer < 0.0f) {
+            timer = 0.0f;
+        }
+        menu_info->position[1] = mCL_page_pos_y(timer);
+    }
     mCL_set_dl(submenu, menu_info, game);
+    menu_info->position[1] = pos_y;
 }
 
 extern void mCL_catalog_ovl_set_proc(Submenu* submenu) {
@@ -1410,6 +1444,7 @@ extern void mCL_catalog_ovl_construct(Submenu* submenu) {
         overlay->catalog_ovl = (mCL_Ovl_c*)zelda_malloc(sizeof(mCL_Ovl_c));
         mem_clear((u8*)overlay->catalog_ovl, sizeof(mCL_Ovl_c), 0);
         overlay->catalog_ovl->item_data_idx = 0;
+        overlay->catalog_ovl->counter_accum = 0.0f;
         seg0_p = (u8*)submenu->next_overlay_address;
 
         for (i = 0; i < mCL_ITEM_DATA_NUM; i++) {

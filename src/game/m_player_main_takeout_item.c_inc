@@ -82,7 +82,7 @@ static void Player_actor_SearchTimer_Takeout_item(ACTOR* actorx, GAME* game) {
         f32 timer = *timer_p;
 
         if (*timer_p < 54.0f) {
-            (*timer_p) += 1.0f;
+            (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
 
             if (*timer_p >= 36.0f) {
                 int next_anim0_idx;

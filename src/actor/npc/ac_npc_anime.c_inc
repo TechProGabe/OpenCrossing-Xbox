@@ -205,6 +205,7 @@ static void aNPC_Animation_init(ACTOR* actorx, int seqNo, int talk_flag) {
 
     nactorx->draw.effect_type = main_anim->feel_effect_type;
     nactorx->draw.effect_pattern = main_anim->feel_effect_set_frame;
+    nactorx->draw.feel_effect_counter = 0.0f;
     if (main_anim->feel_effect != NULL) {
         nactorx->draw.feel_effect = main_anim->feel_effect;
     } else {
@@ -569,7 +570,7 @@ static void aNPC_tex_anm_ctrl_rnd_seq(aNPC_tex_anim_c* tex_anim, int part_type) 
             aNPC_tex_anm_ctrl_set_pat(tex_anim, part_type);
         }
     } else {
-        tex_anim->pattern_counter -= 0.5f;
+        tex_anim->pattern_counter -= 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
     }
 }
 
@@ -588,7 +589,7 @@ static void aNPC_tex_anm_ctrl_talk_seq(aNPC_tex_anim_c* tex_anim, int part_type)
             aNPC_tex_anm_ctrl_set_pat(tex_anim, part_type);
         }
     } else {
-        tex_anim->pattern_counter -= 0.25f;
+        tex_anim->pattern_counter -= 0.25f * (f32)gamePT->graph->dt_num_60fps_frames;
     }
 }
 
@@ -636,19 +637,22 @@ static void aNPC_tex_anm_ctrl(NPC_ACTOR* nactorx) {
     }
 
     if (nactorx->talk_info.type == 1) {
-        int timer = nactorx->talk_info.kutipaku_timer;
+        f32 timer = nactorx->talk_info.kutipaku_timer;
 
         if (aNPC_check_kutipaku(nactorx) == TRUE &&
             (nactorx->condition_info.demo_flg & aNPC_COND_DEMO_SKIP_KUTIPAKU) == 0) {
             nactorx->draw.sub_animation1.keyframe.frame_control.speed = 0.5f;
-            timer = 8;
-        } else if (timer > 0) {
+            timer = 8.0f;
+        } else if (timer > 0.0f) {
             nactorx->draw.sub_animation1.keyframe.frame_control.speed = 0.5f;
-            timer--;
+            timer -= (f32)gamePT->graph->dt_num_60fps_frames;
+            if (timer < 0.0f) {
+                timer = 0.0f;
+            }
         } else {
             nactorx->draw.sub_animation1.keyframe.frame_control.current_frame = 1.0f;
             nactorx->draw.sub_animation1.keyframe.frame_control.speed = 0.0f;
-            timer = 0;
+            timer = 0.0f;
         }
 
         nactorx->talk_info.kutipaku_timer = timer;

@@ -62,10 +62,14 @@ static void eTumbleBodyPrint_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) 
 }
 
 static void eTumbleBodyPrint_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     mActor_name_t* fg_p = mFI_GetUnitFG(effect->position);
 
     if (effect->scale.x < 0.021f) {
-        effect->scale.x += 0.0005f;
+        effect->scale.x += 0.0005f * dt;
+        if (effect->scale.x > 0.021f) {
+            effect->scale.x = 0.021f;
+        }
         effect->scale.z = effect->scale.x;
     }
 
@@ -73,15 +77,21 @@ static void eTumbleBodyPrint_mv(eEC_Effect_c* effect, GAME* game) {
         effect->effect_specific[4] = 1;
     }
 
-    if (effect->effect_specific[4] == 1 && effect->timer >= 70) {
-        effect->timer -= 70;
+    /* Drain lifetime fast when standing on a hole (legacy: timer -= 70 per tick). */
+    if (effect->effect_specific[4] == 1) {
+        f32 drain = 70.0f * dt;
+        if (effect->lifetime >= drain) {
+            effect->lifetime -= drain;
+        }
     }
 }
 
 extern Gfx ef_bodyprint01_00_modelT[];
 
 static void eTumbleBodyPrint_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 counter = 800 - effect->timer;
+    /* Sand/wave path was init=600, grass path init=800. */
+    f32 init = (effect->effect_specific[3] != 0) ? 600.0f : 800.0f;
+    s16 counter = (s16)(init - effect->lifetime);
     u8 a;
 
     if (effect->effect_specific[3] != 0) {

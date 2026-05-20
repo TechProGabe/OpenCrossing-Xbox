@@ -13,6 +13,10 @@
 #include "m_player_lib.h"
 #include "m_event.h"
 #include "libultra/libultra.h"
+#include "graph.h"
+#ifdef TARGET_PC
+#include "pc_platform.h"
+#endif
 
 static void Weather_Actor_ct(ACTOR* actor, GAME* game);
 static void Weather_Actor_dt(ACTOR* actor, GAME* game);
@@ -83,6 +87,24 @@ static void aWeather_weatherinfo_CommonSet(s16 type, s16 intensity) {
     Common_Set(weather, type);
     Common_Set(weather_intensity, intensity);
 }
+
+#ifdef TARGET_PC
+static int aWeather_ApplyPcOverride(WEATHER_ACTOR* weather) {
+    if (g_pc_weather_override < 0) {
+        return FALSE;
+    }
+
+    weather->current_status = g_pc_weather_override;
+    weather->next_status = g_pc_weather_override;
+    weather->current_level = g_pc_weather_intensity_override;
+    weather->current_aim_level = g_pc_weather_intensity_override;
+    weather->next_level = g_pc_weather_intensity_override;
+    weather->request_change = FALSE;
+    aWeather_SetNowProfile(&weather->actor_class, weather->current_status);
+    aWeather_weatherinfo_CommonSet(weather->current_status, weather->current_level);
+    return TRUE;
+}
+#endif
 
 static void aWeather_RequestChangeWeather(ACTOR* actor, s16 status, s16 level) {
     WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actor;
@@ -311,11 +333,28 @@ static void aWeather_EndEnvSE(ACTOR* actor) {
 static void aWeather_SetNowProfile(ACTOR* actorx, s16 id) {
     WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actorx;
 
+    weather->spawn_accum = 0.0f;
     if (!mFI_GET_TYPE(mFI_GetFieldId())) {
         weather->current_profile = profile_tbl[id];
     } else {
         weather->current_profile = NULL;
     }
+}
+
+extern int aWeather_ShouldSpawnEvery(ACTOR* actorx, f32 period_frames) {
+    WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actorx;
+
+    if (weather->spawn_in_advance) {
+        return TRUE;
+    }
+
+    weather->spawn_accum += 1.0f;
+    if (weather->spawn_accum >= period_frames) {
+        weather->spawn_accum -= period_frames;
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 static void aWeather_SecureWeatherPrivateWork(ACTOR* actorx) {
@@ -365,11 +404,14 @@ static void aWeather_RenewWindInfo(ACTOR* actorx) {
 
 static void aWeather_SnowInAdvance(ACTOR* actorx, GAME* game, int moves) {
     WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actorx;
+    int prev_spawn_in_advance = weather->spawn_in_advance;
     int i;
 
+    weather->spawn_in_advance = TRUE;
     for (i = 0; i < moves; i++) {
         Weather_Actor_move(actorx, game);
     }
+    weather->spawn_in_advance = prev_spawn_in_advance;
 }
 
 static void Weather_Actor_ct(ACTOR* actor, GAME* game) {
@@ -413,6 +455,10 @@ static void Weather_Actor_ct(ACTOR* actor, GAME* game) {
 #endif
     }
 
+#ifdef TARGET_PC
+    aWeather_ApplyPcOverride(weather);
+#endif
+
     weather->ptr = NULL;
     weather->priv = NULL;
     weather->request_change = FALSE;
@@ -421,6 +467,9 @@ static void Weather_Actor_ct(ACTOR* actor, GAME* game) {
 
     weather->timer = 0;
     weather->timer2 = 0;
+    weather->make_accum = 0.0f;
+    weather->spawn_accum = 0.0f;
+    weather->spawn_in_advance = FALSE;
     weather->lightning_timer = 0;
     weather->lightning_timer2 = 30;
 
@@ -498,11 +547,16 @@ static void Weather_Actor_draw(ACTOR* actor, GAME* game) {
 
 static void aWeather_MakeWeatherPrv(ACTOR* actor, GAME* game) {
     WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actor;
+    int ticks;
+    int i;
 
     if (weather->current_level != 0) {
         if (weather->current_profile != NULL) {
             if (weather->current_profile->make != NULL) {
-                weather->current_profile->make(actor, game);
+                ticks = graph_dt_60hz_ticks(game, &weather->make_accum);
+                for (i = 0; i < ticks; i++) {
+                    weather->current_profile->make(actor, game);
+                }
             }
         }
     }
@@ -592,6 +646,7 @@ static void aWeather_RenewWeatherLevel(ACTOR* actorx, GAME* game) {
             } else {
                 weather->current_level++;
             }
+            weather->spawn_accum = 0.0f;
 
             aWeather_ChangeEnvSE(actorx, game, weather->current_status, weather->current_level);
         }
@@ -603,6 +658,12 @@ static void aWeather_ChangeWeatherTime0(ACTOR* actorx) {
     s16 rndWeather, rndIntensity;
     s16 evWeather, evIntensity;
     s16 save_weather;
+
+#ifdef TARGET_PC
+    if (g_pc_weather_override >= 0) {
+        return;
+    }
+#endif
 
     if (mEv_IsNotTitleDemo()) {
         if ((Save_Get(scene_no) == SCENE_START_DEMO) || (Save_Get(scene_no) == SCENE_START_DEMO2) ||

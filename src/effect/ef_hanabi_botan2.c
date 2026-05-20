@@ -40,21 +40,24 @@ static void eHanabiBotan2_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->offset.y = 0.f;
     effect->offset.z = 0.f;
     effect->effect_specific[3] = (u16)(RANDOM_F(10.f)) & 1;
+    effect->effect_specific[4] = 0; /* phase counter */
 }
 
 static void eHanabiBotan2_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = EFFECT_LIFETIME - effect->timer;
-    effect->effect_specific[0] += 0x300;
-    effect->effect_specific[1] += 0x100;
-    effect->effect_specific[2] += 0x80;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    effect->effect_specific[0] += (s16)(0x300 * dt);
+    effect->effect_specific[1] += (s16)(0x100 * dt);
+    effect->effect_specific[2] += (s16)(0x80  * dt);
     effect->offset.x = sin_s(effect->effect_specific[1]) * 2.f;
     effect->offset.z = sin_s(-effect->effect_specific[1]) * 2.f;
     add_calc2(&effect->scale.x, 0.08, CALC_EASE(0.2f), 5.f);
     effect->scale.y = effect->scale.x;
     effect->scale.z = effect->scale.x;
-    if (timer == 10) {
+    if (effect->effect_specific[4] < 1 && t >= 10.0f) {
         rgba_t resultColor;
         static rgba_t botan2_light = { 60, 15, 90, 255 };
+        effect->effect_specific[4] = 1;
         eEC_CLIP->decide_light_power_proc(&resultColor, botan2_light, effect->position, game, 2.f, 0.f, 480.f);
         if (effect->arg0) {
             resultColor.r = resultColor.r * (4.f / 3.f);
@@ -63,8 +66,9 @@ static void eHanabiBotan2_mv(eEC_Effect_c* effect, GAME* game) {
         }
         eEC_CLIP->regist_effect_light(resultColor, 20, 50, TRUE);
     }
-    if (timer == 72) {
+    if (effect->effect_specific[4] < 2 && t >= 72.0f) {
         xyz_t p = effect->position;
+        effect->effect_specific[4] = 2;
         p.y += 200.f;
         sAdo_OngenTrgStart(NA_SE_HANABI1, &p);
     }
@@ -86,10 +90,11 @@ extern Gfx ef_hanabi_b_00_modelT[];
 static void eHanabiBotan2_dw(eEC_Effect_c* effect, GAME* game) {
     u8 res1[9];
     u8 res2[9];
-    s16 now_timer = EFFECT_LIFETIME - effect->timer;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    s16 now_timer = (s16)t;
     f32 v2;
     f32 v = (sin_s(effect->effect_specific[0]) + 1.f) * 0.5f * 0.14000005f + 0.93f;
-    v2 = effect->scale.x + eEC_CLIP->calc_adjust_proc(now_timer, 0, EFFECT_LIFETIME - 1, 0.f, 0.01);
+    v2 = effect->scale.x + eEL_CalcAdjust_F(t, 0.0f, (f32)(EFFECT_LIFETIME - 1), 0.f, 0.01);
     eEC_CLIP->morph_combine_proc(res1, eHanabiBotan2_morph_data_out, now_timer);
     eEC_CLIP->morph_combine_proc(res2, eHanabiBotan2_morph_data_in, now_timer);
     OPEN_DISP(game->graph);

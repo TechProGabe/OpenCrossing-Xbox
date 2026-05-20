@@ -157,9 +157,15 @@ static void mMS_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     }
 
     if (mscore_ovl->wait_timer > 0) {
-        mscore_ovl->wait_timer--;
+        static float wait_accum = 0.0f;
+        int old_timer = mscore_ovl->wait_timer;
+        int ticks = graph_dt_60hz_ticks(gamePT, &wait_accum);
+        mscore_ovl->wait_timer -= ticks;
+        if (mscore_ovl->wait_timer < 0) {
+            mscore_ovl->wait_timer = 0;
+        }
 
-        if (mscore_ovl->wait_timer == 1) {
+        if (old_timer > 1 && mscore_ovl->wait_timer <= 1) {
             sAdo_Inst(0, mscore_ovl->melody);
         }
 
@@ -270,15 +276,16 @@ static void mMS_move_Wait(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
 static void mMS_move_Obey(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mMS_Ovl_c* mscore_ovl = submenu->overlay->mscore_ovl;
     u32 trigger = submenu->overlay->menu_control.trigger;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
 
     if (mscore_ovl->scale_dir == mMS_SCALE_IN) {
-        mscore_ovl->scale += 0.25f;
+        mscore_ovl->scale += 0.25f * dt;
         if (mscore_ovl->scale >= 1.0f) {
             mscore_ovl->scale = 1.0f;
             mscore_ovl->scale_dir = mMS_SCALE_WAIT;
         }
     } else if (mscore_ovl->scale_dir == mMS_SCALE_OUT) {
-        mscore_ovl->scale -= 0.25f;
+        mscore_ovl->scale -= 0.25f * dt;
         if (mscore_ovl->scale < 0.0f) {
             mscore_ovl->scale = 0.0f;
             menu_info->proc_status = mSM_OVL_PROC_PLAY;

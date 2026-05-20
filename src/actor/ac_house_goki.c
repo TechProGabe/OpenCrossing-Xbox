@@ -62,20 +62,20 @@ static void aHG_actor_ct(ACTOR* actorx, GAME* game) {
     aHG_setupAction(goki, game, aHG_ACT_AWAY);
 }
 
-static void aHG_anime_proc(HOUSE_GOKI_ACTOR* goki) {
-    goki->anm_no += 0.5f;
+static void aHG_anime_proc(HOUSE_GOKI_ACTOR* goki, f32 dt) {
+    goki->anm_no += 0.5f * dt;
     if (goki->anm_no >= 2.0f) {
         goki->anm_no -= 2.0f;
     }
 }
 
-static void aHG_calc_timer(HOUSE_GOKI_ACTOR* goki) {
-    goki->timer -= 0.5f;
+static void aHG_calc_timer(HOUSE_GOKI_ACTOR* goki, f32 dt) {
+    goki->timer -= 0.5f * dt;
     if (goki->timer < 0.0f) {
         goki->timer = 0.0f;
     }
 
-    goki->timer2 -= 0.5f;
+    goki->timer2 -= 0.5f * dt;
     if (goki->timer2 < 0.0f) {
         goki->timer2 = 0.0f;
     }
@@ -148,12 +148,12 @@ static void aHG_decide_next_act_idx_wait_move(HOUSE_GOKI_ACTOR* goki, GAME* game
     aHG_setupAction(goki, game, next_act_idx);
 }
 
-static void aHG_position_move(ACTOR* actorx) {
+static void aHG_position_move(ACTOR* actorx, f32 dt) {
     s16 angleY = actorx->world.angle.y;
 
     actorx->position_speed.x = actorx->speed * sin_s(angleY);
     actorx->position_speed.z = actorx->speed * cos_s(angleY);
-    actorx->position_speed.y += actorx->gravity;
+    actorx->position_speed.y += actorx->gravity * dt;
     Actor_position_move(actorx);
 }
 
@@ -164,10 +164,10 @@ static void aHG_BGcheck(ACTOR* actorx) {
     }
 }
 
-static int aHG_calc_add_alpha(HOUSE_GOKI_ACTOR* goki) {
+static int aHG_calc_add_alpha(HOUSE_GOKI_ACTOR* goki, f32 dt) {
     int ret = FALSE;
 
-    goki->alpha += 3.5f;
+    goki->alpha += 3.5f * dt;
     if (goki->alpha > 255.0f) {
         goki->alpha = 255.0f;
         ret = TRUE;
@@ -262,11 +262,12 @@ static void aHG_away(ACTOR* actorx, GAME* game) {
 static void aHG_jump_away(ACTOR* actorx, GAME* game) {
     HOUSE_GOKI_ACTOR* goki = (HOUSE_GOKI_ACTOR*)actorx;
     GAME_PLAY* play = (GAME_PLAY*)game;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (actorx->world.position.y == actorx->home.position.y) {
         aHG_setupAction(goki, game, aHG_ACT_AWAY);
     } else {
-        aHG_anime_proc(goki);
+        aHG_anime_proc(goki, dt);
         if (actorx->position_speed.y < 0.0f) {
             actorx->gravity = -7.0f;
         }
@@ -321,13 +322,14 @@ static void aHG_move(ACTOR* actorx, GAME* game) {
 
 static void aHG_dead(ACTOR* actorx, GAME* game) {
     HOUSE_GOKI_ACTOR* goki = (HOUSE_GOKI_ACTOR*)actorx;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     goki->alpha = goki->shadow_alpha;
     if (((int)goki->timer & 2) == 0) {
         goki->alpha = 0.0f;
     }
 
-    goki->shadow_alpha -= 2.5f;
+    goki->shadow_alpha -= 2.5f * dt;
     if (goki->shadow_alpha < 0.0f) {
         goki->shadow_alpha = 0.0f;
     }
@@ -418,12 +420,14 @@ static void aHG_setupAction(HOUSE_GOKI_ACTOR* goki, GAME* game, int act) {
 
 static void aHG_actor_move(ACTOR* actorx, GAME* game) {
     HOUSE_GOKI_ACTOR* goki = (HOUSE_GOKI_ACTOR*)actorx;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
-    aHG_position_move(actorx);
+    aHG_position_move(actorx, dt);
     aHG_BGcheck(actorx);
-    aHG_calc_timer(goki);
+    aHG_calc_timer(goki, dt);
 
-    if (goki->action != aHG_ACT_DEAD && aHG_calc_add_alpha(goki) == TRUE && aHG_check_dead(actorx, game) == TRUE) {
+    if (goki->action != aHG_ACT_DEAD && aHG_calc_add_alpha(goki, dt) == TRUE &&
+        aHG_check_dead(actorx, game) == TRUE) {
         aHG_setupAction(goki, game, aHG_ACT_DEAD);
     }
 

@@ -21,6 +21,11 @@ static void aSumRoboconpo_ct(FTR_ACTOR* ftr_actor, u8* data) {
 static void aSumRoboconpo_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
     cKF_SkeletonInfo_R_c* keyframe = &ftr_actor->keyframe;
 
+    ftr_actor->dynamic_work_f[0] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[0] >= 4.0f) {
+        ftr_actor->dynamic_work_f[0] -= 4.0f;
+    }
+
     if (Common_Get(clip).my_room_clip != NULL) {
         (*Common_Get(clip).my_room_clip->mini_disk_common_move_proc)(ftr_actor, my_room_actor, game, 0.0f, 0.0f);
     }
@@ -45,7 +50,7 @@ static void aSumRoboconpo_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* g
     gSPMatrix(NEXT_POLY_OPA_DISP, _Matrix_to_Mtx_new(game->graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
     if (ftr_actor->switch_bit != FALSE) {
-        u32 idx = game->frame_counter % ARRAY_COUNT(anime_table);
+        u32 idx = (int)ftr_actor->dynamic_work_f[0] % ARRAY_COUNT(anime_table);
         gSPSegment(NEXT_POLY_OPA_DISP, G_MWO_SEGMENT_8, anime_table[idx]);
     }
     else {

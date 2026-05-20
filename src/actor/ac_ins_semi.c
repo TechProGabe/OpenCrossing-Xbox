@@ -271,7 +271,7 @@ static void aISM_wait(ACTOR* actorx, GAME* game) {
     } else {
         if (insect->type != aINS_INSECT_TYPE_BEE && aISM_IS_CAUGHT(insect) == FALSE) {
             if (insect->patience < 50.0f) {
-                insect->timer--;
+                insect->timer -= (f32)game->graph->dt_num_60fps_frames;
                 if (Common_Get(weather) != mEnv_WEATHER_RAIN && insect->timer < 0) {
                     static u8 semi_sound_data[] = { NA_SE_SEMI3_CRY, NA_SE_SEMI2_CRY, NA_SE_SEMI1_CRY, NA_SE_SEMI0_CRY };
                     int semi_idx = insect->type - aINS_INSECT_TYPE_ROBUST_CICADA;

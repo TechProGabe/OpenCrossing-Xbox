@@ -43,6 +43,16 @@
 
 static Submenu_Overlay_c ovl_base;
 
+static f32 mSM_dt_triangle(int period) {
+    f32 frame_per = ((f32)graph_dt_frame_phase(gamePT, period) / (f32)period) * 2.0f;
+
+    if (frame_per > 1.0f) {
+        frame_per = 2.0f - frame_per;
+    }
+
+    return frame_per;
+}
+
 static void mSM_setup_view(Submenu* submenu, GRAPH* graph, int init_flag) {
     Mtx* mtx;
 
@@ -452,11 +462,7 @@ static void mSM_set_dl_item(GRAPH* graph, f32 x, f32 y, f32 scale, mSM_inventory
     }
 
     if (draw_mark) {
-        f32 frame_per = (((f32)(gamePT->frame_counter % 40)) * (1.0f / 40.0f)) * 2.0f;
-
-        if (frame_per > 1.0f) {
-            frame_per = 2.0f - frame_per;
-        }
+        f32 frame_per = mSM_dt_triangle(40);
 
         gDPPipeSync(POLY_OPA_DISP++);
         gDPSetTextureLUT(POLY_OPA_DISP++, G_TT_NONE);
@@ -1576,11 +1582,7 @@ static void mSM_draw_mail(GRAPH* graph, f32 pos_x, f32 pos_y, f32 scale, Mail_c*
     gSPDisplayList(POLY_OPA_DISP++, inv_item_model);
 
     if (mark_flag) {
-        f32 frame_per = (((f32)(gamePT->frame_counter % 40)) * (1.0f / 40.0f)) * 2.0f;
-
-        if (frame_per > 1.0f) {
-            frame_per = 2.0f - frame_per;
-        }
+        f32 frame_per = mSM_dt_triangle(40);
 
         gDPPipeSync(POLY_OPA_DISP++);
         gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 0, (int)(frame_per * 90.0f + 95.0f), 0, 255);
@@ -2059,6 +2061,8 @@ typedef struct submenu_ovl_start_data_s {
     f32 speed_y;
 } mSM_ovl_start_data_c;
 
+static f32 mSM_move_accum[mSM_OVL_NUM];
+
 static void mSM_set_new_start_data(Submenu* submenu) {
     // clang-format off
     static mSM_ovl_start_data_c data_table[] = {
@@ -2109,6 +2113,7 @@ static void mSM_set_new_start_data(Submenu* submenu) {
     menu->data2 = submenu->param2;
     menu->data3 = submenu->param3;
     menu->move_flag = FALSE;
+    mSM_move_accum[type] = 0.0f;
 
     if (type == mSM_OVL_INVENTORY && submenu->param0 == mSM_IV_OPEN_CPMAIL) {
         menu->position[0] = -300.0f;
@@ -2122,6 +2127,7 @@ static void mSM_set_new_start_data(Submenu* submenu) {
 static void mSM_move_chg_base(mSM_MenuInfo_c* menu_info, int mv_dir) {
     menu_info->proc_status = mSM_OVL_PROC_MOVE;
     menu_info->move_drt = mv_dir;
+    mSM_move_accum[menu_info->menu_type] = 0.0f;
 
     if ((mv_dir & 1) != 0) {
         menu_info->next_proc_status = mSM_OVL_PROC_PLAY;
@@ -2142,11 +2148,16 @@ static void mSM_make_trigger_data(Submenu* submenu) {
     }
 
     if (trigger == control->last_trigger) {
+        static f32 repeat_accum = 0.0f;
+        int ticks = graph_dt_60hz_ticks(gamePT, &repeat_accum);
         if (control->repeat_timer > 0) {
-            control->repeat_timer--;
+            control->repeat_timer -= ticks;
+            if (control->repeat_timer < 0) control->repeat_timer = 0;
             trigger = 0;
-        } else {
+        } else if (ticks > 0) {
             control->repeat_timer = 3;
+        } else {
+            trigger = 0;
         }
     } else {
         control->last_trigger = trigger;
@@ -2176,9 +2187,10 @@ static void mSM_set_proc(Submenu* submenu) {
 
 static void mSM_tex_move(Submenu* submenu) {
     mSM_Control_c* control = &submenu->overlay->menu_control;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
 
-    control->texture_pos[0] += 0.3535f;
-    control->texture_pos[1] += 0.3535f;
+    control->texture_pos[0] += 0.3535f * dt;
+    control->texture_pos[1] += 0.3535f * dt;
 
     while (control->texture_pos[0] >= 1024.0f) {
         control->texture_pos[0] -= 1024.0f;
@@ -2227,27 +2239,34 @@ static void mSM_return_func(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     menu_info->next_proc_status = mSM_OVL_PROC_MOVE;
 }
 
-static int mSM_move_menu(f32* pos, f32* speed, s16* flag, f32 speed_mult, f32 p0, f32 p1, f32 p2) {
-    if (*flag == FALSE) {
-        if ((p2 * (*pos - p0)) >= 0.0f) {
-            *speed *= speed_mult;
-            if (*speed < 1.0f) {
-                *speed = 1.0f;
-            } else if (*speed > 75.0f) {
-                *speed = 75.0f;
+static int mSM_move_menu(f32* pos, f32* speed, s16* flag, f32* accum, f32 speed_mult, f32 p0, f32 p1, f32 p2) {
+    *accum += (f32)gamePT->graph->dt_num_60fps_frames;
+
+    while (*accum >= 1.0f) {
+        if (*flag == FALSE) {
+            if ((p2 * (*pos - p0)) >= 0.0f) {
+                *speed *= speed_mult;
+                if (*speed < 1.0f) {
+                    *speed = 1.0f;
+                } else if (*speed > 75.0f) {
+                    *speed = 75.0f;
+                }
             }
+
+            *flag = TRUE;
+        } else {
+            *flag = FALSE;
         }
 
-        *flag = TRUE;
-    } else {
-        *flag = FALSE;
-    }
+        *pos += *speed * p2 * 0.5f;
+        if ((p2 * (*pos - p1)) > 0.0f) {
+            *accum = 0.0f;
+            *flag = FALSE;
+            *pos = p1;
+            return TRUE;
+        }
 
-    *pos += *speed * p2 * 0.5f;
-    if ((p2 * (*pos - p1)) > 0.0f) {
-        *flag = FALSE;
-        *pos = p1;
-        return TRUE;
+        *accum -= 1.0f;
     }
 
     return FALSE;
@@ -2277,14 +2296,79 @@ static void mSM_move_Move(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         dir = 1.0f;
     }
 
-    res = mSM_move_menu(&menu_info->position[idx], &menu_info->speed[idx], &menu_info->move_flag, data_p->speed_mult,
-                        data_p->start_pos * dir, data_p->target_pos * dir, data_p->check_mult * dir);
+    res = mSM_move_menu(&menu_info->position[idx], &menu_info->speed[idx], &menu_info->move_flag,
+                        &mSM_move_accum[menu_info->menu_type], data_p->speed_mult, data_p->start_pos * dir,
+                        data_p->target_pos * dir, data_p->check_mult * dir);
     if (res == TRUE) {
         menu_info->proc_status = menu_info->next_proc_status;
     }
 
-    /* Round down to nearest int */
     menu_info->position[idx] = (f32)(int)menu_info->position[idx];
+}
+
+static f32 mSM_predict_move_position(mSM_MenuInfo_c* menu_info, int idx, mSM_move_data_c* data_p, f32 dir) {
+    f32 pos = menu_info->position[idx];
+    f32 speed = menu_info->speed[idx];
+    s16 flag = menu_info->move_flag;
+    f32 p0 = data_p->start_pos * dir;
+    f32 p1 = data_p->target_pos * dir;
+    f32 p2 = data_p->check_mult * dir;
+
+    if (flag == FALSE) {
+        if ((p2 * (pos - p0)) >= 0.0f) {
+            speed *= data_p->speed_mult;
+            if (speed < 1.0f) {
+                speed = 1.0f;
+            } else if (speed > 75.0f) {
+                speed = 75.0f;
+            }
+        }
+    }
+
+    pos += speed * p2 * 0.5f;
+    if ((p2 * (pos - p1)) > 0.0f) {
+        pos = p1;
+    }
+
+    return (f32)(int)pos;
+}
+
+static void mSM_draw_with_move_interpolation(Submenu* submenu, GAME* game) {
+    static mSM_move_data_c move_data[] = {
+        { 2.0f, 0.0f, 300.0f, 1.0f },
+        { 0.5f, 120.0f, 0.0f, -1.0f },
+    };
+    int type = submenu->current_menu_type;
+    mSM_Control_c* control = &submenu->overlay->menu_control;
+
+    if (type >= 0 && type < mSM_OVL_NUM) {
+        mSM_MenuInfo_c* menu_info = &submenu->overlay->menu_info[type];
+
+        if (menu_info->proc_status == mSM_OVL_PROC_MOVE) {
+            int move_dir = menu_info->move_drt;
+            int idx = move_dir >> 2;
+            mSM_move_data_c* data_p = &move_data[move_dir & 1];
+            f32 dir = (move_dir & 2) ? -1.0f : 1.0f;
+            f32 alpha = mSM_move_accum[type];
+            f32 pos = menu_info->position[idx];
+
+            if (idx < 2 && alpha > 0.0f) {
+                f32 next_pos;
+
+                if (alpha > 1.0f) {
+                    alpha = 1.0f;
+                }
+
+                next_pos = mSM_predict_move_position(menu_info, idx, data_p, dir);
+                menu_info->position[idx] = pos + (next_pos - pos) * alpha;
+                control->menu_draw_func(submenu, game);
+                menu_info->position[idx] = pos;
+                return;
+            }
+        }
+    }
+
+    control->menu_draw_func(submenu, game);
 }
 
 static void mSM_move_End(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
@@ -2305,7 +2389,7 @@ static void mSM_menu_ovl_move(Submenu* submenu) {
 
 static void mSM_menu_ovl_draw(Submenu* submenu, GAME* game) {
     mSM_setup_view(submenu, game->graph, TRUE);
-    submenu->overlay->menu_control.menu_draw_func(submenu, game);
+    mSM_draw_with_move_interpolation(submenu, game);
 }
 
 extern void mSM_menu_ovl_init(Submenu* submenu) {

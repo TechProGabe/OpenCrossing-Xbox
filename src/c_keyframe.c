@@ -420,7 +420,10 @@ static void cKF_SkeletonInfo_R_morphJoint(cKF_SkeletonInfo_R_c* keyframe) {
     s16 next_target_z;
 
     if (!(F32_IS_ZERO(keyframe->morph_counter))) {
-        step = 0.5f / fabsf(keyframe->morph_counter);
+        step = (0.5f * (f32)gamePT->graph->dt_num_60fps_frames) / fabsf(keyframe->morph_counter);
+        if (step > 1.0f) {
+            step = 1.0f;
+        }
     } else {
         step = 0.0f;
     }
@@ -570,22 +573,23 @@ extern int cKF_SkeletonInfo_R_play(cKF_SkeletonInfo_R_c* keyframe) {
     if (F32_IS_ZERO(keyframe->morph_counter)) {
         // Play normally if no morphing is needed
         return cKF_FrameControl_play(&keyframe->frame_control);
-    } else if (keyframe->morph_counter > 0.0f) {
-        // Morph towards target, decreasing morph counter
-        cKF_SkeletonInfo_R_morphJoint(keyframe);
-        keyframe->morph_counter -= 0.5f;
-        if (keyframe->morph_counter <= 0.0f) {
-            keyframe->morph_counter = 0.0f; // Clamp to zero if over-decremented
-        }
-        return cKF_STATE_NONE;
     } else {
-        // Morph from target, increasing morph counter towards zero
-        cKF_SkeletonInfo_R_morphJoint(keyframe);
-        keyframe->morph_counter += 0.5f;
-        if (keyframe->morph_counter >= 0.0f) {
-            keyframe->morph_counter = 0.0f; // Clamp to zero if over-incremented
+        f32 morph_step = 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
+        if (keyframe->morph_counter > 0.0f) {
+            cKF_SkeletonInfo_R_morphJoint(keyframe);
+            keyframe->morph_counter -= morph_step;
+            if (keyframe->morph_counter <= 0.0f) {
+                keyframe->morph_counter = 0.0f;
+            }
+            return cKF_STATE_NONE;
+        } else {
+            cKF_SkeletonInfo_R_morphJoint(keyframe);
+            keyframe->morph_counter += morph_step;
+            if (keyframe->morph_counter >= 0.0f) {
+                keyframe->morph_counter = 0.0f;
+            }
+            return cKF_FrameControl_play(&keyframe->frame_control);
         }
-        return cKF_FrameControl_play(&keyframe->frame_control);
     }
 }
 #else
@@ -736,24 +740,24 @@ extern int cKF_SkeletonInfo_R_play(cKF_SkeletonInfo_R_c* keyframe) {
 
     // Handle morphing and play control based on morph counter
     if (F32_IS_ZERO(keyframe->morph_counter)) {
-        // Play normally if no morphing is needed
         state = cKF_FrameControl_play(&keyframe->frame_control);
-    } else if (keyframe->morph_counter > 0.0f) {
-        // Morph towards target, decreasing morph counter
-        cKF_SkeletonInfo_R_morphJoint(keyframe);
-        keyframe->morph_counter -= 0.5f;
-        if (keyframe->morph_counter <= 0.0f) {
-            keyframe->morph_counter = 0.0f; // Clamp to zero if over-decremented
-        }
-        state = cKF_STATE_NONE;
     } else {
-        // Morph from target, increasing morph counter towards zero
-        cKF_SkeletonInfo_R_morphJoint(keyframe);
-        keyframe->morph_counter += 0.5f;
-        if (keyframe->morph_counter >= 0.0f) {
-            keyframe->morph_counter = 0.0f; // Clamp to zero if over-incremented
+        f32 morph_step = 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
+        if (keyframe->morph_counter > 0.0f) {
+            cKF_SkeletonInfo_R_morphJoint(keyframe);
+            keyframe->morph_counter -= morph_step;
+            if (keyframe->morph_counter <= 0.0f) {
+                keyframe->morph_counter = 0.0f;
+            }
+            state = cKF_STATE_NONE;
+        } else {
+            cKF_SkeletonInfo_R_morphJoint(keyframe);
+            keyframe->morph_counter += morph_step;
+            if (keyframe->morph_counter >= 0.0f) {
+                keyframe->morph_counter = 0.0f;
+            }
+            state = cKF_FrameControl_play(&keyframe->frame_control);
         }
-        state = cKF_FrameControl_play(&keyframe->frame_control);
     }
 
     return state;
@@ -1114,21 +1118,24 @@ extern int cKF_SkeletonInfo_R_combine_play(cKF_SkeletonInfo_R_c* info1, cKF_Skel
     if (F32_IS_ZERO(info1->morph_counter)) {
         cKF_FrameControl_play(&info2->frame_control);
         return cKF_FrameControl_play(&info1->frame_control);
-    } else if (info1->morph_counter > 0.0f) {
-        cKF_SkeletonInfo_R_morphJoint(info1);
-        info1->morph_counter -= 0.5f;
-        if (info1->morph_counter <= 0.0f) {
-            info1->morph_counter = 0.0f;
-        }
-        return cKF_STATE_NONE;
     } else {
-        cKF_SkeletonInfo_R_morphJoint(info1);
-        info1->morph_counter += 0.5f;
-        if (info1->morph_counter >= 0.0f) {
-            info1->morph_counter = 0.0f;
+        f32 morph_step = 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
+        if (info1->morph_counter > 0.0f) {
+            cKF_SkeletonInfo_R_morphJoint(info1);
+            info1->morph_counter -= morph_step;
+            if (info1->morph_counter <= 0.0f) {
+                info1->morph_counter = 0.0f;
+            }
+            return cKF_STATE_NONE;
+        } else {
+            cKF_SkeletonInfo_R_morphJoint(info1);
+            info1->morph_counter += morph_step;
+            if (info1->morph_counter >= 0.0f) {
+                info1->morph_counter = 0.0f;
+            }
+            cKF_FrameControl_play(&info2->frame_control);
+            return cKF_FrameControl_play(&info1->frame_control);
         }
-        cKF_FrameControl_play(&info2->frame_control);
-        return cKF_FrameControl_play(&info1->frame_control);
     }
 }
 
@@ -1182,24 +1189,27 @@ extern void cKF_SkeletonInfo_R_T_combine_play(int* state1, int* state2, int* sta
         *state1 = cKF_FrameControl_play(&info1->frame_control);
         *state2 = cKF_FrameControl_play(&info2->frame_control);
         *state3 = cKF_FrameControl_play(&info3->frame_control);
-    } else if (info1->morph_counter > 0.0f) {
-        cKF_SkeletonInfo_R_morphJoint(info1);
-        info1->morph_counter -= 0.5f;
-        if (info1->morph_counter <= 0.0f) {
-            info1->morph_counter = 0.0f;
-        }
-        *state1 = cKF_STATE_NONE;
-        *state2 = cKF_STATE_NONE;
-        *state3 = cKF_STATE_NONE;
     } else {
-        cKF_SkeletonInfo_R_morphJoint(info1);
-        info1->morph_counter += 0.5f;
-        if (info1->morph_counter >= 0.0f) {
-            info1->morph_counter = 0.0f;
+        f32 morph_step = 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
+        if (info1->morph_counter > 0.0f) {
+            cKF_SkeletonInfo_R_morphJoint(info1);
+            info1->morph_counter -= morph_step;
+            if (info1->morph_counter <= 0.0f) {
+                info1->morph_counter = 0.0f;
+            }
+            *state1 = cKF_STATE_NONE;
+            *state2 = cKF_STATE_NONE;
+            *state3 = cKF_STATE_NONE;
+        } else {
+            cKF_SkeletonInfo_R_morphJoint(info1);
+            info1->morph_counter += morph_step;
+            if (info1->morph_counter >= 0.0f) {
+                info1->morph_counter = 0.0f;
+            }
+            *state1 = cKF_FrameControl_play(&info1->frame_control);
+            *state2 = cKF_FrameControl_play(&info2->frame_control);
+            *state3 = cKF_FrameControl_play(&info3->frame_control);
         }
-        *state1 = cKF_FrameControl_play(&info1->frame_control);
-        *state2 = cKF_FrameControl_play(&info2->frame_control);
-        *state3 = cKF_FrameControl_play(&info3->frame_control);
     }
 }
 
@@ -1280,7 +1290,8 @@ extern void cKF_SkeletonInfo_R_AnimationMove_dt(cKF_SkeletonInfo_R_c* keyframe) 
 extern void cKF_SkeletonInfo_R_AnimationMove_base(xyz_t* base, s16* sbase, xyz_t* scale, s16 yidle,
                                                   cKF_SkeletonInfo_R_c* keyframe) {
     f32 fc = keyframe->fixed_counter;
-    f32 count = 1.0f + fc;
+    f32 move_step = 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
+    f32 count = fc + (move_step * 2.0f);
     int an_flag = keyframe->animation_enabled;
     f32 correct_y;
     f32 mangle_y;
@@ -1297,22 +1308,22 @@ extern void cKF_SkeletonInfo_R_AnimationMove_base(xyz_t* base, s16* sbase, xyz_t
     f32 temp;
     f32 sin, cos;
 
-    if (count > 0.5f) {
-        correct_y = 0.5f / count;
+    if (count > 0.0f) {
+        correct_y = move_step / count;
     } else {
         correct_y = 0.0f;
     }
 
     if (an_flag & cKF_ANIMATION_ROT_Y) {
         mangle_y = keyframe->model_angle_correction;
-        if (count > 0.5f) {
+        if (count > 0.0f) {
             keyframe->model_angle_correction -= (s16)(int)(mangle_y * correct_y);
         } else {
             keyframe->model_angle_correction = 0;
         }
     }
 
-    if (count > 0.5f) {
+    if (count > 0.0f) {
         if (an_flag & cKF_ANIMATION_TRANS_XZ) {
             f32 cx, cz;
 
@@ -1389,7 +1400,7 @@ extern void cKF_SkeletonInfo_R_AnimationMove_base(xyz_t* base, s16* sbase, xyz_t
                       (keyframe->base_world_position.y + keyframe->model_world_position_correction.y);
         }
     }
-    count = fc - 0.5f;
+    count = fc - move_step;
     if (count < 0.0f) {
         count = 0.0f;
     }

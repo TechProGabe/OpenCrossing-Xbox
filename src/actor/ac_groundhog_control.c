@@ -46,7 +46,7 @@ static void aGHC_actor_ct(ACTOR* actor, GAME* game) {
   }
   else if (event_area->awaiting_birth == TRUE) {
     action = aGHC_ACTION_BIRTH_RESET_WAIT;
-    groundhog_control->timer = 600;
+    groundhog_control->timer = 600.0f;
   }
 
   groundhog_control->event_area_p = event_area;
@@ -119,9 +119,9 @@ static void aGHC_before_800(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PLA
 }
 
 static void aGHC_birth_reset_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PLAY* play) {
-  groundhog_control->timer--;
+  groundhog_control->timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-  if (groundhog_control->timer <= 0) {
+  if (groundhog_control->timer <= 0.0f) {
     aGHC_setupAction(groundhog_control, aGHC_ACTION_BIRTH_RESET);
   }
 }
@@ -141,16 +141,16 @@ static void aGHC_birth_reset(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PL
       groundhog_control->event_area_p->awaiting_birth = FALSE;
       groundhog_control->attention_mode = aGHC_ATTENTION_GROUNDHOG;
       mBGMPsComp_make_ps_quietField(360);
-      groundhog_control->timer = 240;
+      groundhog_control->timer = 240.0f;
       aGHC_setupAction(groundhog_control, aGHC_ACTION_RESET_SPEECH_BGM_START_WAIT);
     }
   }
 }
 
 static void aGHC_reset_speech_bgm_start_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PLAY* play) {
-  groundhog_control->timer--;
+  groundhog_control->timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-  if (groundhog_control->timer <= 0) {
+  if (groundhog_control->timer <= 0.0f) {
     mBGMPsComp_make_ps_demo(252, 360);
     aGHC_setupAction(groundhog_control, aGHC_ACTION_RETIRE_RESET_WAIT);
   }
@@ -158,7 +158,7 @@ static void aGHC_reset_speech_bgm_start_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_
 
 static void aGHC_retire_reset_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PLAY* play) {
   if (groundhog_control->event_state == aGHC_EVENT_STATE_MAJIN_DONE) {
-    groundhog_control->timer = 60;
+    groundhog_control->timer = 60.0f;
     Camera2_Inter_set_reverse_mode(play);
     mBGMPsComp_delete_ps_demo(252, 360);
     groundhog_control->attention_mode = aGHC_ATTENTION_SONCHO;
@@ -167,24 +167,24 @@ static void aGHC_retire_reset_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_control, G
 }
 
 static void aGHC_soncho_speech_start_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PLAY* play) {
-  groundhog_control->timer--;
+  groundhog_control->timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-  if (groundhog_control->timer <= 0) {
+  if (groundhog_control->timer <= 0.0f) {
     aGHC_setupAction(groundhog_control, aGHC_ACTION_SONCHO_SPEECH_END_WAIT);
   }
 }
 
 static void aGHC_soncho_speech_end_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PLAY* play) {
   if (groundhog_control->event_state == aGHC_EVENT_STATE_SONCHO_DONE) {
-    groundhog_control->timer = 20;
+    groundhog_control->timer = 20.0f;
     aGHC_setupAction(groundhog_control, aGHC_ACTION_FADE_OUT_START_WAIT);
   }
 }
 
 static void aGHC_fade_out_start_wait(GROUNDHOG_CONTROL_ACTOR* groundhog_control, GAME_PLAY* play) {
-  groundhog_control->timer--;
+  groundhog_control->timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-  if (groundhog_control->timer <= 0) {
+  if (groundhog_control->timer <= 0.0f) {
     Common_Set(event_title_fade_in_progress, TRUE);
     mBGMPsComp_delete_ps_quietField();
     mBGMPsComp_make_ps_co_quiet(360, 60);

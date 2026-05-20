@@ -550,13 +550,16 @@ static void aNPC_act_greeting_turn(NPC_ACTOR* nactorx, GAME_PLAY* play) {
 }
 
 static void aNPC_act_greeting_approach(NPC_ACTOR* nactorx, GAME_PLAY* play) {
-    if (nactorx->movement.demo_move_timer != 0) {
-        nactorx->movement.demo_move_timer--;
+    if (nactorx->movement.demo_move_timer > 0.0f) {
+        nactorx->movement.demo_move_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
+        if (nactorx->movement.demo_move_timer < 0.0f) {
+            nactorx->movement.demo_move_timer = 0.0f;
+        }
     }
 
     if (!aNPC_act_search_move(nactorx) ||
         (nactorx->collision.collision_flag & (mCoBG_HIT_WALL | mCoBG_HIT_WALL_FRONT)) != 0 ||
-        nactorx->movement.demo_move_timer == 0) {
+        nactorx->movement.demo_move_timer <= 0.0f) {
         aNPC_act_greeting_chg_step(nactorx, aNPC_ACT_GREETING_STEP_WAIT);
     }
 }

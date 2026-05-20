@@ -28,8 +28,8 @@ struct fuusen_actor_s {
   mActor_proc action_proc;
   char* segment_p;
   int type_idx;
-  int escape_timer;
-  int timer;
+  f32 escape_timer;
+  f32 timer;
   int count;
   int look_up_flag;
   int wind_idx;

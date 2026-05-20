@@ -36,6 +36,8 @@ enum {
 #define aIKB_CHASE_ANGLE_TIMER1(insect) ((insect)->s32_work1)
 #define aIKB_CHASE_ANGLE_TIMER2(insect) ((insect)->s32_work2)
 #define aIKB_ROT_Y(insect) ((insect)->s32_work3)
+#define aIKB_TIMER0_ACCUM(insect) ((insect)->f32_work0)
+#define aIKB_TIMER2_ACCUM(insect) ((insect)->f32_work1)
 
 extern void aIKB_actor_init(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
@@ -221,22 +223,25 @@ static void aIKB_wait(ACTOR* actorx, GAME* game) {
         /* Insect was scared away */
         aIKB_setupAction(insect, aIKB_ACTION_AVOID, game);
     } else if (aIKB_CHASE_ANGLE_TIMER0(insect) == 0) {
-        chase_angle(&actorx->shape_info.rotation.y, angle_table[(aIKB_CHASE_ANGLE_TIMER1(insect) & 1)], 128);
+        chase_angle(&actorx->shape_info.rotation.y, angle_table[(aIKB_CHASE_ANGLE_TIMER1(insect) & 1)],
+                    aINS_dt_angle_step(game, 128));
 
         if (aIKB_CHASE_ANGLE_TIMER2(insect) == 0) {
             if (aIKB_CHASE_ANGLE_TIMER1(insect) == 0) {
                 aIKB_CHASE_ANGLE_TIMER0(insect) = (int)((10.0f + RANDOM_F(10.0f)) * 2.0f);
+                aIKB_TIMER0_ACCUM(insect) = 0.0f;
                 aIKB_CHASE_ANGLE_TIMER1(insect) = 3 + RANDOM(2);
             } else {
                 aIKB_CHASE_ANGLE_TIMER1(insect)--;
             }
 
             aIKB_CHASE_ANGLE_TIMER2(insect) = 30;
+            aIKB_TIMER2_ACCUM(insect) = 0.0f;
         } else {
-            aIKB_CHASE_ANGLE_TIMER2(insect)--;
+            aINS_dt_dec_s32_timer(game, &aIKB_CHASE_ANGLE_TIMER2(insect), &aIKB_TIMER2_ACCUM(insect));
         }
     } else {
-        aIKB_CHASE_ANGLE_TIMER0(insect)--;
+        aINS_dt_dec_s32_timer(game, &aIKB_CHASE_ANGLE_TIMER0(insect), &aIKB_TIMER0_ACCUM(insect));
     }
 }
 

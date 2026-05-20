@@ -58,6 +58,7 @@ void minsect_ka_mv(MUSEUM_INSECT_PRIVATE_DATA* actor, GAME* game) {
             } else if (mDemo_Check(8, &priv->actor) == 0) {
                 sAdo_OngenTrgStart(0x6a, &actor->_1C);
                 mPlib_request_main_stung_mosquito_type1(MI_Control_Actor);
+                actor->_74 = 2;
             }
         } else if (actor->_6E < 0) {
             if (dist > 60.f) {

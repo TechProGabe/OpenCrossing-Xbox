@@ -58,7 +58,7 @@ static void Player_actor_SetTimer_Putaway_rod(ACTOR* actor) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actor;
     mPlayer_main_putaway_rod_c* main_putaway = &player->main_data.putaway_rod;
 
-    main_putaway->timer += 1.0f;
+    main_putaway->timer += (f32)gamePT->graph->dt_num_60fps_frames;
 }
 
 static void Player_actor_request_proc_index_fromPutaway_rod(ACTOR* actor, GAME* game, int end_flag) {

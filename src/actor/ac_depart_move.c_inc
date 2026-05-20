@@ -358,7 +358,8 @@ static void aDPT_actor_move(ACTOR* actor, GAME* game) {
     depart->struct_class.keyframe_saved_keyframe = depart->struct_class.keyframe.frame_control.current_frame;
 
     (*depart->struct_class.action_proc)((STRUCTURE_ACTOR*)depart, play);
-    chase_f(&depart->struct_class.arg0_f, aDPT_ctrl_light(depart), 0.019532442f); // approx sqrt(0.000385f)
+    chase_f(&depart->struct_class.arg0_f, aDPT_ctrl_light(depart),
+            0.019532442f * (f32)game->graph->dt_num_60fps_frames); // approx sqrt(0.000385f)
 }
 
 static void aDPT_actor_init(ACTOR* actor, GAME* game) {

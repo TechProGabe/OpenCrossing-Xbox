@@ -22,7 +22,8 @@ void minsect_semi_ct(MUSEUM_INSECT_PRIVATE_DATA* actor, GAME* game) {
 void mi_semi_hane_anime(MUSEUM_INSECT_PRIVATE_DATA* actor) {
     static float scaleX_table[7] = { 1.15f, 1.f, 1.15f, 1.f, 1.15f, 1.f, 1.15f };
     if (actor->_70 < 7) {
-        if (chase_f(&actor->_58, (GETREG(NMREG, 1) * 0.01f + 1.0f) * scaleX_table[actor->_70], 0.23f) == TRUE) {
+        if (chase_f(&actor->_58, (GETREG(NMREG, 1) * 0.01f + 1.0f) * scaleX_table[actor->_70],
+                    0.23f) == TRUE) {
             actor->_70--;
             if (actor->_70 < 0) {
                 actor->_70 = 0;

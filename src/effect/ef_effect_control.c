@@ -207,6 +207,7 @@ static void eEC_Name2EffectKill(int effect_id, u16 item_name) {
                 }
             } else if (profile_tbl[effect_id]->n_frames != eEC_IGNORE_DEATH) {
                 effect->timer = profile_tbl[effect_id]->n_frames;
+                effect->lifetime = (f32)profile_tbl[effect_id]->n_frames;
                 effect->state = eEC_STATE_FINISHED;
 
                 if (profile_tbl[effect_id]->child_effect_id != eEC_NO_CHILD_ID) {
@@ -228,6 +229,7 @@ static void eEC_Name2EffectKillAll(u16 item_name) {
                 *active_flags = FALSE;
             } else if (eEC_ctrl_work.program_info[effect->prog_idx].end_frame != eEC_IGNORE_DEATH) {
                 effect->timer = eEC_ctrl_work.program_info[effect->prog_idx].end_frame;
+                effect->lifetime = (f32)eEC_ctrl_work.program_info[effect->prog_idx].end_frame;
                 effect->state = eEC_STATE_FINISHED;
             }
         }
@@ -338,22 +340,124 @@ static int eEC_DistDeath(eEC_Effect_c* effect, GAME* game, s16 prog_idx) {
     return res;
 }
 
+/* Fractional 60Hz progress since last tick, [0, 1). _dw can read this for
+ * smooth animation interpolation between integer timer values. */
+static float eEC_dt_accum = 0.0f;
+float eEC_get_partial_tick(void) { return eEC_dt_accum; }
+
+/* Death check: lifetime <= 0 OR (legacy) timer <= 0. Once all effects use
+ * lifetime, the timer arm goes away. */
+int eEC_ShouldEffectDie(const eEC_Effect_c* effect) {
+    return effect->lifetime <= 0.0f || effect->timer <= 0;
+}
+
+/* Effects flagged here get _mv every real frame with dt-scaled motion.
+ * Timer/lifetime still ticks at 60Hz in pass 2. */
+static const u8 eEC_smooth_motion[eEC_EFFECT_NUM] = {
+    [eEC_EFFECT_DUST]            = 1,
+    [eEC_EFFECT_BUSH_HAPPA]      = 1,
+    [eEC_EFFECT_BUSH_YUKI]       = 1,
+    [eEC_EFFECT_KAZE_HAPPA]      = 1,
+    [eEC_EFFECT_NAMIDA]          = 1,
+    [eEC_EFFECT_IMPACT_STAR]     = 1,
+    [eEC_EFFECT_KIGAE_LIGHT]     = 1,
+    [eEC_EFFECT_KONPU]           = 1,
+    [eEC_EFFECT_NEBOKE_AKUBI]    = 1,
+    [eEC_EFFECT_NEBOKE_AWA]      = 1,
+    [eEC_EFFECT_LOVELOVE2]       = 1,
+    [eEC_EFFECT_LOVELOVE_HEART]  = 1,
+    [eEC_EFFECT_KIKUZU]          = 1,
+    [eEC_EFFECT_ASE_CH]          = 1,
+    [eEC_EFFECT_KASAMIZUTAMA]    = 1,
+    [eEC_EFFECT_HALLOWEEN_SMOKE] = 1,
+    [eEC_EFFECT_YUKIHANE]        = 1,
+    [eEC_EFFECT_STEAM]           = 1,
+    [eEC_EFFECT_FURO_YUGE]       = 1,
+    [eEC_EFFECT_SOBA_YUGE]       = 1,
+    [eEC_EFFECT_TUMBLE_DUST]     = 1,
+    [eEC_EFFECT_DIG_MUD]         = 1,
+    [eEC_EFFECT_KPUN]            = 1,
+    [eEC_EFFECT_PUN_YUGE]        = 1,
+    [eEC_EFFECT_SANDSPLASH]      = 1,
+    [eEC_EFFECT_KISHA_KEMURI]    = 1,
+    [eEC_EFFECT_COIN]            = 1,
+    [eEC_EFFECT_DIG_HOLE]        = 1,
+    [eEC_EFFECT_GOKI]            = 1,
+    [eEC_EFFECT_RESET_HOLE]      = 1,
+    [eEC_EFFECT_TAMAIRE]         = 1,
+    [eEC_EFFECT_BREAK_AXE]       = 1,
+    [eEC_EFFECT_HANABIRA]        = 1,
+    [eEC_EFFECT_KAMIFUBUKI]      = 1,
+    [eEC_EFFECT_TURI_SUITEKI]    = 1,
+    [eEC_EFFECT_SHOOTING]        = 1,
+    [eEC_EFFECT_SHOOTING_SET]    = 1,
+    [eEC_EFFECT_MAKE_HEM]        = 1,
+    [eEC_EFFECT_MAKE_HEM_KIRA]   = 1,
+    [eEC_EFFECT_MAKE_HEM_LIGHT]  = 1,
+    [eEC_EFFECT_KAGU_HAPPA]      = 1,
+    [eEC_EFFECT_YOUNG_TREE]      = 1,
+    [eEC_EFFECT_NIGHT13_MOON]    = 1,
+    [eEC_EFFECT_NIGHT15_MOON]    = 1,
+    [eEC_EFFECT_TURI_MIZU]       = 1,
+    [eEC_EFFECT_TUMBLE_BODYPRINT] = 1,
+    [eEC_EFFECT_SUISOU_AWA]      = 1,
+    [eEC_EFFECT_TURI_HAMON]      = 1,
+    [eEC_EFFECT_DOYON]           = 1,
+    [eEC_EFFECT_CAR_LIGHT]       = 1,
+    [eEC_EFFECT_DOUZOU_LIGHT]    = 1,
+    [eEC_EFFECT_AMI_MIZU]        = 1,
+};
+
 static void eEC_AllEffectMove(GAME* game) {
-    int i;
-    u8* active_flags = eEC_ctrl_work.effect_active_flags;
-    eEC_Effect_c* effect = eEC_ctrl_work.effects;
+    const float dt = (float)game->graph->dt_num_60fps_frames;
 
-    for (i = 0; i < eEC_EFFECT_ACTIVE_MAX; i++, active_flags++, effect++) {
-        if (*active_flags) {
-            s16 prog_idx = effect->prog_idx;
+    /* Pass 1: smooth-motion effects, _mv every real frame. Also decrement
+     * lifetime for ALL effects so dt-correct death is uniform. */
+    {
+        u8* active_flags = eEC_ctrl_work.effect_active_flags;
+        eEC_Effect_c* effect = eEC_ctrl_work.effects;
+        int i;
+        for (i = 0; i < eEC_EFFECT_ACTIVE_MAX; i++, active_flags++, effect++) {
+            if (*active_flags) {
+                effect->lifetime -= dt;
+                if (effect->name >= 0 && effect->name < eEC_EFFECT_NUM &&
+                    eEC_smooth_motion[effect->name]) {
+                    profile_tbl[effect->name]->move_proc(effect, game);
+                }
+            }
+        }
+    }
 
-            profile_tbl[effect->name]->move_proc(effect, game);
-            effect->timer--;
+    /* Pass 2: 60Hz accumulator drives non-smooth _mv plus timer/death. */
+    int step, steps;
 
-            if (effect->timer <= 0 || eEC_DistDeath(effect, game, prog_idx) == TRUE) {
-                *active_flags = 0;
-                effect->timer = 0;
-                effect->_0A = 0;
+    eEC_dt_accum += (float)game->graph->dt_num_60fps_frames;
+    steps = (int)eEC_dt_accum;
+    eEC_dt_accum -= (float)steps;
+    // CPU Spiral preventation
+    if (steps > 4) steps = 4;
+
+    for (step = 0; step < steps; step++) {
+        u8* active_flags = eEC_ctrl_work.effect_active_flags;
+        eEC_Effect_c* effect = eEC_ctrl_work.effects;
+        int i;
+
+        for (i = 0; i < eEC_EFFECT_ACTIVE_MAX; i++, active_flags++, effect++) {
+            if (*active_flags) {
+                s16 prog_idx = effect->prog_idx;
+
+                if (effect->name < 0 || effect->name >= eEC_EFFECT_NUM ||
+                    !eEC_smooth_motion[effect->name]) {
+                    profile_tbl[effect->name]->move_proc(effect, game);
+                }
+                effect->timer--;
+
+                if (eEC_ShouldEffectDie(effect) || eEC_DistDeath(effect, game, prog_idx) == TRUE) {
+                    *active_flags = 0;
+                    effect->timer = 0;
+                    effect->lifetime = 0.0f;
+                    effect->_0A = 0;
+                }
             }
         }
     }
@@ -436,6 +540,8 @@ static eEC_Effect_c* eEC_MakeEffect(s16 effect_id, xyz_t pos, xyz_t* ofs, GAME* 
         effects[use_idx].arg1 = arg1;
 
         profile_tbl[effect_id]->ct_proc(&effects[use_idx], game, ct_arg);
+        /* Default lifetime mirrors timer; per-effect _ct can override. */
+        effects[use_idx].lifetime = (f32)effects[use_idx].timer;
         *active_effect_num = use_idx + 1;
         effect = &effects[use_idx];
     }

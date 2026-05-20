@@ -18,10 +18,11 @@ struct gyo_kage_actor_s {
     s16 type;
     int _17C;
     ClObjPipe_c col_pipe;
-    int delete_timer;
-    s16 draw_frame;
+    f32 delete_timer;
+    f32 draw_frame;
     u8 exist_flag;
     u8 wall_flag;
+    u8 ripple_done;
     u32 alpha;
     int data_id;
 };

@@ -315,12 +315,18 @@ extern void mSM_submenu_ctrl(GAME_PLAY* play) {
 }
 
 static void mSM_move_Wait(Submenu* submenu) {
+    static float wait_accum = 0.0f;
+    int ticks = graph_dt_60hz_ticks(gamePT, &wait_accum);
+
     if (submenu->wait_timer != 0) {
-        submenu->wait_timer--;
+        submenu->wait_timer -= ticks;
+        if (submenu->wait_timer < 0) {
+            submenu->wait_timer = 0;
+        }
     }
 
     if (submenu->start_refuse_timer != 0) {
-        submenu->start_refuse_timer--;
+        submenu->start_refuse_timer = ticks >= submenu->start_refuse_timer ? 0 : submenu->start_refuse_timer - ticks;
     }
 }
 

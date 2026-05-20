@@ -3,8 +3,11 @@ static void aNRTC_talk_request(ACTOR* actor, GAME*);
 
 static void aNRTC_think_start(NPC_ACTOR* actor, GAME_PLAY* play) {
     NPC_RTC_ACTOR* rtc = (NPC_RTC_ACTOR*)actor;
-    if (rtc->first_talk_timer > 0) {
-        rtc->first_talk_timer--;
+    if (rtc->first_talk_timer > 0.0f) {
+        rtc->first_talk_timer -= (f32)play->game.graph->dt_num_60fps_frames;
+        if (rtc->first_talk_timer < 0.0f) {
+            rtc->first_talk_timer = 0.0f;
+        }
     } else {
         rtc->talk_flag = TRUE;
         rtc->npc_class.talk_info.talk_request_proc = &aNRTC_talk_request;
@@ -73,26 +76,32 @@ static aNPC_SUB_PROC aNRTC_proc_table[] = {
 
 static void aNRTC_think_main_proc(NPC_ACTOR* actor, GAME_PLAY* play) {
     NPC_RTC_ACTOR* rtc = (NPC_RTC_ACTOR*)actor;
-    if (rtc->fade_timer > 0) {
-        rtc->fade_timer--;
-        if (rtc->fade_timer == 0) {
+    f32 dt = (f32)play->game.graph->dt_num_60fps_frames;
+
+    if (rtc->fade_timer > 0.0f) {
+        rtc->fade_timer -= dt;
+        if (rtc->fade_timer <= 0.0f) {
+            rtc->fade_timer = 0.0f;
             play->fade_color_value.c.a = -1;
-        } else if (rtc->fade_timer < 25) {
+        } else if (rtc->fade_timer < 25.0f) {
             play->fade_color_value.c.a = 255.0f * (1.0f - (0.04f * rtc->fade_timer));
         }
     } else if (rtc->talk_flag == 0) {
         aNRTC_proc_table[rtc->think_idx](actor, play);
     }
 
-    if (rtc->bgm_timer == 0) {
+    if (rtc->bgm_timer == 0.0f) {
         if (rtc->think_idx == 1) {
             mBGMPsComp_make_ps_wipe(0x21C2);
         } else {
             mBGMPsComp_make_ps_wipe(0x621C);
         }
-        rtc->bgm_timer = -2;
-    } else if (rtc->bgm_timer > 0) {
-        rtc->bgm_timer--;
+        rtc->bgm_timer = -2.0f;
+    } else if (rtc->bgm_timer > 0.0f) {
+        rtc->bgm_timer -= dt;
+        if (rtc->bgm_timer < 0.0f) {
+            rtc->bgm_timer = 0.0f;
+        }
     }
 }
 
@@ -116,9 +125,9 @@ static void aNRTC_schedule_init_proc(NPC_ACTOR* actor, GAME_PLAY* play) {
     NPC_RTC_ACTOR* rtc = (NPC_RTC_ACTOR*)actor;
     rtc->npc_class.draw.anim_speed_type = aNPC_ANIM_SPEED_TYPE_FREE;
     rtc->npc_class.talk_info.default_animation = aNPC_ANIM_4HAKU_E1;
-    rtc->bgm_timer = -1;
-    rtc->fade_timer = 0;
-    rtc->first_talk_timer = 90;
+    rtc->bgm_timer = -1.0f;
+    rtc->fade_timer = 0.0f;
+    rtc->first_talk_timer = 90.0f;
     rtc->npc_class.think.think_proc = aNRTC_think_proc;
     rtc->think_idx = 0;
     Common_Get(clip.npc_clip)->think_proc(actor, play, aNPC_THINK_IN_BLOCK, 0);

@@ -103,7 +103,7 @@ static void Player_actor_request_proc_index_fromStung_bee(ACTOR* actorx, GAME* g
     if (*timer_p > 252.0f) {
         Player_actor_request_main_notice_bee_all(game, mPlayer_REQUEST_PRIORITY_26);
     } else {
-        (*timer_p) += 1.0f;
+        (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
     }
 }
 

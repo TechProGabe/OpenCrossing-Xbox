@@ -44,6 +44,25 @@ ACTOR_PROFILE Ball_Profile = {
 
 BALL_ACTOR* Global_Actor_p;
 
+static f32 aBALL_dt_step(GAME* game, f32 step) {
+    return step * (f32)game->graph->dt_num_60fps_frames;
+}
+
+static s16 aBALL_dt_angle_step(GAME* game, s16 step) {
+    f32 dt_step;
+
+    if (step == 0) {
+        return 0;
+    }
+
+    dt_step = (f32)step * (f32)game->graph->dt_num_60fps_frames;
+    if (dt_step < 1.0f) {
+        dt_step = 1.0f;
+    }
+
+    return (s16)dt_step;
+}
+
 ClObjPipeData_c aBALL_CoInfoData = {
     { 0x39, 0x20, ClObj_TYPE_PIPE }, // collision data
     { 1 },                           // element data
@@ -171,7 +190,7 @@ static void aBALL_actor_dt(ACTOR* actor, GAME* game) {
     ClObjPipe_dt(game, &ball->ball_pipe);
 }
 
-static void aBALL_position_move(BALL_ACTOR* actor) {
+static void aBALL_position_move(BALL_ACTOR* actor, GAME* game) {
     xyz_t pos;
     s_xyz angle;
 
@@ -181,13 +200,14 @@ static void aBALL_position_move(BALL_ACTOR* actor) {
 
     if ((actor->actor_class.bg_collision_check.result.on_ground) ||
         (actor->actor_class.bg_collision_check.result.is_in_water)) {
-        chase_f(&actor->actor_class.speed, actor->ball_max_speed, actor->ball_acceleration);
+        chase_f(&actor->actor_class.speed, actor->ball_max_speed, aBALL_dt_step(game, actor->ball_acceleration));
     }
 
     if (!(actor->state_flags & aBALL_STATE_IN_HOLE)) {
         mRlib_spdF_Angle_to_spdXZ(&actor->actor_class.position_speed, &actor->actor_class.speed,
                                   &actor->actor_class.world.angle.y);
-        chase_f(&actor->actor_class.position_speed.y, actor->actor_class.max_velocity_y, actor->actor_class.gravity);
+        chase_f(&actor->actor_class.position_speed.y, actor->actor_class.max_velocity_y,
+                aBALL_dt_step(game, actor->actor_class.gravity));
 
         mRlib_position_move_for_sloop(&actor->actor_class, &angle);
 
@@ -505,16 +525,19 @@ static void aBALL_process_ground(ACTOR* actor, GAME* game) {
         return;
     }
 
-    if (!(game->frame_counter & 7) && (actor->bg_collision_check.result.unit_attribute) == 9) {
-        if (actor->speed > 1.0f) {
-            if (actor->speed > 4.0f) {
-                effect_type = 1;
-            } else {
-                effect_type = 0;
-            }
+    {
+        if (graph_dt_period_elapsed(game, &ball->grass_effect_accum, 8.0f) &&
+            (actor->bg_collision_check.result.unit_attribute) == 9) {
+            if (actor->speed > 1.0f) {
+                if (actor->speed > 4.0f) {
+                    effect_type = 1;
+                } else {
+                    effect_type = 0;
+                }
 
-            Common_Get(clip).effect_clip->effect_make_proc(eEC_EFFECT_BUSH_HAPPA, actor->world.position, 1,
-                                                           actor->world.angle.y, game, actor->npc_id, 0, effect_type);
+                Common_Get(clip).effect_clip->effect_make_proc(eEC_EFFECT_BUSH_HAPPA, actor->world.position, 1,
+                                                               actor->world.angle.y, game, actor->npc_id, 0, effect_type);
+            }
         }
     }
 }
@@ -539,7 +562,7 @@ static void aBALL_set_spd_relations_in_water(ACTOR* actor, GAME* game) {
     angle = atans_table(pos_flow.z, pos_flow.x);
     apply_angle = ABS((s16)(actor->world.angle.y - angle));
 
-    chase_angle(&actor->world.angle.y, angle, angl_add_table[apply_angle > 0x4000]);
+    chase_angle(&actor->world.angle.y, angle, aBALL_dt_angle_step(game, angl_add_table[apply_angle > 0x4000]));
 
     if (actor->world.position.y < height) {
         actor->max_velocity_y = 1.0f;
@@ -547,12 +570,19 @@ static void aBALL_set_spd_relations_in_water(ACTOR* actor, GAME* game) {
         actor->max_velocity_y = -1.0f;
     }
 
-    if (ball->timer < 0x20) {
-        if (!(game->frame_counter & 3) && (ball->timer < 0x10) || !(game->frame_counter & 7)) {
-            Common_Get(clip).effect_clip->effect_make_proc(eEC_EFFECT_TURI_HAMON, actor->world.position, 1,
-                                                           actor->world.angle.y, game, actor->npc_id, 1, 0);
+    {
+        int ticks = graph_dt_60hz_ticks(game, &ball->water_effect_accum);
+        int t;
+        for (t = 0; t < ticks; t++) {
+            if (ball->timer < 0x20) {
+                ball->water_effect_frame++;
+                if (!(ball->water_effect_frame & 3) && (ball->timer < 0x10) || !(ball->water_effect_frame & 7)) {
+                    Common_Get(clip).effect_clip->effect_make_proc(eEC_EFFECT_TURI_HAMON, actor->world.position, 1,
+                                                                   actor->world.angle.y, game, actor->npc_id, 1, 0);
+                }
+                ball->timer++;
+            }
         }
-        ball->timer++;
     }
 
     actor->gravity = 0.1f;
@@ -601,6 +631,8 @@ static void aBALL_process_ground_water_init(ACTOR* actor, GAME* game) {
 
     actor->shape_info.draw_shadow = 0;
     ball->timer = 0;
+    ball->water_effect_accum = 0.0f;
+    ball->water_effect_frame = 0;
     ball->process_proc = aBALL_process_ground_water;
 }
 
@@ -644,12 +676,12 @@ static void aBALL_process_ground_water(ACTOR* actor, GAME* game) {
     }
 }
 
-static void aBALL_calc_axis(ACTOR* actor) {
+static void aBALL_calc_axis(ACTOR* actor, GAME* game) {
     BALL_ACTOR* ball = (BALL_ACTOR*)actor;
     s16 angle;
     f32 speed_fact;
 
-    angle = (actor->speed * 434.81952f);
+    angle = (actor->speed * 434.81952f * (f32)game->graph->dt_num_60fps_frames);
 
     if (ball->process_proc == aBALL_process_air_water || ball->process_proc == aBALL_process_ground_water) {
         speed_fact = ((-1.0f) - actor->position_speed.y) / (-2.0f);
@@ -748,14 +780,14 @@ static void aBALL_actor_move(ACTOR* actor, GAME* game) {
         }
     }
     Common_Set(ball_pos, actor->world.position);
-    aBALL_position_move(ball);
+    aBALL_position_move(ball, game);
     ball->process_proc(actor, game);
     aBALL_BGcheck(ball);
     aBALL_OBJcheck(ball, game);
 
     CollisionCheck_Uty_ActorWorldPosSetPipeC(&ball->actor_class, &ball->ball_pipe);
     CollisionCheck_setOC(game, &play->collision_check, &ball->ball_pipe.collision_obj);
-    aBALL_calc_axis(actor);
+    aBALL_calc_axis(actor, game);
     aBALL_status_check(actor, game);
 }
 

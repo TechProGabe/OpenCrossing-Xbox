@@ -43,20 +43,20 @@ static void eShootingKira_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eShootingKira_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 max = 42 + GETREG(MYKREG, 32);
-    s16 counter = max - effect->timer;
+    f32 max = (f32)(42 + GETREG(MYKREG, 32));
+    f32 t = max - effect->lifetime;
     s16 fadein = max * 0.7f;
     f32 scale;
 
-    if (counter < fadein) {
-        scale = eEC_CLIP->calc_adjust_proc(counter, 0, max * 0.7f, 0.0f, 0.0065f);
+    if (t < (f32)fadein) {
+        scale = eEL_CalcAdjust_F(t, 0, max * 0.7f, 0.0f, 0.0065f);
     } else {
         s16 fadein2 = max * 0.87f;
 
-        if (counter < fadein2) {
-            scale = eEC_CLIP->calc_adjust_proc(counter, max * 0.7f, max * 0.87f, 0.0065f, 0.00975f);
+        if (t < (f32)fadein2) {
+            scale = eEL_CalcAdjust_F(t, max * 0.7f, max * 0.87f, 0.0065f, 0.00975f);
         } else {
-            scale = eEC_CLIP->calc_adjust_proc(counter, max * 0.7f, max, 0.00975f, 0.0f);
+            scale = eEL_CalcAdjust_F(t, max * 0.7f, max, 0.00975f, 0.0f);
         }
     }
 
@@ -64,8 +64,8 @@ static void eShootingKira_mv(eEC_Effect_c* effect, GAME* game) {
     effect->scale.y = scale;
     effect->scale.z = scale;
 
-    effect->position.x = eEC_CLIP->calc_adjust_proc(counter, 0, 42 + GETREG(MYKREG, 32), effect->acceleration.x, effect->velocity.x);
-    effect->position.z = eEC_CLIP->calc_adjust_proc(counter, 0, 42 + GETREG(MYKREG, 32), effect->acceleration.z, effect->velocity.z);
+    effect->position.x = eEL_CalcAdjust_F(t, 0, 42 + GETREG(MYKREG, 32), effect->acceleration.x, effect->velocity.x);
+    effect->position.z = eEL_CalcAdjust_F(t, 0, 42 + GETREG(MYKREG, 32), effect->acceleration.z, effect->velocity.z);
 }
 
 extern Gfx ef_takurami01_normal_render_mode[];
@@ -73,19 +73,19 @@ extern Gfx ef_takurami01_kira_modelT[];
 
 static void eShootingKira_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
-    s16 max = 42 + GETREG(MYKREG, 32);
-    s16 counter = max - effect->timer;
+    f32 max = (f32)(42 + GETREG(MYKREG, 32));
+    f32 t = max - effect->lifetime;
     s16 fadeout = max * 0.87f;
     f32 alpha;
     s16 angle_z;
 
-    if (counter <= fadeout) {
-        alpha = eEC_CLIP->calc_adjust_proc(counter, 0, max * 0.87f, 100.0f, 150.0f);
+    if (t <= (f32)fadeout) {
+        alpha = eEL_CalcAdjust_F(t, 0, max * 0.87f, 100.0f, 150.0f);
     } else {
-        alpha = eEC_CLIP->calc_adjust_proc(counter, max * 0.87f, max, 150.0f, 100.0f);
+        alpha = eEL_CalcAdjust_F(t, max * 0.87f, max, 150.0f, 100.0f);
     }
 
-    angle_z = eEC_CLIP->calc_adjust_proc(counter, 0, 42 + GETREG(MYKREG, 32), 0.0f, 0x20000);
+    angle_z = (s16)eEL_CalcAdjust_F(t, 0.0f, max, 0.0f, 0x20000);
     Matrix_translate(effect->position.x, effect->position.y, effect->position.z, MTX_LOAD);
     Matrix_mult(&play->billboard_matrix, MTX_MULT);
     Matrix_RotateZ(angle_z, MTX_MULT);

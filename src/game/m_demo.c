@@ -645,7 +645,7 @@ static int set_emsg_default() {
     demo->data.emsg.window_color.a = mDemo_WINDOW_COLOR_A;
     demo->camera_type = CAMERA2_PROCESS_LOCK;
     demo->data.emsg.msg_delay_timer = 0;
-    demo->data.emsg.scene_delay_timer = 30;
+    demo->data.emsg.scene_delay_timer = 30.0f;
 
     return TRUE;
 }
@@ -662,7 +662,7 @@ static int wait_emsg_start() {
         Common_Set(event_title_flags, 2);
         return TRUE;
     } else {
-        demo->data.emsg.msg_delay_timer--;
+        demo->data.emsg.msg_delay_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
     }
 
     return FALSE;
@@ -673,7 +673,7 @@ static int wait_emsg_end() {
     mMsg_Window_c* msg_win = mMsg_Get_base_window_p();
 
     if (mMsg_Check_main_hide(msg_win)) {
-        demo->data.emsg.scene_delay_timer--;
+        demo->data.emsg.scene_delay_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
     }
 
     if (demo->data.emsg.scene_delay_timer <= 0 || demo->state == mDemo_STATE_STOP) {
@@ -696,7 +696,7 @@ static int set_emsg2_default() {
     memcpy(&demo->data.emsg.door_data, Common_GetPointer(event_door_data), sizeof(Door_data_c));
     demo->camera_type = CAMERA2_PROCESS_LOCK;
     demo->data.emsg.msg_delay_timer = 0;
-    demo->data.emsg.scene_delay_timer = 30;
+    demo->data.emsg.scene_delay_timer = 30.0f;
     memcpy(&demo->request_save, &demo->current, sizeof(mDemo_Request_c));
 
     return TRUE;

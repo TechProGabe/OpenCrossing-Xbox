@@ -42,13 +42,18 @@ static void eLoveH_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eLoveH_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 120 - effect->timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 120.0f - effect->lifetime;
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
-    effect->effect_specific[0] += DEG2SHORT_ANGLE2(10.55f);
-    effect->acceleration.y = eEC_CLIP->calc_adjust_proc(timer, 20, 120, 0.0f, 0.0425f);
+    effect->effect_specific[0] += (s16)(DEG2SHORT_ANGLE2(10.55f) * dt);
+    effect->acceleration.y = eEL_CalcAdjust_F(t, 20.0f, 120.0f, 0.0f, 0.0425f);
 }
 
 static void eLoveH_dw(eEC_Effect_c* effect, GAME* game) {
@@ -56,15 +61,15 @@ static void eLoveH_dw(eEC_Effect_c* effect, GAME* game) {
     u8 alpha;
 
     xyz_t* scale = &effect->scale;
-    s16 timer = 120 - effect->timer;
+    f32 t = 120.0f - effect->lifetime;
     s16 angle = effect->effect_specific[0];
     f32 sin = sin_s(angle);
     f32 cos = cos_s(angle);
 
-    temp1 = eEC_CLIP->calc_adjust_proc(timer, 0, 120, 0.0f, 0.01f);
-    temp2 = eEC_CLIP->calc_adjust_proc(timer, 0, 30, 1.3499999f, 0.85f);
-    temp3 = eEC_CLIP->calc_adjust_proc(timer, 0, 30, 0.050000012f, 0.54999995f);
-    alpha = (s8)eEC_CLIP->calc_adjust_proc(timer, 60, 120, 255.0f, 0.0f);
+    temp1 = eEL_CalcAdjust_F(t, 0.0f, 120.0f, 0.0f, 0.01f);
+    temp2 = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 1.3499999f, 0.85f);
+    temp3 = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 0.050000012f, 0.54999995f);
+    alpha = (s8)eEL_CalcAdjust_F(t, 60.0f, 120.0f, 255.0f, 0.0f);
 
     scale->x = temp1 * (temp3 + ((sin + 1.0f) * 0.5f * (temp2 - temp3)));
     scale->y = temp1 * (temp3 + ((cos + 1.0f) * 0.5f * (temp2 - temp3)));

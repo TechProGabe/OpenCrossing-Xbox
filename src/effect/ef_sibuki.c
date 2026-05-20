@@ -66,8 +66,11 @@ static void eSibuki_dw(eEC_Effect_c* effect, GAME* game) {
     f32 scale_mult;
     xyz_t pos = effect->position;
     xyz_t scale = effect->scale;
-    s16 idx = (12 - effect->timer) >> 1;
-    idx = CLAMP(idx, 0, 5);
+    f32 k = (12.0f - effect->lifetime) * 0.5f;
+    s16 idx;
+    if (k < 0.0f) k = 0.0f;
+    if (k > 5.0f) k = 5.0f;
+    idx = (s16)k;
 
     if (eSibuki_DrawSibukiPtn[idx] != NULL) {
         mtx = (Mtx*)GRAPH_ALLOC_TYPE(game->graph, Mtx, 1);

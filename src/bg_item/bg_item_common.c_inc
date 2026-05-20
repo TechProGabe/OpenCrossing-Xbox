@@ -114,17 +114,23 @@ static int bIT_actor_fade_entry(mActor_name_t fg_name, xyz_t* pos) {
     return FALSE;
 }
 
-static void bIT_actor_fade_move(GAME* game, bg_item_fade_c* bg_item_fade) {
+static void bIT_actor_fade_move(GAME* game, bg_item_fade_c* bg_item_fade, int ticks) {
     int i;
+
+    if (ticks <= 0) {
+        return;
+    }
 
     for (i = 0; i < bIT_FADE_NUM; i++, bg_item_fade++) {
         if (bg_item_fade->mode != 0) {
-            bg_item_fade->_10++;
+            bg_item_fade->_10 += ticks;
 
             if (bg_item_fade->alpha < 20) {
                 bg_item_fade->mode = 0; // delete
             } else {
-                bg_item_fade->alpha -= 20;
+                int alpha = (int)bg_item_fade->alpha - 20 * ticks;
+
+                bg_item_fade->alpha = alpha > 0 ? alpha : 0;
             }
         }
     }
@@ -278,34 +284,46 @@ static int bg_item_ten_coin_entry_ex(xyz_t* pos, s16 angle) {
     return bIT_actor_ten_coin_entry(bIT_CLIP->bg_item_common_p->ten_coin, pos, angle);
 }
 
-static void bIT_actor_ten_coin_move(GAME* game, bg_item_ten_coin_c* ten_coin) {
+static void bIT_actor_ten_coin_move_tick(bg_item_ten_coin_c* ten_coin) {
     int save;
     int cmp0;
     int cmp1;
+
+    if (ten_coin->_4C == 1) {
+        ten_coin->_4E--;
+
+        if (ten_coin->_4E < 0) {
+            ten_coin->_4E = 0;
+        }
+
+        save = ten_coin->_46;
+        ten_coin->_46 += ten_coin->_48;
+        cmp0 = save >= 0 ? 1 : -1;
+        cmp1 = ten_coin->_46 >= 0 ? 1 : -1;
+
+        if (cmp1 != cmp0) {
+            ten_coin->_46 = 0;
+            ten_coin->_4C = 2;
+        }
+    }
+
+    if (ten_coin->left_frames > 0) {
+        ten_coin->left_frames--;
+    }
+}
+
+static void bIT_actor_ten_coin_move(GAME* game, bg_item_ten_coin_c* ten_coin, int ticks) {
     int i;
+    int tick;
+
+    if (ticks <= 0) {
+        return;
+    }
 
     for (i = 0; i < bIT_TEN_COIN_NUM; i++, ten_coin++) {
         if (ten_coin->_4C != 0) {
-            if (ten_coin->_4C == 1) {
-                ten_coin->_4E--;
-
-                if (ten_coin->_4E < 0) {
-                    ten_coin->_4E = 0;
-                }
-
-                save = ten_coin->_46;
-                ten_coin->_46 += ten_coin->_48;
-                cmp0 = save >= 0 ? 1 : -1;
-                cmp1 = ten_coin->_46 >= 0 ? 1 : -1;
-
-                if (cmp1 != cmp0) {
-                    ten_coin->_46 = 0;
-                    ten_coin->_4C = 2;
-                }
-            }
-
-            if (ten_coin->left_frames > 0) {
-                ten_coin->left_frames--;
+            for (tick = 0; tick < ticks; tick++) {
+                bIT_actor_ten_coin_move_tick(ten_coin);
             }
 
             /* Check if we should reset the money rock to a normal rock */
@@ -1221,7 +1239,7 @@ static void bIT_actor_hole_effect_destruct(bg_item_hole_c* hole) {
     hole->mode = 0;
 }
 
-static void bIT_actor_hole_effect_move(bg_item_hole_c* hole) {
+static void bIT_actor_hole_effect_move_tick(GAME* game, bg_item_hole_c* hole) {
     if (hole->wait_counter != 0) {
         hole->wait_counter--;
     }
@@ -1254,6 +1272,14 @@ static void bIT_actor_hole_effect_move(bg_item_hole_c* hole) {
 
                 break;
         }
+    }
+}
+
+static void bIT_actor_hole_effect_move(GAME* game, bg_item_hole_c* hole, int ticks) {
+    int tick;
+
+    for (tick = 0; tick < ticks && hole->mode != 0; tick++) {
+        bIT_actor_hole_effect_move_tick(game, hole);
     }
 }
 
@@ -1381,6 +1407,7 @@ static void bIT_actor_fly_entry(mActor_name_t fg_item, xyz_t* pos, s16 angle_y) 
     }
 
     drop._6E = 0;
+    drop._8A = 0.0f;
     drop.actorx_p = NULL;
     drop.wait_counter = 0;
 
@@ -1427,6 +1454,7 @@ static int bIT_actor_drop_entry(bg_item_drop_table_c* drop_info, mActor_name_t f
     }
 
     drop.actorx_p = NULL;
+    drop._8A = 0.0f;
 
     if (IS_ITEM_GRASS(drop.fg_item) || (drop.fg_item >= ITM_SHELL0 && drop.fg_item <= ITM_SHELL7)) {
         xyz_t tpos;
@@ -1441,15 +1469,25 @@ static int bIT_actor_drop_entry(bg_item_drop_table_c* drop_info, mActor_name_t f
     return bIT_actor_drop_entry_main(drop_info, &drop);
 }
 
-static void bIT_actor_drop_move(bg_item_drop_table_c* drop_info) {
+static void bIT_actor_drop_move(bg_item_drop_table_c* drop_info, int ticks) {
     bg_item_drop_c* drop = drop_info->drop_p;
     int i;
 
     for (i = 0; i < drop_info->count; i++, drop++) {
         if (drop->layer > 0) {
-            drop->layer--;
+            if (ticks > 0) {
+                drop->layer -= ticks;
+                if (drop->layer < 0) {
+                    drop->layer = 0;
+                }
+            }
         } else if (drop->wait_counter > 0) {
-            drop->wait_counter--;
+            if (ticks > 0) {
+                drop->wait_counter -= ticks;
+                if (drop->wait_counter < 0) {
+                    drop->wait_counter = 0;
+                }
+            }
 
             if (drop->wait_counter == 0 && (drop->flags & 0x80)) {
                 sAdo_OngenTrgStart(0x2A, &drop->position);
@@ -1475,9 +1513,15 @@ static void bIT_actor_drop_destruct(bg_item_drop_table_c* drop_info) {
 
 static void bIT_actor_drop_move_plant(bg_item_drop_c* drop) {
     s16 last_58 = drop->_58;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
+    s16 step = (s16)((f32)drop->_5A * dt);
     s16 now_58;
 
-    drop->_58 = last_58 + drop->_5A;
+    if (step == 0) {
+        step = drop->_5A >= 0 ? 1 : -1;
+    }
+
+    drop->_58 = last_58 + step;
     now_58 = drop->_58;
 
     if ((drop->flags & 1)) {
@@ -1526,7 +1570,7 @@ static void bIT_actor_drop_move_bury_destruct(bg_item_drop_c* drop) {
 
 static void bIT_actor_drop_move_bury(bg_item_drop_c* drop) {
     if (drop->scale.x > 0.0f) {
-        drop->scale.x += -0.1f;
+        drop->scale.x += -0.1f * (f32)gamePT->graph->dt_num_60fps_frames;
         drop->scale.y = drop->scale.x;
         drop->scale.z = drop->scale.x;
     } else {
@@ -1551,26 +1595,36 @@ static void bIT_actor_drop_move_bury_change(bg_item_drop_c* drop) {
 // Part 2
 
 static void bIT_actor_drop_wait_bee(bg_item_drop_c* drop) {
-    drop->_90--;
+    drop->_90 -= (f32)gamePT->graph->dt_num_60fps_frames;
 
-    if (drop->_90 == 0) {
+    if (drop->_90 <= 0.0f) {
         if (drop->actorx_p != NULL) {
             xyz_t_move(&drop->actorx_p->world.position, &drop->position);
         }
 
-        drop->_88 = 120;
+        drop->_88 = 120.0f;
         drop->move_proc = &bIT_actor_drop_move_wait;
     }
 }
 
 static void bIT_actor_drop_move_wait(bg_item_drop_c* drop) {
-    if (drop->_88 != 0) {
-        drop->_88--;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
+
+    if (drop->_88 > 0.0f) {
+        drop->_88 -= dt;
+        if (drop->_88 < 0.0f) {
+            drop->_88 = 0.0f;
+        }
         drop->_76 = 0;
         drop->_70 = 5;
     } else if (drop->_76 <= 255) {
+        int fade_step = (int)((f32)drop->_70 * dt);
+
         drop->_72 = 255 - drop->_76;
-        drop->_76 += drop->_70;
+        if (fade_step < 1) {
+            fade_step = 1;
+        }
+        drop->_76 += fade_step;
     } else {
         drop->_72 = 0;
         drop->move_proc = NULL;
@@ -1582,18 +1636,23 @@ static void bIT_actor_drop_move_wait(bg_item_drop_c* drop) {
 static void bIT_actor_drop_move_fly(bg_item_drop_c* drop) {
     f32 vel_x;
     f32 vel_z;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
+    f32 next_time = drop->_4C + 0.5f * dt;
     f32 scale = drop->_4C / (f32)(int)drop->drop_speed;
 
-    if (drop->_8A > 0) {
-        if (drop->_8A == 1) {
+    if (drop->_8A > 0.0f) {
+        f32 next_delay = drop->_8A - dt;
+
+        if (drop->_8A <= 1.0f || (drop->_8A > 1.0f && next_delay <= 1.0f)) {
             if ((drop->flags & 0x100)) {
                 sAdo_OngenTrgStart(0x43D, &drop->position);
             } else if ((drop->flags & 0x200)) {
                 sAdo_OngenTrgStart(0x40C, &drop->position);
             }
+            next_delay = 0.0f;
         }
 
-        drop->_8A--;
+        drop->_8A = next_delay > 0.0f ? next_delay : 0.0f;
     }
 
     if ((drop->flags & 0x200)) {
@@ -1627,8 +1686,13 @@ static void bIT_actor_drop_move_fly(bg_item_drop_c* drop) {
 
     if ((drop->flags & 0x20) && drop->_4C > (f32)drop->_78) {
         if (drop->_76 <= 255) {
+            int fade_step = (int)((f32)drop->_70 * dt);
+
             drop->_72 = 255 - drop->_76;
-            drop->_76 += drop->_70;
+            if (fade_step < 1) {
+                fade_step = 1;
+            }
+            drop->_76 += fade_step;
         } else {
             drop->_72 = 0;
             drop->move_proc = NULL;
@@ -1637,14 +1701,21 @@ static void bIT_actor_drop_move_fly(bg_item_drop_c* drop) {
     }
 
     if ((drop->flags & 0x10)) {
+        s16 angle_step = (s16)((f32)0x123 * dt);
+
+        if (angle_step < 1) {
+            angle_step = 1;
+        }
+
         if ((drop->flags & 0x40)) {
-            drop->angle.z -= 0x123;
+            drop->angle.z -= angle_step;
         } else {
-            drop->angle.z += 0x123;
+            drop->angle.z += angle_step;
         }
     }
 
-    if (drop->_4C == (f32)(drop->drop_speed - 1) && (drop->flags & 0x2000)) {
+    if (drop->_4C <= (f32)(drop->drop_speed - 1) && next_time > (f32)(drop->drop_speed - 1) &&
+        (drop->flags & 0x2000)) {
         drop->flags &= ~0x2000;
 
         if ((drop->flags & 0x20) == 0) {
@@ -1682,7 +1753,7 @@ static void bIT_actor_drop_move_fly(bg_item_drop_c* drop) {
             drop->_4C = 1.0f;
             drop->_6E--;
         } else if (drop->fg_item == HONEYCOMB) {
-            drop->_90 = 1;
+            drop->_90 = 1.0f;
             drop->move_proc = &bIT_actor_drop_wait_bee;
         } else {
             drop->move_proc = NULL;
@@ -1693,7 +1764,7 @@ static void bIT_actor_drop_move_fly(bg_item_drop_c* drop) {
             }
         }
     } else {
-        drop->_4C += 0.5f;
+        drop->_4C = next_time;
     }
 }
 
@@ -2320,73 +2391,80 @@ static int bIT_actor_pit_entry(bg_item_pit_c* pit, s16 mode, mActor_name_t fg_no
     return res;
 }
 
-static void bIT_actor_pit_move(GAME* game, bg_item_pit_c* pit) {
+static void bIT_actor_pit_move_tick(GAME* game, bg_item_pit_c* pit) {
+    switch (pit->mode) {
+        case 0: {
+            break;
+        }
+
+        case 1: {
+            if (pit->hole_timer > 0) {
+                pit->hole_timer--;
+            } else {
+                mFI_SetFG_common(RSV_NO, pit->position, FALSE);
+                pit->mode = 2;
+                pit->hole_timer = 17;
+            }
+
+            break;
+        }
+
+        case 2: {
+            if (pit->hole_timer <= 0) {
+                pit->hole_timer = 0;
+                pit->mode = 3;
+            } else {
+                pit->hole_timer--;
+            }
+
+            break;
+        }
+
+        case 3: {
+            pit->scale = (f32)(int)pit->hole_timer / 26.0f;
+
+            if (pit->hole_timer == 6) {
+                sAdo_OngenTrgStart(0x13C, &pit->position);
+                eEC_CLIP->effect_make_proc(eEC_EFFECT_OTOSIANA, pit->position, 1, 0, game, pit->fg_item_in_pit,
+                                           mCoBG_Wpos2Attribute(pit->position, NULL), 0);
+            }
+
+            if (pit->scale >= 1.0f) {
+                mFI_SetFG_common(pit->hole_fg_item, pit->position, TRUE);
+                pit->mode = 0;
+            }
+
+            pit->hole_timer++;
+            break;
+        }
+
+        case 4: {
+            pit->scale = 1.0f - (f32)(int)pit->hole_timer / 14.0f;
+
+            if (pit->hole_timer == 0) {
+                sAdo_OngenTrgStart(0x15B, &pit->position);
+                eEC_CLIP->effect_make_proc(eEC_EFFECT_OTOSIANA, pit->position, 1, 0, game, pit->fg_item_in_pit,
+                                           mCoBG_Wpos2Attribute(pit->position, NULL), 0);
+            }
+
+            if (pit->scale <= 0.0f) {
+                mFI_SetFG_common(EMPTY_NO, pit->position, TRUE);
+                pit->mode = 0;
+            }
+
+            pit->hole_timer++;
+            break;
+        }
+    }
+}
+
+static void bIT_actor_pit_move(GAME* game, bg_item_pit_c* pit, int ticks) {
     int i;
+    int tick;
 
     for (i = 0; i < bIT_PIT_NUM; i++, pit++) {
-        switch (pit->mode) {
-            case 0: {
-                break;
-            }
-
-            case 1: {
-                if (pit->hole_timer > 0) {
-                    pit->hole_timer--;
-                } else {
-                    mFI_SetFG_common(RSV_NO, pit->position, FALSE);
-                    pit->mode = 2;
-                    pit->hole_timer = 17;
-                }
-
-                break;
-            }
-
-            case 2: {
-                if (pit->hole_timer <= 0) {
-                    pit->hole_timer = 0;
-                    pit->mode = 3;
-                } else {
-                    pit->hole_timer--;
-                }
-
-                break;
-            }
-
-            case 3: {
-                pit->scale = (f32)(int)pit->hole_timer / 26.0f;
-
-                if (pit->hole_timer == 6) {
-                    sAdo_OngenTrgStart(0x13C, &pit->position);
-                    eEC_CLIP->effect_make_proc(eEC_EFFECT_OTOSIANA, pit->position, 1, 0, game, pit->fg_item_in_pit,
-                                               mCoBG_Wpos2Attribute(pit->position, NULL), 0);
-                }
-
-                if (pit->scale >= 1.0f) {
-                    mFI_SetFG_common(pit->hole_fg_item, pit->position, TRUE);
-                    pit->mode = 0;
-                }
-
-                pit->hole_timer++;
-                break;
-            }
-
-            case 4: {
-                pit->scale = 1.0f - (f32)(int)pit->hole_timer / 14.0f;
-
-                if (pit->hole_timer == 0) {
-                    sAdo_OngenTrgStart(0x15B, &pit->position);
-                    eEC_CLIP->effect_make_proc(eEC_EFFECT_OTOSIANA, pit->position, 1, 0, game, pit->fg_item_in_pit,
-                                               mCoBG_Wpos2Attribute(pit->position, NULL), 0);
-                }
-
-                if (pit->scale <= 0.0f) {
-                    mFI_SetFG_common(EMPTY_NO, pit->position, TRUE);
-                    pit->mode = 0;
-                }
-
-                pit->hole_timer++;
-                break;
-            }
+        for (tick = 0; tick < ticks && pit->mode != 0; tick++) {
+            bIT_actor_pit_move_tick(game, pit);
         }
     }
 }
@@ -2850,17 +2928,19 @@ static void bg_item_common_draw_check(GAME_PLAY* play, bg_item_common_c* common,
 }
 
 static void bg_item_common_move(GAME_PLAY* play, ACTOR* actorx, bg_item_common_c* common) {
+    static f32 logic_accum = 0.0f;
     int flags;
     int i;
+    int ticks = graph_dt_60hz_ticks((GAME*)play, &logic_accum);
     bg_item_draw_table_c* draw_tbl;
 
-    bIT_actor_drop_move(&common->drop_info);
-    bIT_actor_drop_move(&common->fruit_drop_info);
-    bIT_actor_hole_effect_move(common->hole);
+    bIT_actor_drop_move(&common->drop_info, ticks);
+    bIT_actor_drop_move(&common->fruit_drop_info, ticks);
+    bIT_actor_hole_effect_move((GAME*)play, common->hole, ticks);
     bIT_actor_shin_effect_move((GAME*)play, common->shin);
-    bIT_actor_pit_move((GAME*)play, common->pit);
-    bIT_actor_ten_coin_move((GAME*)play, common->ten_coin);
-    bIT_actor_fade_move((GAME*)play, common->fade);
+    bIT_actor_pit_move((GAME*)play, common->pit, ticks);
+    bIT_actor_ten_coin_move((GAME*)play, common->ten_coin, ticks);
+    bIT_actor_fade_move((GAME*)play, common->fade, ticks);
 
     flags = 0;
     if (mFI_ItemisBorn() == TRUE || mFI_CheckPlayerWade(mFI_WADE_END)) {

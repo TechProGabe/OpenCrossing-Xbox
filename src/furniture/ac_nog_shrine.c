@@ -3,7 +3,10 @@ static void fNSH_ct(FTR_ACTOR* ftr_actor, u8* data) {
 }
 
 static void fNSH_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    // nothing
+    ftr_actor->dynamic_work_f[0] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[0] >= 1024.0f) {
+        ftr_actor->dynamic_work_f[0] -= 1024.0f;
+    }
 }
 
 static void fNSH_dt(FTR_ACTOR* ftr_actor, u8* data) {
@@ -20,15 +23,8 @@ extern Gfx int_nog_shrine_baseT_model[];
 extern Gfx int_nog_shrine_waterT_model[];
 
 static void fNSH_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    u32 ctr;
+    int ctr = (int)ftr_actor->dynamic_work_f[0];
     Gfx* scroll_gfx;
-
-    if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
-        ctr = play->game_frame;
-    } else {
-        ctr = game->frame_counter;
-    }
 
     scroll_gfx = fNSH_GetTileGfx(ctr * 3, 0, game);
 

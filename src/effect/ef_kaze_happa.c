@@ -69,6 +69,7 @@ static void eKZH_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eKZH_mv(eEC_Effect_c* effect, GAME* game) {
+    float dt = (float)game->graph->dt_num_60fps_frames;
     s16 counter = 60 - effect->timer;
     f32 dir = 1.0f;
 
@@ -77,20 +78,24 @@ static void eKZH_mv(eEC_Effect_c* effect, GAME* game) {
     }
 
     if (counter < 20) {
-        effect->velocity.x += dir * 0.095f;
-        effect->velocity.y += -0.02875f;
+        effect->velocity.x += dir * 0.095f * dt;
+        effect->velocity.y += -0.02875f * dt;
     } else if (counter >= 20 && counter < 40) {
         f32 angle = eEC_CLIP->calc_adjust_proc(counter, 20, 39, 0.0f, 360.0f);
         effect->effect_specific[3] = RAD2SHORT_ANGLE2(DEG2RAD(angle));
     } else if (counter >= 40) {
         f32 angle = eEC_CLIP->calc_adjust_proc(counter, 40, 59, 360.0f, 450.0f);
         effect->effect_specific[3] = RAD2SHORT_ANGLE2(DEG2RAD(angle));
-        effect->velocity.x += dir * 0.095f;
-        effect->velocity.y += -0.02875f;
+        effect->velocity.x += dir * 0.095f * dt;
+        effect->velocity.y += -0.02875f * dt;
     }
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->offset, &effect->velocity, &effect->offset);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->offset.x += effect->velocity.x * dt;
+    effect->offset.y += effect->velocity.y * dt;
+    effect->offset.z += effect->velocity.z * dt;
 }
 
 extern Gfx ef_kaze01_happa_modelT[];

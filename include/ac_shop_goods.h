@@ -20,14 +20,14 @@ typedef struct ac_shop_good_single_draw_s {
     xyz_t current_pos;
     xyz_t start_pos;
     f32 scale;
-    u16 counter;
+    f32 counter;
     s_xyz angle;
     f32 velocity_y;
     f32 _38;
     f32 acceleration_y;
     s16 _40;
     u16 flags;
-    int delay_timer;
+    f32 delay_timer;
 } aSG_single_draw_c;
 
 struct ac_shop_goods_s {

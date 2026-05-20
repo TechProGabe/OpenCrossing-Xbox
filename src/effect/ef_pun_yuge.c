@@ -41,15 +41,16 @@ static void ePunYuge_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->effect_specific[1] = *(s16*)ct_arg;
     effect->effect_specific[0] = eEC_CLIP->random_first_speed_proc(NULL, 1.5f, 16.0f, 0.0f);
     effect->offset.z = 10.0f;
-    effect->timer = 26.0f;
+    effect->timer = 26;
     sAdo_OngenTrgStart(NA_SE_PUN_YUGE, &effect->position);
 }
 
 static void ePunYuge_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 elapsed_time = 26 - effect->timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 26.0f - effect->lifetime;
 
-    if (elapsed_time < 4) {
-        effect->offset.y += 1.5f;
+    if (t < 4.0f) {
+        effect->offset.y += 1.5f * dt;
     }
 }
 
@@ -72,35 +73,37 @@ static u8 ePunYuge_prim_f_table[] = {
 
 static void ePunYuge_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
-    int frame;
-    s16 time_elapsed = 26 - effect->timer;
-    int anime_idx0;
-    int anime_idx1;
-    int prim_f;
-    int prim_gb;
-    int prim_a;
-    int env_gb;
+    f32 t = 26.0f - effect->lifetime;
+    f32 k = t * 0.5f;
+    int i, j;
+    f32 frac;
+    int anime_idx0, anime_idx1;
+    int prim_f, prim_gb, prim_a, env_gb;
 
-    frame = (s16)CLAMP(time_elapsed >> 1, 0, 12);
-    anime_idx0 = ePunYuge_texture_anime_idx[frame].tex0;
-    anime_idx1 = ePunYuge_texture_anime_idx[frame].tex1;
-    prim_f = ePunYuge_prim_f_table[frame];
-    prim_gb = (u8)eEC_CLIP->calc_adjust_proc(time_elapsed, 0, 8, 200.0f, 255.0f);
-    prim_a = (u8)eEC_CLIP->calc_adjust_proc(time_elapsed, 12, 26, 255.0f, 0.0f);
-    env_gb = (u8)eEC_CLIP->calc_adjust_proc(time_elapsed, 0, 8, 0.0f, 255.0f);
+    if (k < 0.0f) k = 0.0f;
+    if (k > 12.0f) k = 12.0f;
+    i = (int)k;
+    if (i > 12) i = 12;
+    j = (i < 12) ? i + 1 : i;
+    frac = k - (f32)i;
+    anime_idx0 = ePunYuge_texture_anime_idx[i].tex0;
+    anime_idx1 = ePunYuge_texture_anime_idx[i].tex1;
+    prim_f = (int)(ePunYuge_prim_f_table[i] + (ePunYuge_prim_f_table[j] - ePunYuge_prim_f_table[i]) * frac);
+    prim_gb = (u8)eEL_CalcAdjust_F(t, 0.0f, 8.0f, 200.0f, 255.0f);
+    prim_a = (u8)eEL_CalcAdjust_F(t, 12.0f, 26.0f, 255.0f, 0.0f);
+    env_gb = (u8)eEL_CalcAdjust_F(t, 0.0f, 8.0f, 0.0f, 255.0f);
 
-    if (frame <= 4) {
-        f32 scale_y[5];
+    if (t <= 8.0f) {
+        static const f32 scale_y_table[5] = { 0.00595f, 0.00833f, 0.014161f, 0.00833f, 0.00595f };
+        f32 ks = (k < 4.0f) ? k : 4.0f;
+        int si = (int)ks;
+        f32 sf = ks - (f32)si;
+        int sj = (si < 4) ? si + 1 : si;
 
-        scale_y[0] = 0.00595f;
-        scale_y[1] = 0.00833f;
-        scale_y[2] = 0.014161f;
-        scale_y[3] = 0.00833f;
-        scale_y[4] = 0.00595f;
-        effect->scale.y = scale_y[frame];
+        effect->scale.y = scale_y_table[si] + (scale_y_table[sj] - scale_y_table[si]) * sf;
         effect->scale.x = 0.00595f;
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(time_elapsed, 10, 26, 0.00595f, 0.0119f);
+        effect->scale.x = eEL_CalcAdjust_F(t, 10.0f, 26.0f, 0.00595f, 0.0119f);
         effect->scale.y = effect->scale.x;
     }
 

@@ -21,6 +21,18 @@
 static void Camera2_main_Normal_AdjustDistanceAndDirection(GAME_PLAY* play, f32* dist, s_xyz* dir);
 static void Camera2_change_main_index(GAME_PLAY* play);
 
+static f32 Camera2_DtFraction(GAME_PLAY* play, f32 fraction) {
+    if (fraction <= 0.0f) {
+        return 0.0f;
+    }
+
+    if (fraction >= 1.0f) {
+        return 1.0f;
+    }
+
+    return 1.0f - DTCONV_GRAPH(1.0f - fraction, play->game.graph);
+}
+
 static void Camera2_DirectionCalc(GAME_PLAY* play) {
     Camera2* camera = &play->camera;
     xyz_t eye_minus_center;
@@ -201,11 +213,12 @@ static void Camera2_SetView(GAME_PLAY* play) {
     } else {
         if (camera->now_main_index != CAMERA2_PROCESS_LOCK) {
             f32 dist_from_player = Math3DLength(eye, &get_player_actor_withoutCheck(play)->actor_class.world.position);
+            f32 dt = play->game.graph->dt_num_60fps_frames;
 
             if (dist_from_player < 540.0f) {
-                chase_f(&camera->perspective.near, 145.0f, 4.0f);
+                chase_f(&camera->perspective.near, 145.0f, 4.0f * dt);
             } else {
-                chase_f(&camera->perspective.near, 200.0f, 4.0f);
+                chase_f(&camera->perspective.near, 200.0f, 4.0f * dt);
             }
 
             camera->perspective.far = 1600.0f;
@@ -1352,8 +1365,9 @@ static int Camera2_MoveVparamCenter(GAME_PLAY* play, xyz_t* pos) {
     xyz_t* center_p = &camera->lookat.center;
     xyz_t last_center = *center_p;
     xyz_t* center_vel_p = &camera->movement_velocity;
+    f32 step = Camera2_DtFraction(play, 0.2f);
 
-    Math3DInDivPos2(center_p, pos, &new_center, 0.2f); // weirdness with the float loading
+    Math3DInDivPos2(center_p, pos, &new_center, step);
     *center_p = new_center;
 
     xyz_t_sub(center_p, &last_center, center_vel_p);
@@ -1362,8 +1376,9 @@ static int Camera2_MoveVparamCenter(GAME_PLAY* play, xyz_t* pos) {
 
 static int Camera2_MoveDistancePosAndSpeedVParam(GAME_PLAY* play, f32 goal_dist) {
     f32 dist = play->camera.focus_distance;
+    f32 step = Camera2_DtFraction(play, 0.2f);
 
-    play->camera.focus_distance = dist + (goal_dist - dist) * 0.2f;
+    play->camera.focus_distance = dist + (goal_dist - dist) * step;
     play->camera.focus_distance_velocity = play->camera.focus_distance - dist;
     return FALSE;
 }

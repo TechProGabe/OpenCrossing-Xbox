@@ -29,12 +29,13 @@ static void eCar_Light_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg){
 };
 
 static void eCar_Light_mv(eEC_Effect_c* effect, GAME* game){
+    f32 timer = effect->lifetime;
 
-    if(effect->timer > 12){
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 12,24, 0.015f, 0.0f);
+    if(timer > 12.0f){
+        effect->scale.x = eEL_CalcAdjust_F(timer, 12.0f, 24.0f, 0.015f, 0.0f);
     }
     else{
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0,12, 0.0f, 0.015f);
+        effect->scale.x = eEL_CalcAdjust_F(timer, 0.0f, 12.0f, 0.0f, 0.015f);
     }
 
     effect->scale.y = effect->scale.z = effect->scale.x;

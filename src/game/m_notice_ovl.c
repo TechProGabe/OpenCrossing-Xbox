@@ -8,8 +8,16 @@
 #include "m_font.h"
 #include "m_quest.h"
 #include "sys_matrix.h"
+#include "libc/math.h"
 
 static mNT_Ovl_c notice_ovl_data;
+
+static f32 mNT_add_calc_dt(f32* value, f32 target, f32 rate, f32 max_step, f32 min_step) {
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
+    f32 dt_rate = 1.0f - powf(1.0f - rate, dt);
+
+    return add_calc(value, target, dt_rate, max_step * dt, min_step * dt);
+}
 
 extern u8 kei_win_st1_tex_rgb_ia8[];
 extern u8 kei_win_st2_tex_rgb_ia8[];
@@ -106,7 +114,7 @@ static void mNT_roll_control(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
                 }
             }
 
-            chase_f(&menu_info->position[1], roll_pos, menu_info->speed[1]);
+            chase_f(&menu_info->position[1], roll_pos, menu_info->speed[1] * (f32)gamePT->graph->dt_num_60fps_frames);
         } else {
             menu_info->position[1] = roll_pos;
         }
@@ -200,7 +208,7 @@ static void mNT_Play_page_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mNT_
     f32 tmp;
 
     if (notice_ovl->move_time == 1) {
-        tmp = add_calc(&menu_info->position[0], 0.0f, 0.4f, 74.0f, 2.5f);
+        tmp = mNT_add_calc_dt(&menu_info->position[0], 0.0f, 0.4f, 74.0f, 2.5f);
 
         if (fabsf(tmp) < 0.1f) {
             move_flag = TRUE;
@@ -210,7 +218,7 @@ static void mNT_Play_page_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mNT_
     } else {
         if (menu_info->position[0] > 0.0f) {
             direction = 1;
-            menu_info->position[0] = menu_info->position[0] - 74.0f;
+            menu_info->position[0] -= 74.0f * (f32)gamePT->graph->dt_num_60fps_frames;
 
             if (menu_info->position[0] <= 0.0f) {
                 move_flag = TRUE;
@@ -219,7 +227,7 @@ static void mNT_Play_page_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mNT_
             }
         } else {
             direction = 0;
-            menu_info->position[0] += 74.0f;
+            menu_info->position[0] += 74.0f * (f32)gamePT->graph->dt_num_60fps_frames;
 
             if (menu_info->position[0] >= 0.0f) {
                 move_flag = TRUE;
@@ -252,7 +260,7 @@ static void mNT_Play_page_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mNT_
 }
 
 static void mNT_Play_page_to_write(Submenu* submenu, mSM_MenuInfo_c* menu_info, mNT_Ovl_c* notice_ovl) {
-    f32 c0 = add_calc(&menu_info->position[0], 0.0f, 0.4f, 74.0f, 2.5f);
+    f32 c0 = mNT_add_calc_dt(&menu_info->position[0], 0.0f, 0.4f, 74.0f, 2.5f);
     f32 c1;
     int page_stopped;
     int control_stopped;
@@ -265,7 +273,7 @@ static void mNT_Play_page_to_write(Submenu* submenu, mSM_MenuInfo_c* menu_info, 
         page_stopped = FALSE;
     }
 
-    c1 = add_calc(&notice_ovl->control_position, -100.0f, 0.4f, 74.0f, 2.5f);
+    c1 = mNT_add_calc_dt(&notice_ovl->control_position, -100.0f, 0.4f, 74.0f, 2.5f);
     if (fabsf(c1) < 0.1f) {
         notice_ovl->control_position = -100.0f;
         control_stopped = TRUE;
@@ -279,7 +287,7 @@ static void mNT_Play_page_to_write(Submenu* submenu, mSM_MenuInfo_c* menu_info, 
 }
 
 static void mNT_Play_page_to_read(Submenu* submenu, mSM_MenuInfo_c* menu_info, mNT_Ovl_c* notice_ovl) {
-    f32 c0 = add_calc(&menu_info->position[0], 0.0f, 0.4f, 74.0f, 2.5f);
+    f32 c0 = mNT_add_calc_dt(&menu_info->position[0], 0.0f, 0.4f, 74.0f, 2.5f);
     f32 c1;
     int page_stopped;
     int control_stopped;
@@ -292,7 +300,7 @@ static void mNT_Play_page_to_read(Submenu* submenu, mSM_MenuInfo_c* menu_info, m
         page_stopped = FALSE;
     }
 
-    c1 = add_calc(&notice_ovl->control_position, 0.0f, 0.4f, 74.0f, 2.5f);
+    c1 = mNT_add_calc_dt(&notice_ovl->control_position, 0.0f, 0.4f, 74.0f, 2.5f);
     if (fabsf(c1) < 0.1f) {
         notice_ovl->control_position = 0.0f;
         control_stopped = TRUE;

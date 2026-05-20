@@ -50,7 +50,7 @@ static void eSSHKR_mv(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->set_continious_env_proc(effect, 22, 122);
 
     if (effect->state == eEC_STATE_NORMAL) {
-        scale = eEC_CLIP->calc_adjust_proc(22 - effect->timer, 0, 21, 0.0f, 0.015f);
+        scale = eEL_CalcAdjust_F(22.0f - effect->lifetime, 0.0f, 21.0f, 0.0f, 0.015f);
         effect->scale.x = scale;
         effect->scale.y = scale;
         effect->scale.z = scale;
@@ -61,7 +61,7 @@ static void eSSHKR_mv(eEC_Effect_c* effect, GAME* game) {
         effect->scale.z = 0.015f;
         effect->effect_specific[0] = 150;
     } else if (effect->state == eEC_STATE_FINISHED) {
-        effect->effect_specific[0] = eEC_CLIP->calc_adjust_proc(72 - effect->timer, 0, 72, 150.0f, 0.0f);
+        effect->effect_specific[0] = (s16)eEL_CalcAdjust_F(72.0f - effect->lifetime, 0.0f, 72.0f, 150.0f, 0.0f);
     }
 }
 

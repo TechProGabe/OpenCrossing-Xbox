@@ -1,6 +1,7 @@
 #include "ef_effect_control.h"
 
 #include "m_common_data.h"
+#include "m_lib.h"
 #include "sys_matrix.h"
 #include "m_rcp.h"
 
@@ -50,19 +51,27 @@ static void eKikuzu_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eKikuzu_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+
     effect->offset.x = effect->position.y;
     effect->offset.z = effect->offset.y;
     effect->offset.y = mCoBG_GetBgY_AngleS_FromWpos(NULL, effect->position, 0.0f);
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-    effect->effect_specific[0] += effect->effect_specific[1];
-    effect->effect_specific[2] += effect->effect_specific[3];
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+    effect->effect_specific[0] += (s16)(effect->effect_specific[1] * dt);
+    effect->effect_specific[2] += (s16)(effect->effect_specific[3] * dt);
 
     if (effect->position.y < effect->offset.y && effect->offset.x >= effect->offset.y && effect->velocity.y < 0.0f) {
+        f32 bounce = DTCONV_GAME(0.6f, game);
+
         effect->position.y = effect->offset.y;
-        effect->velocity.x *= 0.6f;
-        effect->velocity.y *= -0.6f;
-        effect->velocity.z *= 0.6f;
+        effect->velocity.x *= bounce;
+        effect->velocity.y *= -bounce;
+        effect->velocity.z *= bounce;
         effect->effect_specific[1] >>= 1;
         effect->effect_specific[3] >>= 1;
     }
@@ -79,7 +88,7 @@ static void eKikuzu_mv(eEC_Effect_c* effect, GAME* game) {
 extern Gfx ef_kikuzu01_00_modelT[];
 
 static void eKikuzu_dw(eEC_Effect_c* effect, GAME* game) {
-    u8 a = (int)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 16, 0.0f, 255.0f);
+    u8 a = (int)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 16.0f, 0.0f, 255.0f);
 
     _texture_z_light_fog_prim_xlu(game->graph);
     OPEN_DISP(game->graph);

@@ -52,10 +52,10 @@ static void eMK_mv(eEC_Effect_c* effect, GAME* game) {
 }
 
 static void eMK_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 40 - effect->timer;
-    u8 prim_g = (int)eEC_CLIP->calc_adjust_proc(timer, 0, 20, 255.0f, 50.0f);
-    u8 prim_a = (int)eEC_CLIP->calc_adjust_proc(timer, 20, 41, 255.0f, 0.0f);
-    u8 env_r = (int)eEC_CLIP->calc_adjust_proc(timer, 0, 20, 255.0f, 100.0f);
+    f32 t = 40.0f - effect->lifetime;
+    u8 prim_g = (int)eEL_CalcAdjust_F(t, 0.0f, 20.0f, 255.0f, 50.0f);
+    u8 prim_a = (int)eEL_CalcAdjust_F(t, 20.0f, 41.0f, 255.0f, 0.0f);
+    u8 env_r  = (int)eEL_CalcAdjust_F(t, 0.0f, 20.0f, 255.0f, 100.0f);
 
     OPEN_DISP(game->graph);
 

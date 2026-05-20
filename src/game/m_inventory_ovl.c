@@ -464,20 +464,24 @@ static void mIV_pl_shape_init(Submenu* submenu) {
 static void mIV_pl_eff_move(Submenu* submenu) {
     mIV_Ovl_c* inv_ovl = submenu->overlay->inventory_ovl;
     mIV_pl_eff_c* effect_p = inv_ovl->pl_eff;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
     int i;
 
     for (i = 0; i < mIV_PLAYER_EFFECT_NUM; i++) {
-        if (effect_p->timer != 0) {
-            effect_p->timer--;
-
-            if (effect_p->timer > 20) {
-                chase_f(&effect_p->scale, 0.009f, 0.0009f);
-            } else {
-                chase_f(&effect_p->scale, 0.0f, 0.00045f);
+        if (effect_p->timer > 0.0f) {
+            effect_p->timer -= dt;
+            if (effect_p->timer < 0.0f) {
+                effect_p->timer = 0.0f;
             }
 
-            effect_p->speed += -0.05f;
-            effect_p->pos.y += effect_p->speed;
+            if (effect_p->timer > 20.0f) {
+                chase_f(&effect_p->scale, 0.009f, 0.0009f * dt);
+            } else {
+                chase_f(&effect_p->scale, 0.0f, 0.00045f * dt);
+            }
+
+            effect_p->speed += -0.05f * dt;
+            effect_p->pos.y += effect_p->speed * dt;
         }
 
         effect_p++;
@@ -489,7 +493,7 @@ static void mIV_pl_eff_move(Submenu* submenu) {
         s16 angle = (int)cur_frame * DEG2SHORT_ANGLE2(-36.0f);
         mIV_pl_eff_c* effect_p = &inv_ovl->pl_eff[effect_no];
 
-        effect_p->timer = 30;
+        effect_p->timer = 30.0f;
         effect_p->speed = 0.0f;
         effect_p->scale = 0.0f;
         effect_p->pos.x = 22.0f * sin_s(angle) + RANDOM2_F(5.0f);
@@ -535,7 +539,12 @@ static void mIV_pl_shape_move(Submenu* submenu) {
     }
 
     if (seg->player_anime_timer > 0) {
-        seg->player_anime_timer--;
+        static float player_anime_accum = 0.0f;
+        int ticks = graph_dt_60hz_ticks(gamePT, &player_anime_accum);
+        seg->player_anime_timer -= ticks;
+        if (seg->player_anime_timer < 0) {
+            seg->player_anime_timer = 0;
+        }
     }
 
     mIV_pl_eff_move(submenu);
@@ -1219,6 +1228,12 @@ static void mIV_move_Move(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     submenu->overlay->move_Move_proc(submenu, menu_info);
 }
 
+static f32 mIV_page_move_accum = 0.0f;
+
+static f32 mIV_page_pos_y(f32 timer) {
+    return 100.0f * sinf_table(timer * 0.078539819f);
+}
+
 static void mIV_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mSM_Control_c* ctrl = &submenu->overlay->menu_control;
     mTG_Ovl_c* tag_ovl;
@@ -1284,20 +1299,27 @@ static void mIV_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
 
         menu_info->open_flag = TRUE;
     } else if (inv_ovl->page_move_timer != 0) {
+        int old_timer = inv_ovl->page_move_timer;
+        int ticks = graph_dt_60hz_ticks(gamePT, &mIV_page_move_accum);
         int y;
 
-        inv_ovl->page_move_timer--;
-        y = 100.0f * sinf_table((f32)inv_ovl->page_move_timer * 0.078539819f);
+        if (ticks > 0) {
+            inv_ovl->page_move_timer -= ticks;
+            if (inv_ovl->page_move_timer < 0) {
+                inv_ovl->page_move_timer = 0;
+            }
+        }
+        y = mIV_page_pos_y((f32)inv_ovl->page_move_timer);
         menu_info->position[1] = (f32)y;
 
-        if (inv_ovl->page_move_timer == 20) {
+        if (old_timer > 20 && inv_ovl->page_move_timer <= 20) {
             if (inv_ovl->page_order[2] == inv_ovl->next_page_id) {
                 inv_ovl->page_order[2] = inv_ovl->page_order[1];
             }
 
             inv_ovl->page_order[1] = inv_ovl->page_order[0];
             inv_ovl->page_order[0] = inv_ovl->next_page_id;
-        } else if (inv_ovl->page_move_timer == 0) {
+        } else if (old_timer > 0 && inv_ovl->page_move_timer == 0) {
             menu_info->position[1] = 0.0f;
             submenu->overlay->hand_ovl->set_hand_func(submenu);
         }
@@ -1950,9 +1972,20 @@ static void mIV_set_dl(Submenu* submenu, mSM_MenuInfo_c* menu_info, GAME* game) 
 
 static void mIV_inventory_ovl_draw(Submenu* submenu, GAME* game) {
     mSM_MenuInfo_c* menu_info = &submenu->overlay->menu_info[mSM_OVL_INVENTORY];
+    mIV_Ovl_c* inv_ovl = submenu->overlay->inventory_ovl;
+    f32 pos_y = menu_info->position[1];
 
     menu_info->pre_draw_func(submenu, game);
+    if (inv_ovl->page_move_timer != 0 && mIV_page_move_accum > 0.0f) {
+        f32 timer = (f32)inv_ovl->page_move_timer - mIV_page_move_accum;
+
+        if (timer < 0.0f) {
+            timer = 0.0f;
+        }
+        menu_info->position[1] = mIV_page_pos_y(timer);
+    }
     mIV_set_dl(submenu, menu_info, game);
+    menu_info->position[1] = pos_y;
 }
 
 extern void mIV_inventory_ovl_set_proc(Submenu* submenu) {

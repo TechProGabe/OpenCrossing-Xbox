@@ -30,7 +30,7 @@ typedef struct ac_shrine_clip_s {
 #define aSHR_SET_CLIP(v) (Common_Get(clip).shrine_clip = (v))
 
 typedef struct ac_shrine_present_s aSHR_Present_c;
-typedef void (*aSHR_Present_PROC)(aSHR_Present_c*);
+typedef void (*aSHR_Present_PROC)(aSHR_Present_c*, GAME*);
 
 struct ac_shrine_present_s {
   xyz_t trans;
@@ -41,6 +41,7 @@ struct ac_shrine_present_s {
 
 struct ac_shrine_s {
   STRUCTURE_ACTOR structure_class;
+  f32 texture_frame;
 };
 
 extern ACTOR_PROFILE Shrine_Profile;

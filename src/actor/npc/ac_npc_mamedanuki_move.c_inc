@@ -946,7 +946,8 @@ static void aNMD_search_player(NPC_MAMEDANUKI_ACTOR* mamedanuki, GAME_PLAY* play
         if (ABS(angle) > DEG2SHORT_ANGLE(90.0f)) {
             aNSC_setupAction(mamedanuki, play, 66);
         } else {
-            chase_angle(&actorx->shape_info.rotation.y, mamedanuki->player_angle, DEG2SHORT_ANGLE(11.25f));
+            chase_angle(&actorx->shape_info.rotation.y, mamedanuki->player_angle,
+                        aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f)));
             actorx->world.angle.y = actorx->shape_info.rotation.y;
         }
     }
@@ -1035,7 +1036,8 @@ static void aNMD_search_player2(NPC_MAMEDANUKI_ACTOR* mamedanuki, GAME_PLAY* pla
         f32 dz = posZ_p[mamedanuki->next_zone] - mamedanuki->npc_class.actor_class.world.position.z;
 
         s16 angle = atans_table(dz, dx);
-        chase_angle(&mamedanuki->npc_class.actor_class.shape_info.rotation.y, angle, DEG2SHORT_ANGLE(11.25f));
+        chase_angle(&mamedanuki->npc_class.actor_class.shape_info.rotation.y, angle,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f)));
 
         mamedanuki->npc_class.actor_class.world.angle.y = mamedanuki->npc_class.actor_class.shape_info.rotation.y;
 

@@ -63,7 +63,7 @@ static int Player_actor_MessageControl_Fail_emu(ACTOR* actorx) {
     int* msg_mode_p = &fail_emu_p->msg_mode;
 
     if (*timer_p < 42.0f) {
-        (*timer_p) += 1.0f;
+        (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
         return FALSE;
     }
 

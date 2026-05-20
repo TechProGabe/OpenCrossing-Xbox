@@ -61,12 +61,15 @@ static Gfx* eWU_DispTable[12] = {
 };
 
 static void eWU_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 counter = (24 - effect->timer) >> 1;
+    f32 k = (24.0f - effect->lifetime) * 0.5f;
+    s16 counter;
     xyz_t* pos = &effect->position;
     xyz_t* ofs = &effect->offset;
     xyz_t* scale = &effect->scale;
 
-    counter = CLAMP(counter, 0, 11);
+    if (k < 0.0f) k = 0.0f;
+    if (k > 11.0f) k = 11.0f;
+    counter = (s16)k;
 
     if (eWU_DispTable[counter] != NULL) {
         OPEN_DISP(game->graph);

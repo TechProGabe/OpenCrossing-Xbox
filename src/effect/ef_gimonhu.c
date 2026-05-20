@@ -67,26 +67,33 @@ static void eGM_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, 
 static void eGM_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->timer = EFFECT_LIFETIME;
     effect->offset.x = effect->offset.y = effect->offset.z = 0.f;
+    effect->effect_specific[0] = 0; /* SE-played flag */
 }
 
 static void eGM_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 currentFrame = EFFECT_LIFETIME - effect->timer;
-    if (currentFrame == 0) {
+    if (effect->effect_specific[0] == 0) {
         sAdo_OngenTrgStart(NA_SE_2F, &effect->position);
+        effect->effect_specific[0] = 1;
     }
 }
 
 static void eGM_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 frameIndex;
-    s16 currentFrame = EFFECT_LIFETIME - effect->timer;
-    int v = (u8)eEC_CLIP->calc_adjust_proc(currentFrame, EFFECT_STAGE2, EFFECT_LIFETIME, 255.f, 0.f);
-    if (currentFrame > EFFECT_STAGE1) {
-        currentFrame = EFFECT_STAGE1;
-    }
-    frameIndex = currentFrame >> 1;
-    frameIndex = CLAMP(frameIndex, 0, EFFECT_STAGE1 / 2);
-    effect->scale.x = eGM_scale_data[frameIndex][0] * 0.008f;
-    effect->scale.y = eGM_scale_data[frameIndex][1] * 0.008f;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    f32 t_clamped = (t > (f32)EFFECT_STAGE1) ? (f32)EFFECT_STAGE1 : t;
+    f32 k = t_clamped * 0.5f;
+    int max_idx = EFFECT_STAGE1 / 2;
+    int i, j;
+    f32 frac;
+    int v = (int)eEL_CalcAdjust_F(t, (f32)EFFECT_STAGE2, (f32)EFFECT_LIFETIME, 255.f, 0.f);
+
+    if (k < 0.0f) k = 0.0f;
+    if (k > (f32)max_idx) k = (f32)max_idx;
+    i = (int)k;
+    if (i > max_idx - 1) i = max_idx - 1;
+    j = i + 1;
+    frac = k - (f32)i;
+    effect->scale.x = (eGM_scale_data[i][0] + (eGM_scale_data[j][0] - eGM_scale_data[i][0]) * frac) * 0.008f;
+    effect->scale.y = (eGM_scale_data[i][1] + (eGM_scale_data[j][1] - eGM_scale_data[i][1]) * frac) * 0.008f;
     effect->scale.z = 0.008f;
     OPEN_DISP(game->graph);
     _texture_z_light_fog_prim_xlu(game->graph);

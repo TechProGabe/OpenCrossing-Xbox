@@ -15,6 +15,7 @@ extern "C" {
 extern int aWeather_ChangingWeather();
 extern void aWeather_RequestChangeWeatherToIsland();
 extern void aWeather_RequestChangeWeatherFromIsland();
+extern int aWeather_ShouldSpawnEvery(ACTOR* actorx, f32 period_frames);
 
 extern ACTOR_PROFILE Weather_Profile;
 
@@ -93,6 +94,9 @@ struct weather_actor_s {
     /* 0x1DC */ s16 start_sound_effect;
     /* 0x1DE */ s16 stop_sound_effect;
     /* 0x1E0 */ s16 basement_event;
+    /* 0x1E4 */ f32 make_accum;
+    /* 0x1E8 */ f32 spawn_accum;
+    int spawn_in_advance;
 };
 
 #ifdef __cplusplus

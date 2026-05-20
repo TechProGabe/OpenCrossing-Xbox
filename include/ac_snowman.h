@@ -46,6 +46,11 @@ typedef struct snowman_actor_s {
     /* 0x1F2 */ s_xyz ground_angle;
     /* 0x1F8 */ s16 flags;
     /* 0x1FA */ s16 timer;
+    f32 timer_accum;
+    f32 ground_effect_accum;
+    f32 water_effect_accum;
+    u32 water_effect_frame;
+    s16 ground_effect_flip;
 } SNOWMAN_ACTOR;
 
 extern ACTOR_PROFILE Snowman_Profile;

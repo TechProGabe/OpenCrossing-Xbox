@@ -107,7 +107,7 @@ static int Player_actor_able_request_proc_index_fromWade_snowball_common(ACTOR* 
     if (player->main_data.wade_snowball.timer > 36.0f) {
         return TRUE;
     } else {
-        player->main_data.wade_snowball.timer += 1.0f;
+        player->main_data.wade_snowball.timer += (f32)gamePT->graph->dt_num_60fps_frames;
         return FALSE;
     }
 }

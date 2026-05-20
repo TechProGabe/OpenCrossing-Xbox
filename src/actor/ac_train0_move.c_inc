@@ -22,22 +22,28 @@ static void aTR0_set_effect(ACTOR* actor, GAME* game) {
     xyz_t pos;
     xyz_t clip_pos;
 
-    if (train0->arg1 <= 0) {
-        if (train0->actor_class.speed >= 1.0f) {
-            calc = (12.0f / train0->actor_class.speed);
-            train0->arg1 = calc;
-        } else {
-            train0->arg1 = 12;
-        }
-        xyz_t_move(&pos, &train0->actor_class.world.position);
-        pos.x += 36.0f;
-        pos.y += 110.0f;
+    /* Cooldown is in 60Hz units, gate it so spawns don't pile at high fps. */
+    static float dt_accum = 0.0f;
+    int ticks = graph_dt_60hz_ticks(game, &dt_accum);
+    int t;
+    for (t = 0; t < ticks; t++) {
+        if (train0->arg1 <= 0) {
+            if (train0->actor_class.speed >= 1.0f) {
+                calc = (12.0f / train0->actor_class.speed);
+                train0->arg1 = calc;
+            } else {
+                train0->arg1 = 12;
+            }
+            xyz_t_move(&pos, &train0->actor_class.world.position);
+            pos.x += 36.0f;
+            pos.y += 110.0f;
 
-        if (mEv_CheckTitleDemo() == mEv_TITLEDEMO_NONE) {
-            eEC_CLIP->effect_make_proc(eEC_EFFECT_KISHA_KEMURI, pos, 1, 0, game, train0->actor_class.npc_id, 0, 0);
+            if (mEv_CheckTitleDemo() == mEv_TITLEDEMO_NONE) {
+                eEC_CLIP->effect_make_proc(eEC_EFFECT_KISHA_KEMURI, pos, 1, 0, game, train0->actor_class.npc_id, 0, 0);
+            }
+        } else {
+            train0->arg1--;
         }
-    } else {
-        train0->arg1--;
     }
 }
 

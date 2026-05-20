@@ -87,7 +87,7 @@ static int Player_actor_MessageControl_Notice_mosquito(ACTOR* actorx) {
             f32* timer_p = &notice_mosquito_p->timer;
 
             if (*timer_p < 0.0f) {
-                (*timer_p) += 1.0f;
+                (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
             } else {
                 *msg_mode_p = 1;
             }

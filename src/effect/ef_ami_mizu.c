@@ -32,24 +32,25 @@ static void eAmi_Mizu_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
 static void eAmi_Mizu_mv(eEC_Effect_c* effect, GAME* game) {
     f32 adjust;
+    s16 timer = (s16)effect->lifetime;
 
-    if (effect->timer == 10) {
+    if (timer >= 10) {
         f32 off_x = effect->offset.x;
         effect->scale.z = off_x;
         effect->scale.y = off_x;
         effect->scale.x = off_x;
     }
     else{
-        adjust = eEC_CLIP->calc_adjust_proc(effect->timer,0, 8, 1.3f * effect->offset.x, 1.1f * effect->offset.x);
+        adjust = eEC_CLIP->calc_adjust_proc(timer,0, 8, 1.3f * effect->offset.x, 1.1f * effect->offset.x);
         effect->scale.z = adjust;
         effect->scale.x = adjust;
-        effect->scale.y =  eEC_CLIP->calc_adjust_proc(effect->timer, 0, 8, 0.5f * effect->offset.x, 1.2f * effect->offset.x);
+        effect->scale.y =  eEC_CLIP->calc_adjust_proc(timer, 0, 8, 0.5f * effect->offset.x, 1.2f * effect->offset.x);
     }
 }
 
 
 static void eAmi_Mizu_dw(eEC_Effect_c* effect, GAME* game) {
-    int alpha = (u8)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 6, 50.0f, 155.0f);
+    int alpha = (u8)eEC_CLIP->calc_adjust_proc((s16)effect->lifetime, 0, 6, 50.0f, 155.0f);
     GRAPH* graph = game->graph;
     
     _texture_z_light_fog_prim_xlu(graph);

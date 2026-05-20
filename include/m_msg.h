@@ -225,7 +225,7 @@ struct message_window_s {
 
     /* 0x3E8 */ int _3E8;
 
-    /* 0x3EC */ u16 end_timer;
+    /* 0x3EC */ f32 end_timer;
     /* 0x3EE */ s16 animal_voice_idx;
     /* 0x3F0 */ int voice_sfx_idx;
     /* 0x3F4 */ u8 voice_idx;

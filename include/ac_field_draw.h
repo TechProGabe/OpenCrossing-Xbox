@@ -24,6 +24,7 @@ typedef struct field_draw_marin_info_s {
   u32 tile1_scroll;
   rgba_t beach_env_color;
   u32 frame;
+  f32 anim_frame;
 } aFD_marin_info_c;
 
 struct field_draw_s {

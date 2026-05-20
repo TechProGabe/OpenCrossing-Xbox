@@ -27,24 +27,33 @@ static void ePun_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     s16 var = *(s16*)ct_arg;
     effect->effect_specific[0] = var;
     effect->timer = 24;
+    effect->effect_specific[2] = 0; /* cycle-phase: 0=rand pending, 1=spawn pending, 2=fired */
+    effect->effect_specific[3] = 0; /* prev integer t (cycle wrap detector) */
 }
 
 static void ePun_mv(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->set_continious_env_proc(effect, 24, 44);
-    
+
     if (effect->state == eEC_STATE_CONTINUOUS) {
-        s16 timer_left = 44 - effect->timer;
-        
-        if (timer_left == 0) {
+        f32 t = 44.0f - effect->lifetime;
+        s16 ti = (s16)t;
+
+        /* Cycle wrap: previous t was past current t (lifetime reset). */
+        if (ti < effect->effect_specific[3]) {
+            effect->effect_specific[2] = 0;
+        }
+        effect->effect_specific[3] = ti;
+
+        if (effect->effect_specific[2] == 0) {
             effect->effect_specific[1] = RANDOM(100) & 1;
-        }   
-            
-        if (timer_left == 8) {
+            effect->effect_specific[2] = 1;
+        }
+
+        if (effect->effect_specific[2] == 1 && t >= 8.0f) {
             eEC_CLIP->effect_make_proc(eEC_EFFECT_PUN_YUGE, effect->position, effect->prio, effect->effect_specific[0], game, (u16)effect->item_name, effect->effect_specific[1], 0);
-            
             effect->effect_specific[1] = ++effect->effect_specific[1] & 1;
-            
             eEC_CLIP->effect_make_proc(eEC_EFFECT_PUN_SEKIMEN, effect->position, effect->prio, effect->effect_specific[0], game, (u16)effect->item_name, 0, 0);
+            effect->effect_specific[2] = 2;
         }
     }
 }

@@ -45,10 +45,12 @@ static void eDouzou_Light_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eDouzou_Light_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->timer > 12) {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 12, 24, effect->offset.x, 0.0f);
+    f32 timer = effect->lifetime;
+
+    if (timer > 12.0f) {
+        effect->scale.x = eEL_CalcAdjust_F(timer, 12.0f, 24.0f, effect->offset.x, 0.0f);
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 12, 0.0f, effect->offset.x);
+        effect->scale.x = eEL_CalcAdjust_F(timer, 0.0f, 12.0f, 0.0f, effect->offset.x);
     }
 
     effect->scale.y = effect->scale.z = effect->scale.x;

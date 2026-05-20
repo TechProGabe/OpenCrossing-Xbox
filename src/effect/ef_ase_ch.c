@@ -49,21 +49,34 @@ static void eASC_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eASC_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity,&effect->acceleration,&effect->velocity);
-    xyz_t_add(&effect->position,&effect->velocity,&effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 }
 
 static void eASC_dw(eEC_Effect_c* effect, GAME* game) {
     xyz_t* pos = &effect->position;
     xyz_t* scale = &effect->scale;
-
-    s16 val = (20 - effect->timer) >> 1;
-    s16 idx = CLAMP(val, 0, 10);
+    f32 k = (20.0f - effect->lifetime) * 0.5f;
+    int i, j;
+    f32 frac, s;
     GRAPH* graph = game->graph;
 
-    effect->scale.x = eASC_scale_table[idx];
-    effect->scale.y = eASC_scale_table[idx]; 
-    effect->scale.z = eASC_scale_table[idx];
+    if (k < 0.0f) k = 0.0f;
+    if (k > 9.0f) k = 9.0f;
+    i = (int)k;
+    if (i > 9) i = 9;
+    j = (i < 9) ? i + 1 : i;
+    frac = k - (f32)i;
+    s = eASC_scale_table[i] + (eASC_scale_table[j] - eASC_scale_table[i]) * frac;
+
+    effect->scale.x = s;
+    effect->scale.y = s;
+    effect->scale.z = s;
     
     OPEN_DISP(game->graph);
     

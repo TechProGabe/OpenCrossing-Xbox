@@ -9,16 +9,17 @@ static void aGYO_position_move(aGYO_CTRL_ACTOR* ctrl) {
         1.0f, // aGYO_SIZE_XXL
         0.0f, // aGYO_SIZE_WHALE
     };
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
     
     xyz_t_move(&((ACTOR*)ctrl)->last_world_position, &((ACTOR*)ctrl)->world.position);
     
     if (ctrl->fwork0 <= 0.0f) {
         ctrl->fwork0 += 19.0f;
     } else {
-        ctrl->fwork0 -= dec_step[ctrl->size_type] * 0.5f;
+        ctrl->fwork0 -= dec_step[ctrl->size_type] * 0.5f * dt;
     }
 
-    chase_f(&((ACTOR*)ctrl)->speed, ctrl->speed, ctrl->speed_step * 0.5f);
+    chase_f(&((ACTOR*)ctrl)->speed, ctrl->speed, ctrl->speed_step * 0.5f * dt);
     Actor_position_moveF((ACTOR*)ctrl);
 }
 
@@ -67,28 +68,38 @@ static void aGYO_actor_move(ACTOR* actorx, GAME* game) {
     aGYO_CTRL_ACTOR* ctrl = gyoei->ctrl;
     GAME_PLAY* play = (GAME_PLAY*)game;
     int i;
+    int tick;
 
     for (i = 0; i < aGYO_MAX_GYOEI; i++) {
         if (ctrl->exist == TRUE) {
             ((ACTOR*)ctrl)->state_bitfield &= ~ACTOR_STATE_24;
 
             if ((((ACTOR*)ctrl)->state_bitfield & (ACTOR_STATE_NO_CULL | ACTOR_STATE_NO_MOVE_WHILE_CULLED)) != 0) {
+                ctrl->logic_accum += (f32)game->graph->dt_num_60fps_frames;
+                if (ctrl->logic_accum > 4.0f) {
+                    ctrl->logic_accum = 4.0f;
+                }
+
                 aGYO_position_move(ctrl);
-                aGYO_BGcheck(ctrl);
 
-                if (bite_check()) {
-                    ctrl->gyo_flags |= 1;
-                } else {
-                    ctrl->gyo_flags &= ~1;
+                for (tick = 0; ctrl->logic_accum >= 1.0f && tick < 4; tick++) {
+                    ctrl->logic_accum -= 1.0f;
+                    aGYO_BGcheck(ctrl);
+
+                    if (bite_check()) {
+                        ctrl->gyo_flags |= 1;
+                    } else {
+                        ctrl->gyo_flags &= ~1;
+                    }
+
+                    if ((ctrl->gyo_flags & 8) != 0) {
+                        ctrl->gyo_flags &= ~8;
+                        ctrl->gyo_flags |= 4;
+                        aGYO_change_data_area(&play->object_exchange);
+                    }
+
+                    (*((ACTOR*)ctrl)->mv_proc)((ACTOR*)ctrl, game);
                 }
-
-                if ((ctrl->gyo_flags & 8) != 0) {
-                    ctrl->gyo_flags &= ~8;
-                    ctrl->gyo_flags |= 4;
-                    aGYO_change_data_area(&play->object_exchange);
-                }
-
-                (*((ACTOR*)ctrl)->mv_proc)((ACTOR*)ctrl, game);
                 Actor_world_to_eye((ACTOR*)ctrl, 0.0f);
             }
 

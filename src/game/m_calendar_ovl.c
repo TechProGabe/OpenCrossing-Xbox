@@ -6,6 +6,14 @@
 #include "m_warning_ovl.h"
 #include "sys_matrix.h"
 #include "m_malloc.h"
+#include "libc/math.h"
+
+static f32 mCD_add_calc_dt(f32* value, f32 target, f32 rate, f32 max_step, f32 min_step) {
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
+    f32 dt_rate = 1.0f - powf(1.0f - rate, dt);
+
+    return add_calc(value, target, dt_rate, max_step * dt, min_step * dt);
+}
 
 static u32 mCD_visiter_chk(int player_no, int month, int day) {
     u32 ret = FALSE;
@@ -527,7 +535,7 @@ static void mCD_MVPL_mv(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     int flag;
 
     if (calendar->_105A == 1) {
-        f32 val = add_calc(&menu_info->position[0], 0.0f, 0.4f, 37.0f, 1.25f);
+        f32 val = mCD_add_calc_dt(&menu_info->position[0], 0.0f, 0.4f, 37.0f, 1.25f);
 
         if (fabsf(val) < 0.1f) {
             flag = TRUE;
@@ -535,14 +543,14 @@ static void mCD_MVPL_mv(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
             flag = FALSE;
         }
     } else if (menu_info->position[0] > 0.0f) {
-        menu_info->position[0] -= 37.0f;
+        menu_info->position[0] -= 37.0f * (f32)gamePT->graph->dt_num_60fps_frames;
         if (menu_info->position[0] <= 0.0f) {
             flag = TRUE;
         } else {
             flag = FALSE;
         }
     } else {
-        menu_info->position[0] += 37.0f;
+        menu_info->position[0] += 37.0f * (f32)gamePT->graph->dt_num_60fps_frames;
         if (menu_info->position[0] >= 0.0f) {
             flag = TRUE;
         } else {
@@ -585,7 +593,7 @@ static void mCD_MVPL_chg(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         target1 = &calendar->_102C;
     }
 
-    adj1 = fabsf(add_calc(target1, 0.0f, 0.4f, 37.0f, 1.25f));
+    adj1 = fabsf(mCD_add_calc_dt(target1, 0.0f, 0.4f, 37.0f, 1.25f));
     if (adj1 < 0.1f) {
         *target1 = 0.0f;
         done1 = TRUE;
@@ -593,7 +601,7 @@ static void mCD_MVPL_chg(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         done1 = FALSE;
     }
 
-    adj0 = fabsf(add_calc(target0, -100.0f, 0.4f, 37.0f, 1.25f));
+    adj0 = fabsf(mCD_add_calc_dt(target0, -100.0f, 0.4f, 37.0f, 1.25f));
     if (adj0 < 0.1f) {
         *target0 = -100.0f;
         done0 = TRUE;
@@ -678,9 +686,9 @@ static void mCD_MVPL_day(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         }
     }
 
-    calendar->_1038 += 1.0f;
-    if (calendar->_1038 >= 60.0f) {
-        calendar->_1038 = 0.0f;
+    calendar->_1038 += (f32)gamePT->graph->dt_num_60fps_frames;
+    while (calendar->_1038 >= 60.0f) {
+        calendar->_1038 -= 60.0f;
     }
 
     {
@@ -707,7 +715,7 @@ static void mCD_MVPL_day(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
 static void mCD_MVPL_escape(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mCD_Ovl_c* calendar = submenu->overlay->calendar_ovl;
 
-    if (fabsf(add_calc(&menu_info->position[1], 300.0f, 0.4f, 37.0f, 1.25f)) < 0.1f) {
+    if (fabsf(mCD_add_calc_dt(&menu_info->position[1], 300.0f, 0.4f, 37.0f, 1.25f)) < 0.1f) {
         menu_info->position[1] = 300.0f;
         menu_info->proc_status = mSM_OVL_PROC_OBEY;
         calendar->move_proc_idx = mCD_MVPL_DAY;
@@ -717,7 +725,7 @@ static void mCD_MVPL_escape(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
 static void mCD_MVPL_entrance(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mCD_Ovl_c* calendar = submenu->overlay->calendar_ovl;
 
-    if (fabsf(add_calc(&menu_info->position[1], 0.0f, 0.4f, 37.0f, 1.25f)) < 0.1f) {
+    if (fabsf(mCD_add_calc_dt(&menu_info->position[1], 0.0f, 0.4f, 37.0f, 1.25f)) < 0.1f) {
         menu_info->position[1] = 0.0f;
         calendar->move_proc_idx = mCD_MVPL_DAY;
     }

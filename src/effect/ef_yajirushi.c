@@ -35,11 +35,11 @@ static void eYajirushi_mv(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->set_continious_env_proc(effect, 4, 60);
 
     if (effect->state == eEC_STATE_NORMAL) {
-        eYajirushi_ALPHA = eEC_CLIP->calc_adjust_proc(4 - effect->timer, 0, 3, 0.0f, 255.0f);
+        eYajirushi_ALPHA = (s16)eEL_CalcAdjust_F(4.0f - effect->lifetime, 0.0f, 3.0f, 0.0f, 255.0f);
     } else if (effect->state == eEC_STATE_CONTINUOUS) {
         eYajirushi_ALPHA = 255;
     } else if (effect->state == eEC_STATE_FINISHED) {
-        eYajirushi_ALPHA = eEC_CLIP->calc_adjust_proc(6 - effect->timer, 0, 6, 255.0f, 0.0f);
+        eYajirushi_ALPHA = (s16)eEL_CalcAdjust_F(6.0f - effect->lifetime, 0.0f, 6.0f, 255.0f, 0.0f);
     }
 }
 

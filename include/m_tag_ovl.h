@@ -270,7 +270,7 @@ typedef struct tag_mark_original_s {
     /* 0x30 */ s16 mark_mode;
 } mTG_mark_original_c;
 
-/* sizeof(mTG_Ovl_c) == 0x3C4 */
+/* sizeof(mTG_Ovl_c) == 0x3C8 */
 struct tag_ovl_s {
     /* 0x000 */ int sel_tag_idx;
     /* 0x004 */ int ret_tag_idx;
@@ -289,6 +289,7 @@ struct tag_ovl_s {
     /* 0x376 */ u16 _02;
     /* 0x378 */ mTG_cporiginal_mark_entry_c original_entries[mTG_ORG_TYPE_NUM];
     /* 0x390 */ mTG_mark_original_c original_mark;
+    f32 item_name_wait_accum;
 };
 
 extern int mTG_mark_main(Submenu*, mSM_MenuInfo_c*, int, int*);

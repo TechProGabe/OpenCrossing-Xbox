@@ -45,8 +45,9 @@ typedef struct airplane_s {
   int joystick_x;
 
   s16 ground_timer;
+  f32 ground_effect_accum;
 
-  int wind_frame;
+  f32 wind_frame;
   int wind_change_frame;
   xyz_t* wind;
 

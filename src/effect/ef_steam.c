@@ -79,22 +79,40 @@ static void eSteam_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eSteam_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-    effect->velocity.x *= sqrtf(0.8f);
-    effect->velocity.y *= sqrtf(0.8f);
-    effect->velocity.z *= sqrtf(0.8f);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 decay = powf(sqrtf(0.8f), dt);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+    effect->velocity.x *= decay;
+    effect->velocity.y *= decay;
+    effect->velocity.z *= decay;
 }
 
 extern Gfx ef_dust01_modelT[];
 
 static void eSteam_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 counter = 30 - effect->timer;
-    s16 idx = CLAMP(counter >> 1, 0, 14);
-    int tex0 = Steam_tex_indx[idx].tex0;
-    int tex1 = Steam_tex_indx[idx].tex1;
+    f32 t = 30.0f - effect->lifetime;
+    f32 k = t * 0.5f;
+    int i, j;
+    f32 frac;
+    int tex0, tex1;
+    u8 prim_f;
 
-    effect->scale.x = eEC_CLIP->calc_adjust_proc(counter, 0, 30, 0.005f, effect->offset.x);
+    if (k < 0.0f) k = 0.0f;
+    if (k > 14.0f) k = 14.0f;
+    i = (int)k;
+    if (i > 14) i = 14;
+    j = (i < 14) ? i + 1 : i;
+    frac = k - (f32)i;
+    tex0 = Steam_tex_indx[i].tex0;
+    tex1 = Steam_tex_indx[i].tex1;
+    prim_f = (u8)(Steam_plod_tbl[i] + (Steam_plod_tbl[j] - Steam_plod_tbl[i]) * frac);
+
+    effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 0.005f, effect->offset.x);
     effect->scale.y = effect->scale.z = effect->scale.x;
 
     OPEN_DISP(game->graph);
@@ -102,7 +120,7 @@ static void eSteam_dw(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->auto_matrix_xlu_proc(game, &effect->position, &effect->scale);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_1_TXT_SEG, Steam_tex_tbl[tex0]);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_2_TXT_SEG, Steam_tex_tbl[tex1]);
-    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, Steam_plod_tbl[idx], 255, 255, 255, 255);
+    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, 255, 255, 255, 255);
     gSPDisplayList(NEXT_POLY_XLU_DISP, ef_dust01_modelT);
 
     CLOSE_DISP(game->graph);

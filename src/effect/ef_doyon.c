@@ -46,15 +46,21 @@ static void eDoyon_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
 static void eDoyon_mv(eEC_Effect_c* effect, GAME* game) {
     f32 progress = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 60, 0.0f, 5.0f);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 decay = powf(sqrtf(0.95f), dt);
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
-    effect->effect_specific[0] += DEG2SHORT_ANGLE2(5.625f);
-    effect->effect_specific[1] += DEG2SHORT_ANGLE2(5.625f);
+    effect->effect_specific[0] += (s16)(DEG2SHORT_ANGLE2(5.625f) * dt);
+    effect->effect_specific[1] += (s16)(DEG2SHORT_ANGLE2(5.625f) * dt);
 
-    effect->velocity.x *= sqrtf(0.95f);
-    effect->velocity.y *= sqrtf(0.95f);
+    effect->velocity.x *= decay;
+    effect->velocity.y *= decay;
 
     if (effect->timer > 50) {
         f32 scale = (60 - effect->timer) * 0.00065f;

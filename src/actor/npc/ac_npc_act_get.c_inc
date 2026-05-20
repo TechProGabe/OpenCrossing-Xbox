@@ -103,20 +103,23 @@ static void aNPC_act_get_chg_step(NPC_ACTOR* nactorx, u8 step) {
 }
 
 static void aNPC_act_get_move(NPC_ACTOR* nactorx, GAME_PLAY* play) {
-    if (nactorx->movement.demo_move_timer != 0) {
-        nactorx->movement.demo_move_timer--;
+    if (nactorx->movement.demo_move_timer > 0.0f) {
+        nactorx->movement.demo_move_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
+        if (nactorx->movement.demo_move_timer < 0.0f) {
+            nactorx->movement.demo_move_timer = 0.0f;
+        }
     }
 
 #ifndef aNPC_NPC2
     if (!aNPC_act_search_move(nactorx) ||
         (nactorx->collision.collision_flag & (mCoBG_HIT_WALL | mCoBG_HIT_WALL_FRONT)) != 0 ||
-        nactorx->movement.demo_move_timer == 0) {
+        nactorx->movement.demo_move_timer <= 0.0f) {
         aNPC_act_get_chg_step(nactorx, aNPC_ACT_GET_STEP_GET);
     }
 #else
     if (!aNPC_act_demo_move(nactorx) ||
         (nactorx->collision.collision_flag & (mCoBG_HIT_WALL | mCoBG_HIT_WALL_FRONT)) != 0 ||
-        nactorx->movement.demo_move_timer == 0) {
+        nactorx->movement.demo_move_timer <= 0.0f) {
         aNPC_act_get_chg_step(nactorx, aNPC_ACT_GET_STEP_GET);
     }
 #endif

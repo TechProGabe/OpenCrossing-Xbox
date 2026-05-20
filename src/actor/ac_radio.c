@@ -49,6 +49,7 @@ static void aRAD_actor_ct(ACTOR* actor, GAME* game){
     
     aRAD_setup_action(radio, 0); 
     radio->next_action = 0;
+    radio->effect_accum = 0.0f;
     aRAD_set_bgOffset(radio, 1);
 }
 

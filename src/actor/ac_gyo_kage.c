@@ -99,10 +99,11 @@ static void aGYO_KAGE_actor_ct(ACTOR* actorx, GAME* game) {
     actorx->scale.z = scale;
     actorx->speed = 2.0f;
     actorx->shape_info.rotation.y = actorx->world.angle.y;
-    gyo_kage->delete_timer = 100;
-    gyo_kage->draw_frame = 38;
+    gyo_kage->delete_timer = 100.0f;
+    gyo_kage->draw_frame = 38.0f;
     gyo_kage->exist_flag = TRUE;
     gyo_kage->wall_flag = FALSE;
+    gyo_kage->ripple_done = FALSE;
     
     atr = mCoBG_Wpos2BgAttribute_Original(actorx->world.position);
     if (mCoBG_CheckWaterAttribute(atr)) {
@@ -131,14 +132,14 @@ static void aGYO_KAGE_Cullcheck(ACTOR* actorx, GAME* game) {
     }
 }
 
-static void aGYO_KAGE_position_move(ACTOR* actorx) {
+static void aGYO_KAGE_position_move(ACTOR* actorx, GAME* game) {
     GYO_KAGE_ACTOR* gyo_kage = (GYO_KAGE_ACTOR*)actorx;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     xyz_t_move(&actorx->last_world_position, &actorx->world.position);
-    if (gyo_kage->draw_frame <= 0) {
-        gyo_kage->draw_frame = 38;
-    } else {
-        gyo_kage->draw_frame--;
+    gyo_kage->draw_frame -= dt;
+    while (gyo_kage->draw_frame <= 0.0f) {
+        gyo_kage->draw_frame += 38.0f;
     }
 
     Actor_position_moveF(actorx);
@@ -147,7 +148,7 @@ static void aGYO_KAGE_position_move(ACTOR* actorx) {
 
 static void aGYO_KAGE_actor_move(ACTOR* actorx, GAME* game) {
     GYO_KAGE_ACTOR* gyo_kage = (GYO_KAGE_ACTOR*)actorx;
-    int timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (gyo_kage->gyoei_actor != NULL && ((GYOEI_ACTOR*)gyo_kage->gyoei_actor)->exist[0] != 0) {
         ((GYOEI_ACTOR*)gyo_kage->gyoei_actor)->exist[0] = 0;
@@ -158,10 +159,11 @@ static void aGYO_KAGE_actor_move(ACTOR* actorx, GAME* game) {
         return;
     }
 
-    aGYO_KAGE_position_move(actorx);
+    aGYO_KAGE_position_move(actorx, game);
     aGYO_KAGE_BGcheck(actorx);
 
-    if (gyo_kage->delete_timer == 96) {
+    gyo_kage->delete_timer -= dt;
+    if (!gyo_kage->ripple_done && gyo_kage->delete_timer <= 96.0f) {
         switch (actorx->actor_specific) {
             case 0:
             case 1:
@@ -178,22 +180,18 @@ static void aGYO_KAGE_actor_move(ACTOR* actorx, GAME* game) {
             default:
                 break;
         }
+
+        gyo_kage->ripple_done = TRUE;
     }
 
-    if (gyo_kage->delete_timer == 0) {
-        timer = 0;
-    } else {
-        timer = --gyo_kage->delete_timer;
-    }
-
-    if (timer == 0) {
+    if (gyo_kage->delete_timer <= 0.0f) {
         Actor_delete(actorx);
     } else {
         if (aGYO_KAGE_Wall_Check(actorx) && gyo_kage->wall_flag == FALSE) {
             return;
         }
 
-        chase_f(&actorx->speed, 0.0f, 0.02f);
+        chase_f(&actorx->speed, 0.0f, 0.02f * (f32)game->graph->dt_num_60fps_frames);
         gyo_kage->wall_flag = FALSE;
     }
 
@@ -214,6 +212,12 @@ static void aGYO_KAGE_actor_draw(ACTOR* actorx, GAME* game) {
 
     Matrix_push();
     _texture_z_light_fog_prim_xlu(graph);
+    if (frame < 0) {
+        frame = 0;
+    } else if (frame >= 20) {
+        frame = 19;
+    }
+
     tex_idx0 = aGYO_2tile_texture_idx[frame][0];
     tex_idx1 = aGYO_2tile_texture_idx[frame][1];
     if (alpha <= 0) {

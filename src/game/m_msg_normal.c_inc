@@ -3,16 +3,22 @@ static int mMsg_Check_ScrollOrder(mMsg_Window_c* msg_p) {
 }
 
 static int mMsg_MsgTimeEnd_dec(mMsg_Window_c* msg_p) {
-  if (msg_p->end_timer == 0) {
+  f32 prev_timer = msg_p->end_timer;
+
+  if (prev_timer <= 0.0f) {
     return FALSE;
   }
-  else if (msg_p->end_timer == 1) {
+
+  msg_p->end_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
+  if (msg_p->end_timer < 0.0f) {
+    msg_p->end_timer = 0.0f;
+  }
+
+  if (prev_timer > 1.0f && msg_p->end_timer <= 1.0f) {
     return TRUE;
   }
-  else {
-    msg_p->end_timer--;
-    return FALSE;
-  }
+
+  return FALSE;
 }
 
 static int mMsg_end_to_disappear(mMsg_Window_c* msg_p) {
@@ -78,7 +84,7 @@ static void mMsg_Set_display_button_turn_color(mMsg_Window_c* msg_p, GAME* game)
   f32* timer = &msg_p->continue_button_timer;
   f32 target;
 
-  (*timer) += 1.0f;
+  (*timer) += (f32)game->graph->dt_num_60fps_frames;
   if (*timer >= mMsg_BUTTON_TURN_TIME) {
     *timer = 0.0f;
   }

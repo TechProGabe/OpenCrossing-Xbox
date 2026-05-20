@@ -86,6 +86,7 @@ static void eNight15Moon_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eNight15Moon_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     f32 sin = sin_s(effect->effect_specific[2]);
 
     if (effect->effect_specific[3] == 0 && effect->timer == 0) {
@@ -97,9 +98,9 @@ static void eNight15Moon_mv(eEC_Effect_c* effect, GAME* game) {
         }
     }
 
-    effect->effect_specific[0] += 150;
-    effect->effect_specific[1] -= 100;
-    effect->effect_specific[2] += 256;
+    effect->effect_specific[0] += (s16)(150 * dt);
+    effect->effect_specific[1] -= (s16)(100 * dt);
+    effect->effect_specific[2] += (s16)(256 * dt);
 
     eEC_CLIP->set_continious_env_proc(effect, 20000, 20000);
     effect->position = eNight15Moon_GetNowMoonPos(effect->acceleration);

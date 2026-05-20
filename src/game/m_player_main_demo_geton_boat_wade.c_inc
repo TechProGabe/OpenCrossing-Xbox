@@ -64,7 +64,7 @@ static int Player_actor_able_request_proc_index_fromDemo_geton_boat_wade_common(
         return TRUE;
     }
 
-    demo_geton_boat_wade_p->timer += 1.0f;
+    demo_geton_boat_wade_p->timer += (f32)gamePT->graph->dt_num_60fps_frames;
     return FALSE;
 }
 

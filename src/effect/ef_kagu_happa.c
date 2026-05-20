@@ -41,20 +41,28 @@ static void eKagu_Happa_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->scale = ZeroVec;
     effect->timer = EFFECT_LIFETIME;
     effect->effect_specific[0] = 0;
+    effect->effect_specific[1] = 0; /* phase flag for one-shot effect spawn at end */
 }
 
 static void eKagu_Happa_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    /* Use lifetime so calc_adjust's "now" matches the original countdown semantics. */
+    s16 timer_like = (s16)effect->lifetime;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+
     effect->position.x =
-        eEC_CLIP->calc_adjust_proc(effect->timer, 8, EFFECT_LIFETIME, effect->offset.x, effect->acceleration.x);
+        eEC_CLIP->calc_adjust_proc(timer_like, 8, EFFECT_LIFETIME, effect->offset.x, effect->acceleration.x);
     effect->position.y =
-        eEC_CLIP->calc_adjust_proc(effect->timer, 8, EFFECT_LIFETIME, effect->offset.y, effect->acceleration.y);
-    effect->position.z = eEC_CLIP->calc_adjust_proc(effect->timer, 8, 0x1c, effect->offset.z, effect->acceleration.z);
+        eEC_CLIP->calc_adjust_proc(timer_like, 8, EFFECT_LIFETIME, effect->offset.y, effect->acceleration.y);
+    effect->position.z = eEC_CLIP->calc_adjust_proc(timer_like, 8, 0x1c, effect->offset.z, effect->acceleration.z);
     add_calc(&effect->scale.x, 0.01f, CALC_EASE(0.25f), 0.0015f, 5e-5f);
     effect->scale.y = effect->scale.z = effect->scale.x;
-    if (effect->timer > 10) {
-        effect->position.y += ((effect->timer - 14.f) - 4.f) * (-10.f / 98.f) * ((effect->timer - 14.f) - 4.f) + 20.f;
-        effect->effect_specific[0] += 0x924;
-    } else if (effect->timer == 2) {
+    if (timer_like > 10) {
+        effect->position.y += ((timer_like - 14.f) - 4.f) * (-10.f / 98.f) * ((timer_like - 14.f) - 4.f) + 20.f;
+        effect->effect_specific[0] += (s16)(0x924 * dt);
+    } else if (effect->effect_specific[1] < 1 && t >= (f32)(EFFECT_LIFETIME - 2)) {
+        /* Frame-exact one-shot at original timer==2 (i.e. t == LIFETIME-2). */
+        effect->effect_specific[1] = 1;
         effect->position.y += 5.f;
         eEC_CLIP->effect_make_proc(1, effect->position, effect->prio, 0, game, effect->item_name, 0, 3);
     }

@@ -36,7 +36,8 @@ struct kamakura_indoor_actor_s {
     aKI_candle_ring_c candle_ring[aKI_CANDLE_NUM];
     aKI_candle_fire_c candle_fire[aKI_CANDLE_NUM];
     aKI_mochi_c mochi;
-    u8 _1E0[0x200 - 0x1E0];
+    f32 anim_frame;
+    u8 _1E4[0x200 - 0x1E4];
 };
 
 extern ACTOR_PROFILE Kamakura_Indoor_Profile;

@@ -291,6 +291,9 @@ static void mTRC_trainControl(GAME_PLAY* play, int state) {
     int block_x;
     int block_z;
     int now_state = state;
+    static float train_timer_accum = 0.0f;
+    int timer_ticks = graph_dt_60hz_ticks(&play->game, &train_timer_accum);
+    f32 dt = play->game.graph->dt_num_60fps_frames;
 
     if (Common_Get(train_day) != rtc_time->day) {
         if (start_timer >= mTM_SECONDS_IN_DAY) {
@@ -314,7 +317,7 @@ static void mTRC_trainControl(GAME_PLAY* play, int state) {
         }
 
         case mTRC_ACTION_BEGIN_SLOWDOWN: {
-            chase_f(&speed, mTRC_SLOW_SPEED, mTRC_SLOW_RATE);
+            chase_f(&speed, mTRC_SLOW_SPEED, mTRC_SLOW_RATE * dt);
             if (pos.x > 2165.0f) {
                 action = mTRC_ACTION_BEGIN_STOP;
                 speed = mTRC_SLOW_SPEED;
@@ -323,7 +326,7 @@ static void mTRC_trainControl(GAME_PLAY* play, int state) {
         }
 
         case mTRC_ACTION_BEGIN_STOP: {
-            chase_f(&speed, 0.0f, mTRC_STOP_RATE);
+            chase_f(&speed, 0.0f, mTRC_STOP_RATE * dt);
             if (fabsf(speed) < 0.008f) {
                 signal = TRUE;
                 timer = 48;
@@ -339,7 +342,7 @@ static void mTRC_trainControl(GAME_PLAY* play, int state) {
                 action = mTRC_ACTION_WAIT_STOPPED;
                 start_timer += 310;
             } else {
-                timer--;
+                timer = timer_ticks >= timer ? 0 : timer - timer_ticks;
             }
             break;
         }
@@ -367,24 +370,24 @@ static void mTRC_trainControl(GAME_PLAY* play, int state) {
                 action = mTRC_ACTION_BEGIN_PULL_OUT;
                 now_state = 3;
             } else {
-                timer--;
+                timer = timer_ticks >= timer ? 0 : timer - timer_ticks;
             }
             break;
         }
 
         case mTRC_ACTION_BEGIN_PULL_OUT: {
-            chase_f(&speed, mTRC_SLOW_SPEED, mTRC_START_RATE);
+            chase_f(&speed, mTRC_SLOW_SPEED, mTRC_START_RATE * dt);
 
             if (timer == 0) {
                 action = mTRC_ACTION_SPEED_UP;
             } else {
-                timer--;
+                timer = timer_ticks >= timer ? 0 : timer - timer_ticks;
             }
             break;
         }
 
         case mTRC_ACTION_SPEED_UP: {
-            chase_f(&speed, mTRC_FAST_SPEED, mTRC_SPEEDUP_RATE);
+            chase_f(&speed, mTRC_FAST_SPEED, mTRC_SPEEDUP_RATE * dt);
             if (pos.x > 4400.0f) {
                 start_timer = mTRC_get_depart_time();
                 action = mTRC_ACTION_NONE;
@@ -401,7 +404,7 @@ static void mTRC_trainControl(GAME_PLAY* play, int state) {
             Common_Set(train_flag, TRUE);
         }
 
-        pos.x += 0.5f * speed;
+        pos.x += 0.5f * speed * dt;
         mTRC_KishaStatusLevel(play, speed, pos);
     }
 

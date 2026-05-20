@@ -68,6 +68,7 @@ struct catalog_ovl_s {
     u8 change_flag;
     u8 counter;
     u8 alpha;
+    f32 counter_accum;
 };
 
 extern void mCL_catalog_ovl_set_proc(Submenu* submenu);

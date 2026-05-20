@@ -26,13 +26,14 @@ extern void mRlib_spdF_Angle_to_spdXZ(xyz_t* speed_vec, f32* speedf, s16* angle_
 
 extern int mRlib_position_move_for_sloop(ACTOR* actor, s_xyz* slope_angle) {
     if (actor->bg_collision_check.result.on_ground && (slope_angle->x != 0 || slope_angle->z != 0)) {
+        f32 move_step = 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
         f32 x = (actor->position_speed.x * ABS(cos_s(slope_angle->z))); // duplicates cos_s call (3x)
         f32 y = actor->position_speed.y;
         f32 z = (actor->position_speed.z * ABS(cos_s(slope_angle->x))); // duplicates cos_s call (3x)
 
-        actor->world.position.x += x * 0.5f + actor->status_data.collision_vec.x;
-        actor->world.position.y += y * 0.5f + actor->status_data.collision_vec.y;
-        actor->world.position.z += z * 0.5f + actor->status_data.collision_vec.z;
+        actor->world.position.x += x * move_step + actor->status_data.collision_vec.x;
+        actor->world.position.y += y * move_step + actor->status_data.collision_vec.y;
+        actor->world.position.z += z * move_step + actor->status_data.collision_vec.z;
 
         return TRUE;
     } else {

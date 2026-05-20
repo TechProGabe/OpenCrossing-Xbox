@@ -48,37 +48,43 @@ static void eTape_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eTape_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->timer < 74) {
-        xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-        xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-        effect->velocity.x *= sqrtf(0.9f);
-        effect->velocity.y *= sqrtf(0.9f);
-        effect->velocity.z *= sqrtf(0.9f);
+    if (effect->lifetime < 74.0f) {
+        f32 dt = (f32)game->graph->dt_num_60fps_frames;
+        f32 decay = powf(sqrtf(0.9f), dt);
+        effect->velocity.x += effect->acceleration.x * dt;
+        effect->velocity.y += effect->acceleration.y * dt;
+        effect->velocity.z += effect->acceleration.z * dt;
+        effect->position.x += effect->velocity.x * dt;
+        effect->position.y += effect->velocity.y * dt;
+        effect->position.z += effect->velocity.z * dt;
+        effect->velocity.x *= decay;
+        effect->velocity.y *= decay;
+        effect->velocity.z *= decay;
     }
 }
 
 static void eTape_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 now_timer = effect->timer;
+    f32 lt = effect->lifetime;
     f32 scale_y;
     f32 scale_z;
     f32 scale;
     u8 a;
 
-    if (now_timer > 68) {
-        scale_y = eEC_CLIP->calc_adjust_proc(now_timer, 68, 80, 1.0f, 0.0f) * 0.01f;
+    if (lt > 68.0f) {
+        scale_y = eEL_CalcAdjust_F(lt, 68.0f, 80.0f, 1.0f, 0.0f) * 0.01f;
         scale_z = 0.0f;
-    } else if (now_timer > 56) {
+    } else if (lt > 56.0f) {
         scale_y = 0.01f;
         scale_z = 0.0f;
     } else {
-        scale_y = eEC_CLIP->calc_adjust_proc(now_timer, 0, 56, 0.7f, 1.0f) * 0.01f;
-        scale_z = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 56, 1.0f, 0.0f) * 0.01f;
+        scale_y = eEL_CalcAdjust_F(lt, 0.0f, 56.0f, 0.7f, 1.0f) * 0.01f;
+        scale_z = eEL_CalcAdjust_F(lt, 0.0f, 56.0f, 1.0f, 0.0f) * 0.01f;
     }
 
-    if (effect->timer > 14) {
+    if (lt > 14.0f) {
         a = 255;
     } else {
-        a = (int)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 28, 0.0f, 255.0f);
+        a = (int)eEL_CalcAdjust_F(lt, 0.0f, 28.0f, 0.0f, 255.0f);
     }
 
     OPEN_DISP(game->graph);

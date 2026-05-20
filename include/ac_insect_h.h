@@ -116,6 +116,61 @@ typedef struct insect_init_s {
 typedef void (*aINS_MOVE_PROC)(ACTOR*);
 typedef void (*aINS_ACTION_PROC)(ACTOR*, GAME*);
 
+static inline f32 aINS_dt_step(GAME* game, f32 step) {
+    return step * (f32)game->graph->dt_num_60fps_frames;
+}
+
+static inline s16 aINS_dt_angle_step(GAME* game, s16 step) {
+    f32 dt_step = (f32)step * (f32)game->graph->dt_num_60fps_frames;
+
+    if (dt_step < 1.0f) {
+        dt_step = 1.0f;
+    }
+
+    return (s16)dt_step;
+}
+
+static inline int aINS_dt_phase(GAME* game, int* phase, int period) {
+    const int scale = 0x10000;
+    int limit = period * scale;
+    int add = (int)((f32)game->graph->dt_num_60fps_frames * (f32)scale);
+
+    if (add <= 0 && game->graph->dt_num_60fps_frames > 0.0) {
+        add = 1;
+    }
+
+    *phase += add;
+    while (*phase >= limit) {
+        *phase -= limit;
+    }
+
+    return *phase / scale;
+}
+
+static inline void aINS_dt_dec_s32_timer(GAME* game, int* timer, f32* accum) {
+    int ticks;
+
+    *accum += (f32)game->graph->dt_num_60fps_frames;
+    ticks = (int)*accum;
+
+    if (ticks > 0) {
+        *accum -= (f32)ticks;
+        *timer -= ticks;
+
+        if (*timer < 0) {
+            *timer = 0;
+            *accum = 0.0f;
+        }
+    }
+}
+
+static inline void aINS_dt_dec_s16_timer(GAME* game, s16* timer, f32* accum) {
+    int value = *timer;
+
+    aINS_dt_dec_s32_timer(game, &value, accum);
+    *timer = (s16)value;
+}
+
 /* sizeof(aINS_INSECT_ACTOR) == 0x288 */
 typedef struct insect_actor_s {
     TOOLS_ACTOR tools_actor; /* why tools actor? */
@@ -144,9 +199,9 @@ typedef struct insect_actor_s {
         u8 bit_6 : 1;
         u8 bit_7 : 1;
     } insect_flags;
-    int life_time;
-    int alpha_time;
-    int timer;
+    f32 life_time;
+    f32 alpha_time;
+    f32 timer;
     int continue_timer;
     int flag;
 

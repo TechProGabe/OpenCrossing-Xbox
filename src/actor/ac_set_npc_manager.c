@@ -66,6 +66,7 @@ static void aSNMgr_actor_ct(ACTOR* actorx, GAME* game) {
     manager->npc_info.joint_event = 0;
     aSNMgr_clear_make_npc(manager->npc_info.make, mNpc_EVENT_NPC_NUM);
     aSNMgr_clear_event_info(&manager->npc_info.event_info);
+    manager->walk_accum = (f32)(7 * FRAMES_PER_SECOND);
 
     for (i = 0; i < ANIMAL_NUM_MAX; i++) {
         if (manager->npc_info.winfo_p[i] != NULL) {
@@ -911,7 +912,7 @@ static void aSNMgr_walk_npc(SET_NPC_MANAGER_ACTOR* manager, GAME* game) {
     int i;
 
     aSNMgr_set_in_block_npc_num((u8*)manager->npc_info.in_block_num, list_p, manager->npc_info.exist);
-    if ((game->frame_counter % (7 * FRAMES_PER_SECOND)) == 0) {
+    if (graph_dt_period_elapsed(game, &manager->walk_accum, (f32)(7 * FRAMES_PER_SECOND))) {
         walk_flag = TRUE;
     }
 

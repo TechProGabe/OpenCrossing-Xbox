@@ -245,13 +245,12 @@ static void aITB_height_ctrl(ACTOR* actorx) {
  * @return TRUE if the dragonfly touches water, FALSE otherwise.
  */
 static int aITB_check_water_touch(aINS_INSECT_ACTOR* insect, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
     int bx;
     int bz;
     int ret = FALSE;
 
     if (mFI_Wpos2BlockNum(&bx, &bz, insect->tools_actor.actor_class.world.position) == TRUE) {
-        if (bz < FG_BLOCK_Z_NUM && (play->game_frame % 100) < 20) {
+        if (bz < FG_BLOCK_Z_NUM && aINS_dt_phase(game, &insect->_254, 100) < 20) {
             u32 attr = mCoBG_Wpos2Attribute(insect->tools_actor.actor_class.world.position, NULL);
 
             if (mCoBG_CheckWaterAttribute_OutOfSea(attr) == TRUE) {
@@ -287,7 +286,7 @@ static void aITB_fly_ctrl(aINS_INSECT_ACTOR* insect, GAME* game) {
                 insect->target_speed = 0.0f;
             }
         } else {
-            insect->timer--;
+            insect->timer -= (f32)game->graph->dt_num_60fps_frames;
         }
     }
 }
@@ -320,8 +319,8 @@ static void aITB_move_spd_set(aINS_INSECT_ACTOR* insect) {
  *
  * @param insect Pointer to the insect actor.
  */
-static void aITB_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.5f;
+static void aITB_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += aINS_dt_step(game, 0.5f);
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -416,7 +415,7 @@ static void aITB_let_escape(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* ins = (aINS_INSECT_ACTOR*)actorx;
     f32 gravity = actorx->gravity;
     
-    gravity *= 1.1f;
+    gravity *= DTCONV_GAME(1.1f, game);
     if (gravity > 12.0f) {
         gravity = 12.0f;
     }
@@ -518,7 +517,7 @@ static void aITB_touch_water_reverse(ACTOR* actorx, GAME* game) {
     add_calc_short_angle2(&actorx->shape_info.rotation.y, actorx->world.angle.y, 1.0f - sqrtf(0.7f), 2500, 0);
     
     if (ins->timer > 0) {
-        ins->timer--;
+        ins->timer -= (f32)game->graph->dt_num_60fps_frames;
     }
 
     if (ins->timer == 0) {
@@ -536,7 +535,7 @@ static void aITB_hover_wait_on_water(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* ins = (aINS_INSECT_ACTOR*)actorx;
 
     if (ins->timer > 0) {
-        ins->timer--;
+        ins->timer -= (f32)game->graph->dt_num_60fps_frames;
     }
 
     if (ins->timer == 0) {
@@ -596,14 +595,20 @@ static void aITB_rest_on_notice(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* ins = (aINS_INSECT_ACTOR*)actorx;
 
     if (ins->timer > 0 && ins->patience < 90.0f) {
+        f32 dt = (f32)game->graph->dt_num_60fps_frames;
+        f32 rest_elapsed;
+
         add_calc(&actorx->world.position.y, aITB_GET_RESERVE_DUMMY_HEIGHT(ins), 1.0f - sqrtf(0.8f), 0.5f, 0.0f);
-        aITB_GET_REST_ANIME_TIMER(ins)++;
-        if (aITB_GET_REST_ANIME_TIMER(ins) < 20) {
-            aITB_anime_proc(ins);
+
+        ins->timer -= dt;
+        if (ins->timer < 0.0f) {
+            ins->timer = 0.0f;
         }
 
-        if (ins->timer > 0) {
-            ins->timer--;
+        rest_elapsed = (f32)aITB_REST_ON_NOTICE_TIMER - ins->timer;
+        aITB_GET_REST_ANIME_TIMER(ins) = (int)rest_elapsed;
+        if (rest_elapsed < 20.0f) {
+            aITB_anime_proc(ins, game);
         }
     } else {
         aITB_GET_STOP_STATE(ins) = aITB_STOP_TYPE_NONE;
@@ -841,7 +846,7 @@ static void aITB_actor_move(ACTOR* actorx, GAME* game) {
     } else {
         ins->action_proc(actorx, game);
         if (aITB_GET_STOP_STATE(ins) != aITB_STOP_TYPE_REST) {
-            aITB_anime_proc(ins);
+            aITB_anime_proc(ins, game);
         }
     }
 }

@@ -100,7 +100,7 @@ static void aEBRK_talk_wait(EV_BROKER_ACTOR* broker) {
     int animeSeqNo = aNPC_ANIM_WAIT1;
 
     if (chase_angle(&broker->npc_class.actor_class.shape_info.rotation.y, DEG2SHORT_ANGLE2(0.0f),
-                    DEG2SHORT_ANGLE2(5.625f)) == FALSE) {
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f))) == FALSE) {
         animeSeqNo = aNPC_ANIM_WALK1;
     }
 

@@ -55,11 +55,13 @@ extern void Actor_position_move(ACTOR* actor) {
 }
 
 extern void Actor_position_speed_set(ACTOR* actor) {
+    const f32 dt_frames = (f32)gamePT->graph->dt_num_60fps_frames;
+
     actor->position_speed.x = actor->speed * sin_s(actor->world.angle.y);
     actor->position_speed.z = actor->speed * cos_s(actor->world.angle.y);
 
     /* divide by 2 because of 30fps -> 60fps? */
-    chase_f(&actor->position_speed.y, actor->max_velocity_y, 0.5f * actor->gravity);
+    chase_f(&actor->position_speed.y, actor->max_velocity_y, 0.5f * actor->gravity * dt_frames);
 }
 
 extern void Actor_position_moveF(ACTOR* actor) {

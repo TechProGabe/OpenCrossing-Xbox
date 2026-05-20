@@ -73,16 +73,22 @@ static void eKT_mv(eEC_Effect_c* effect, GAME* game) {
 }
 
 static void eKT_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 frame_index;
-    s16 timer = 72 - effect->timer;
-    u16 alpha = (u8)eEC_CLIP->calc_adjust_proc(timer, 64, 72, 255.0f, 0.0f);
+    f32 t = 72.0f - effect->lifetime;
+    u16 alpha = (u8)eEL_CalcAdjust_F(t, 64.0f, 72.0f, 255.0f, 0.0f);
+    f32 k;
+    int i, j;
+    f32 frac;
 
-    if (timer > 50) {
-        timer = 50;
-    }
-    frame_index = timer >> 1;
-    effect->scale.x = eKT_scale_data[frame_index][0] * 0.008f;
-    effect->scale.y = eKT_scale_data[frame_index][1] * 0.008f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 50.0f) t = 50.0f;
+    k = t * 0.5f;
+    i = (int)k;
+    if (i > 24) i = 24;
+    j = i + 1;
+    frac = k - (f32)i;
+
+    effect->scale.x = (eKT_scale_data[i][0] + (eKT_scale_data[j][0] - eKT_scale_data[i][0]) * frac) * 0.008f;
+    effect->scale.y = (eKT_scale_data[i][1] + (eKT_scale_data[j][1] - eKT_scale_data[i][1]) * frac) * 0.008f;
     effect->scale.z = 0.008f;
 
     OPEN_DISP(game->graph);

@@ -391,36 +391,45 @@ static void aNPC_check_feel_tim(NPC_ACTOR* nactorx) {
 
     if (animal_p != NULL) {
         if ((nactorx->condition_info.demo_flg & aNPC_COND_DEMO_SKIP_FEEL_CHECK) == 0 &&
-            nactorx->condition_info.feel_tim > 0) {
-            nactorx->condition_info.feel_tim--;
+            nactorx->condition_info.feel_tim > 0.0f) {
+            nactorx->condition_info.feel_tim -= (f32)gamePT->graph->dt_num_60fps_frames;
+            if (nactorx->condition_info.feel_tim < 0.0f) {
+                nactorx->condition_info.feel_tim = 0.0f;
+            }
         }
 
-        if (nactorx->condition_info.feel_tim == 0) {
+        if (nactorx->condition_info.feel_tim <= 0.0f) {
             animal_p->mood = mNpc_FEEL_NORMAL;
         }
     }
 }
 
 static void aNPC_calc_move_timer(NPC_ACTOR* nactorx) {
-    int move_timer = nactorx->movement.move_timer;
+    f32 move_timer = nactorx->movement.move_timer;
 
-    move_timer++;
-    if (move_timer > 18000) {
-        move_timer = 18000;
+    move_timer += (f32)gamePT->graph->dt_num_60fps_frames;
+    if (move_timer > 18000.0f) {
+        move_timer = 18000.0f;
     }
 
     nactorx->movement.move_timer = move_timer;
 }
 
 static void aNPC_calc_force_call_timer(NPC_ACTOR* nactorx) {
-    if (mDemo_Get_talk_actor() == NULL && nactorx->think.force_call_timer != 0) {
-        nactorx->think.force_call_timer--;
+    if (mDemo_Get_talk_actor() == NULL && nactorx->think.force_call_timer > 0.0f) {
+        nactorx->think.force_call_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
+        if (nactorx->think.force_call_timer < 0.0f) {
+            nactorx->think.force_call_timer = 0.0f;
+        }
     }
 }
 
 static void aNPC_calc_act_timer(NPC_ACTOR* nactorx) {
-    if (nactorx->action.act_timer != 0) {
-        nactorx->action.act_timer--;
+    if (nactorx->action.act_timer > 0.0f) {
+        nactorx->action.act_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
+        if (nactorx->action.act_timer < 0.0f) {
+            nactorx->action.act_timer = 0.0f;
+        }
     }
 }
 
@@ -440,7 +449,7 @@ static void aNPC_position_move(ACTOR* actorx) {
         accel = nactorx->movement.speed.deceleration;
     }
 
-    chase_f(&actorx->speed, nactorx->movement.speed.max_speed, accel * 0.5f);
+    chase_f(&actorx->speed, nactorx->movement.speed.max_speed, aNPC_dt_float_step(accel * 0.5f));
     Actor_position_speed_set(actorx);
     if ((nactorx->condition_info.demo_flg & aNPC_COND_DEMO_SKIP_MOVE_Y) != 0) {
         actorx->position_speed.y = 0.0f;
@@ -450,7 +459,8 @@ static void aNPC_position_move(ACTOR* actorx) {
 }
 
 static void aNPC_angle_calc(NPC_ACTOR* nactorx) {
-    chase_angle(&nactorx->actor_class.shape_info.rotation.y, nactorx->movement.mv_angl, nactorx->movement.mv_add_angl);
+    chase_angle(&nactorx->actor_class.shape_info.rotation.y, nactorx->movement.mv_angl,
+                aNPC_dt_angle_step(nactorx->movement.mv_add_angl));
     nactorx->actor_class.world.angle.y = nactorx->actor_class.shape_info.rotation.y;
 }
 
@@ -463,7 +473,7 @@ static void aNPC_set_body_angle(NPC_ACTOR* nactorx) {
         angle = (nactorx->actor_class.speed * 3640.0f) / 3.0f;
     }
 
-    chase_angle(&nactorx->actor_class.shape_info.rotation.x, angle, 224);
+    chase_angle(&nactorx->actor_class.shape_info.rotation.x, angle, aNPC_dt_angle_step(224));
 }
 
 static void aNPC_around_obj_check(NPC_ACTOR* nactorx, ACTOR* actorx) {

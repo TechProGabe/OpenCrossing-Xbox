@@ -320,7 +320,12 @@ struct effect_s {
     /* 0x34 */ xyz_t scale;
     /* 0x40 */ xyz_t offset;
     /* 0x4C */ s16 effect_specific[6];
+    /* 0x58 */ f32 lifetime; /* dt-correct death timer, real-time 60fps frames */
 };
+
+float eEC_get_partial_tick(void);
+int   eEC_ShouldEffectDie(const eEC_Effect_c* effect);
+f32   eEL_CalcAdjust_F(f32 now, f32 start, f32 end, f32 start_val, f32 end_val);
 
 typedef void (*eEC_EFFECT_INIT_PROC)(xyz_t, int, s16, GAME*, u16, s16, s16);
 typedef void (*eEC_EFFECT_CT_PROC)(eEC_Effect_c*, GAME*, void*);

@@ -315,7 +315,7 @@ static void mDI_roll_control_read(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
             }
         }
 
-        chase_f(&menu_info->position[1], aim, menu_info->speed[1]);
+        chase_f(&menu_info->position[1], aim, menu_info->speed[1] * (f32)gamePT->graph->dt_num_60fps_frames);
         if (fabsf(aim - menu_info->position[1]) <= 0.01f) {
             menu_info->position[1] = aim;
             diary_ovl->_32 = 0;
@@ -354,7 +354,7 @@ static void mDI_roll_control_read_to_write(Submenu* submenu, mSM_MenuInfo_c* men
             }
         }
 
-        chase_f(&menu_info->position[1], aim, menu_info->speed[1]);
+        chase_f(&menu_info->position[1], aim, menu_info->speed[1] * (f32)gamePT->graph->dt_num_60fps_frames);
     } else {
         menu_info->speed[1] = 0.0f;
         menu_info->position[1] = aim;
@@ -407,7 +407,7 @@ static void mDI_roll_control(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
                 }
             }
 
-            chase_f(&menu_info->position[1], aim, menu_info->speed[1]);
+            chase_f(&menu_info->position[1], aim, menu_info->speed[1] * (f32)gamePT->graph->dt_num_60fps_frames);
 
             if (editor_ovl->_34 != 3 && editor_ovl->_34 != 2 && diary_ovl->_20 > 0) {
                 diary_ovl->_20--;
@@ -538,7 +538,7 @@ static void mDI_roll_control_write_to_endchk(Submenu* submenu, mSM_MenuInfo_c* m
             }
         }
 
-        chase_f(&menu_info->position[1], aim, menu_info->speed[1]);
+        chase_f(&menu_info->position[1], aim, menu_info->speed[1] * (f32)gamePT->graph->dt_num_60fps_frames);
     } else {
         menu_info->speed[1] = 0.0f;
         menu_info->position[1] = aim;

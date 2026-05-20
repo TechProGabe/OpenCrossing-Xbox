@@ -99,12 +99,19 @@ extern void mCO_clear_hide_flg(Submenu* submenu) {
     }
 }
 
+static f32 mCO_page_accum = 0.0f;
+
+static f32 mCO_page_pos_y(f32 timer) {
+    return 100.0f * sinf_table(timer * DEG2RAD(4.5f));
+}
+
 extern int mCO_change_up_folder(Submenu* submenu, int folder) {
     mCO_Ovl_c* cporiginal_ovl = submenu->overlay->cporiginal_ovl;
     int ret = FALSE;
 
     if (folder < mCO_PAGE_NUM && folder != cporiginal_ovl->page_order[0]) {
         cporiginal_ovl->timer = 40;
+        mCO_page_accum = 0.0f;
         cporiginal_ovl->up_folder = folder;
         ret = TRUE;
     }
@@ -244,10 +251,15 @@ static void mCO_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         submenu->overlay->tag_ovl->chg_tag_func_proc(submenu, mTG_TABLE_CPORIGINAL, mTG_TYPE_NONE, 0, 0.0f, 0.0f);
         menu_info->open_flag = TRUE;
     } else if (cporiginal_ovl->timer != 0) {
-        cporiginal_ovl->timer--;
-        menu_info->position[1] = 100.0f * sinf_table(cporiginal_ovl->timer * DEG2RAD(4.5f));
+        int old_timer = cporiginal_ovl->timer;
+        int ticks = graph_dt_60hz_ticks(gamePT, &mCO_page_accum);
+        cporiginal_ovl->timer -= ticks;
+        if (cporiginal_ovl->timer < 0) {
+            cporiginal_ovl->timer = 0;
+        }
+        menu_info->position[1] = mCO_page_pos_y((f32)cporiginal_ovl->timer);
 
-        if (cporiginal_ovl->timer == 20) {
+        if (old_timer > 20 && cporiginal_ovl->timer <= 20) {
             u8* page_order_p = cporiginal_ovl->page_order;
             int i;
 
@@ -707,10 +719,21 @@ static void mCO_set_frame_dl(Submenu* submenu, GAME* game, mSM_MenuInfo_c* menu_
 
 static void mCO_cporiginal_ovl_draw(Submenu* submenu, GAME* game) {
     mSM_MenuInfo_c* menu_info = &submenu->overlay->menu_info[mSM_OVL_CPORIGINAL];
+    mCO_Ovl_c* cporiginal_ovl = submenu->overlay->cporiginal_ovl;
+    f32 pos_y = menu_info->position[1];
 
     menu_info->pre_draw_func(submenu, game);
+    if (cporiginal_ovl->timer != 0 && mCO_page_accum > 0.0f) {
+        f32 timer = (f32)cporiginal_ovl->timer - mCO_page_accum;
+
+        if (timer < 0.0f) {
+            timer = 0.0f;
+        }
+        menu_info->position[1] = mCO_page_pos_y(timer);
+    }
     mCO_set_frame_dl(submenu, game, menu_info);
-    if (submenu->overlay->cporiginal_ovl->timer == 0) {
+    menu_info->position[1] = pos_y;
+    if (cporiginal_ovl->timer == 0) {
         submenu->overlay->menu_control.tag_draw_func(submenu, game, mSM_OVL_CPORIGINAL);
     }
 }

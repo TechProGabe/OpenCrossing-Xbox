@@ -78,6 +78,9 @@ static void eMizutama_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eMizutama_mv(eEC_Effect_c* effect, GAME* game) {
+    /* Non-smooth: _mv runs at 60Hz cadence (Pass 2), so motion stays unscaled.
+     * Death-stage counter (effect_specific[0/1]) needs 60Hz pacing for correct
+     * splash-staging animation. */
     if (effect->effect_specific[0] == 0) {
         effect->offset.z = effect->offset.y;
         effect->offset.y = mCoBG_GetBgY_AngleS_FromWpos(NULL, effect->position, 0.0f);
@@ -131,7 +134,7 @@ static void eMizutama_dw(eEC_Effect_c* effect, GAME* game) {
 
     s16 idx = CLAMP(effect->effect_specific[0] >> 1, 0, 3);
 
-    effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 40, 0.004f, 0.008f);
+    effect->scale.x = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 40.0f, 0.004f, 0.008f);
     effect->scale.y = effect->scale.z = effect->scale.x;
 
     _texture_z_light_fog_prim_xlu(game->graph);

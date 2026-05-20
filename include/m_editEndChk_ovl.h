@@ -26,6 +26,7 @@ struct end_edit_chk_s {
     u8 question_alpha_step;
     u8 question_alpha;
     f32 scale;
+    f32 question_alpha_accum;
 };
 
 extern void mEE_editEndChk_ovl_set_proc(Submenu* submenu);

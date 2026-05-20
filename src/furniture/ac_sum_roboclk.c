@@ -21,7 +21,7 @@ static void aSumroboclk_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* gam
     int mtx_idx = game->frame_counter & 1;
     cKF_SkeletonInfo_R_c* keyframe = &ftr_actor->keyframe;
     Mtx* mtx = ftr_actor->skeleton_mtx[mtx_idx];
-    int tex_idx = game->frame_counter & 3;
+    int tex_idx = (int)ftr_actor->dynamic_work_f[0] & 3;
     static u8* texture_table[] = {
         int_sum_roboclk_eye1_TA_tex_txt,
         int_sum_roboclk_eye1_TA_tex_txt,
@@ -53,6 +53,11 @@ static void aSumroboclk_ct(FTR_ACTOR* ftr_actor, u8* data) {
 
 static void aSumroboclk_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
     cKF_SkeletonInfo_R_c* keyframe = &ftr_actor->keyframe;
+
+    ftr_actor->dynamic_work_f[0] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[0] >= 4.0f) {
+        ftr_actor->dynamic_work_f[0] -= 4.0f;
+    }
 
     cKF_SkeletonInfo_R_play(keyframe);
 }

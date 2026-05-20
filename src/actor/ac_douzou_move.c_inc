@@ -117,8 +117,9 @@ static void aDOU_setEffect(ACTOR* actor, GAME* game) {
     static f32 r_timetbl[mHS_HOUSE_NUM] = { 10.0f, 30.0f, 40.0f, 60.0f };
 
     STRUCTURE_ACTOR* douzou = (STRUCTURE_ACTOR*)actor;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
-    s16 time_tbl[mHS_HOUSE_NUM];
+    f32 time_tbl[mHS_HOUSE_NUM];
     int i;
 
     time_tbl[0] = douzou->arg0_f;
@@ -128,12 +129,15 @@ static void aDOU_setEffect(ACTOR* actor, GAME* game) {
 
     for (i = 0; i < mHS_HOUSE_NUM; i++) {
         if (aDOU_set_check(i)) {
-            if (time_tbl[i] == 0) {
+            if (time_tbl[i] <= 0.0f) {
                 int color = aDOU_get_color(i);
                 time_tbl[i] = (b_timetbl[color] + r_timetbl[color] * fqrand());
                 aDOU_setEffect_sub(actor, game, i, color);
             } else {
-                time_tbl[i]--;
+                time_tbl[i] -= dt;
+                if (time_tbl[i] < 0.0f) {
+                    time_tbl[i] = 0.0f;
+                }
             }
         }
     }

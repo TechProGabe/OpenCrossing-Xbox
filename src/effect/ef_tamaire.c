@@ -1,6 +1,7 @@
 #include "ef_effect_control.h"
 
 #include "m_common_data.h"
+#include "m_lib.h"
 #include "m_rcp.h"
 #include "sys_matrix.h"
 
@@ -60,11 +61,16 @@ static void eTamaire_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eTamaire_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     mActor_name_t* item_p;
     xyz_t pos;
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
     effect->offset.z = effect->offset.y;
     effect->offset.y = mCoBG_GetBgY_AngleS_FromWpos(NULL, effect->position, 0.0f) + 3.0f;
@@ -105,13 +111,16 @@ static void eTamaire_mv(eEC_Effect_c* effect, GAME* game) {
 
                 if (search_position_distance(&effect->position, &pos) < 1.0f) {
                     effect->timer = 0;
+                    effect->lifetime = 0.0f;
                 }
             } else {
+                f32 bounce = DTCONV_GAME(0.5f, game);
+
                 effect->position.y = effect->offset.y;
 
-                effect->velocity.y *= -0.5f;
-                effect->velocity.x *= 0.5f;
-                effect->velocity.z *= 0.5f;
+                effect->velocity.y *= -bounce;
+                effect->velocity.x *= bounce;
+                effect->velocity.z *= bounce;
 
                 effect->effect_specific[1] >>= 1;
 
@@ -122,7 +131,7 @@ static void eTamaire_mv(eEC_Effect_c* effect, GAME* game) {
         }
     }
 
-    effect->effect_specific[0] += effect->effect_specific[1];
+    effect->effect_specific[0] += (s16)(effect->effect_specific[1] * dt);
     effect->scale.y = (ABS(effect->velocity.y) * 0.1f + 0.9f) * 0.005f;
 }
 
@@ -132,7 +141,7 @@ static void eTamaire_dw(eEC_Effect_c* effect, GAME* game) {
     f32 adjust, alpha, temp;
     u8 shadow_alpha;
 
-    adjust = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 20, 0.0f, 1.0f);
+    adjust = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 20.0f, 0.0f, 1.0f);
     temp = ((effect->offset.y - effect->position.y + 300.0f) / 300.0f) * 0.5f;
     temp = (temp < 0.0f ? 0.0f : temp);
     temp = (temp > 0.5f ? 0.5f : temp) * play->kankyo.shadow_alpha;

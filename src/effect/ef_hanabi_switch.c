@@ -43,27 +43,25 @@ static void eHanabiSwitch_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->timer = 300;
     eHanabiSwitch_SearchLakePos(&effect->position);
     effect->offset = effect->position;
+    effect->effect_specific[0] = 0; /* phase: 0 = pre-init, 1 = pos-captured, 2 = set-spawned */
 }
 
 static void eHanabiSwitch_mv(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->set_continious_env_proc(effect, 300, 300);
     if (mEv_CheckTitleDemo() != mEv_TITLEDEMO_STAFFROLL) {
-        s16 alive_frames;
-        if (effect->state == 0) {
-            alive_frames = EFFECT_LIFETIME - effect->timer;
-        } else {
-            alive_frames = EFFECT_LIFETIME - effect->timer;
+        f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+        if (effect->effect_specific[0] < 1 && eEC_CLIP->check_lookat_block_proc(effect->position)) {
+            effect->offset = effect->position;
+            effect->effect_specific[0] = 1;
         }
-        if (alive_frames == 40) {
+        if (effect->effect_specific[0] < 2 && t >= 40.0f) {
+            effect->effect_specific[0] = 2;
             eEC_CLIP->effect_make_proc(eEC_EFFECT_HANABI_SET, effect->position, effect->prio, 0, game,
                                        (mActor_name_t)effect->item_name, 0, 0);
         }
-        if (alive_frames == 0 && eEC_CLIP->check_lookat_block_proc(effect->position)) {
-            effect->offset = effect->position;
-        }
-        if (alive_frames < 240 && eEC_CLIP->check_lookat_block_proc(effect->position)) {
+        if (t < 240.0f && eEC_CLIP->check_lookat_block_proc(effect->position)) {
             effect->offset.y =
-                eEC_CLIP->calc_adjust_proc(alive_frames, 0, 40, effect->position.y, effect->position.y + 200.f);
+                eEL_CalcAdjust_F(t, 0.0f, 40.0f, effect->position.y, effect->position.y + 200.f);
             NPC_CLIP->set_attention_request_proc(aNPC_ATTENTION_TYPE_POSITION, NULL, &effect->offset);
         }
     }

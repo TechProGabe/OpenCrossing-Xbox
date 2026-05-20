@@ -72,8 +72,8 @@ static int aICH_check_live_condition(aINS_INSECT_ACTOR* insect, mActor_name_t* n
     return ret;
 }
 
-static void aICH_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.2f;
+static void aICH_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += aINS_dt_step(game, 0.2f);
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -91,7 +91,7 @@ static void aICH_jump_ctrl(aINS_INSECT_ACTOR* insect, f32 base) {
         insect->tools_actor.actor_class.position_speed.y = 2.0f + fqrand();
     }
     chase_f(&insect->tools_actor.actor_class.position_speed.y, insect->tools_actor.actor_class.max_velocity_y,
-            0.5f * insect->tools_actor.actor_class.gravity);
+            aINS_dt_step((GAME*)gamePT, 0.5f * insect->tools_actor.actor_class.gravity));
 }
 
 static int aICH_flower_search_sub(aINS_INSECT_ACTOR* insect, int type) {
@@ -184,7 +184,7 @@ static void aICH_loop_move_ctrl(aINS_INSECT_ACTOR* insect) {
         stepVal = 0x400;
     }
 
-    chase_angle(&insect->tools_actor.actor_class.shape_info.rotation.y, angle, stepVal);
+    chase_angle(&insect->tools_actor.actor_class.shape_info.rotation.y, angle, aINS_dt_angle_step((GAME*)gamePT, stepVal));
     insect->tools_actor.actor_class.world.angle.y = insect->tools_actor.actor_class.shape_info.rotation.y;
 
     if (((x * chkX_table[idx]) < 0.0f) || ((z * chkZ_table[idx]) < 0.0f)) {
@@ -211,8 +211,9 @@ static void aICH_avoid_player(aINS_INSECT_ACTOR* insect, GAME* game) {
     if (player != NULL) {
         s16 angle = search_position_angleY(&insect->tools_actor.actor_class.world.position,
                                            &player->actor_class.world.position) + 0x8000;
-        angle += add_angl[(play->game.frame_counter >> 5) & 1];
-        chase_angle(&insect->tools_actor.actor_class.shape_info.rotation.y, (angle), 0x600);
+        angle += add_angl[aINS_dt_phase(game, &insect->_254, 64) >= 32];
+        chase_angle(&insect->tools_actor.actor_class.shape_info.rotation.y, (angle),
+                    aINS_dt_angle_step(game, 0x600));
         insect->tools_actor.actor_class.world.angle.y = insect->tools_actor.actor_class.shape_info.rotation.y;
     }
 } 
@@ -232,7 +233,8 @@ static void aICH_avoid_move_ctrl(aINS_INSECT_ACTOR* insect, GAME* game) {
                             8);
         angle = atans_table(pos.z - insect->tools_actor.actor_class.world.position.z,
                             pos.x - insect->tools_actor.actor_class.world.position.x);
-        chase_angle(&insect->tools_actor.actor_class.shape_info.rotation.y, angle, 0x600);
+        chase_angle(&insect->tools_actor.actor_class.shape_info.rotation.y, angle,
+                    aINS_dt_angle_step(game, 0x600));
         insect->tools_actor.actor_class.world.angle.y = insect->tools_actor.actor_class.shape_info.rotation.y;
 
     } else {
@@ -379,7 +381,7 @@ static void aICH_avoid(ACTOR* actor, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actor;
     f32 base;
 
-    aICH_anime_proc(insect);
+    aICH_anime_proc(insect, game);
     switch (insect->type) {
         case aINS_INSECT_TYPE_TIGER_BUTTERFLY:
             base = -80.0f;
@@ -403,15 +405,15 @@ static void aICH_let_escape(ACTOR* actor, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actor;
 
     aICH_chou_fuwafuwa(insect);
-    actor->gravity += 0.1f;
-    aICH_anime_proc(insect);
+    actor->gravity += aINS_dt_step(game, 0.1f);
+    aICH_anime_proc(insect, game);
 }
 
 static void aICH_fly(ACTOR* actor, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actor;
     f32 base;
 
-    aICH_anime_proc(insect);
+    aICH_anime_proc(insect, game);
     aICH_BGcheck(actor);
 
     switch (insect->type) {
@@ -457,7 +459,7 @@ static void aICH_landing(ACTOR* actor, GAME* game) {
     };
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actor;
 
-    aICH_anime_proc(insect);
+    aICH_anime_proc(insect, game);
     if (aICH_check_patience(insect) == TRUE) {
         int action;
         switch (insect->type) {
@@ -485,7 +487,7 @@ static void aICH_landing(ACTOR* actor, GAME* game) {
                 break;
         }
         angle = search_position_angleY(&actor->world.position, &pos);
-        chase_angle(&actor->shape_info.rotation.y, angle, 0x1000);
+        chase_angle(&actor->shape_info.rotation.y, angle, aINS_dt_angle_step(game, 0x1000));
         actor->world.angle.y = actor->shape_info.rotation.y;
         if (F32_IS_ZERO(insect->target_speed) ||
             ((fabsf(actor->world.position.x - pos.x) < 2.0f) && (fabsf(actor->world.position.z - pos.z) < 2.0f))) {
@@ -499,7 +501,7 @@ static void aICH_hover(ACTOR* actor, GAME* game) {
     int action;
 
     if (insect->action == aICH_ACTION_HOVER) {
-        aICH_anime_proc(insect);
+        aICH_anime_proc(insect, game);
     }
     if (aICH_check_patience(insect) == TRUE) {
         switch (insect->type) {
@@ -513,7 +515,7 @@ static void aICH_hover(ACTOR* actor, GAME* game) {
         }
         aICH_setupAction(insect, action, game);
     } else {
-        insect->timer--;
+        insect->timer -= (f32)game->graph->dt_num_60fps_frames;
         if (insect->timer <= 0) {
             action = aICH_ACTION_REST;
             if (insect->action == aICH_ACTION_REST) {
@@ -574,9 +576,7 @@ static void aICH_fly_init(aINS_INSECT_ACTOR* insect, GAME* game) {
 }
 
 static void aICH_landing_init(aINS_INSECT_ACTOR* insect, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    
-    insect->light_flag = play->game_frame % 3;
+    insect->light_flag = graph_dt_frame_phase(game, 3);
     insect->tools_actor.actor_class.position_speed.y = 0.0f;
 }
 
@@ -622,7 +622,7 @@ static void aICH_actor_move(ACTOR* actor, GAME* game) {
 
     if (label == (u32)actor) {
         insect->alpha0 = 255;
-        aICH_anime_proc(insect);
+        aICH_anime_proc(insect, game);
         aICH_setupAction(insect, aICH_ACTION_LET_ESCAPE, game);
     }
     else if((insect->insect_flags.bit_3 == TRUE) && (insect->insect_flags.bit_2 == FALSE)){

@@ -68,15 +68,20 @@ static void eNamida_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eNamida_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 30 - effect->timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 30.0f - effect->lifetime;
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->offset, &effect->velocity, &effect->offset);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->offset.x += effect->velocity.x * dt;
+    effect->offset.y += effect->velocity.y * dt;
+    effect->offset.z += effect->velocity.z * dt;
 
-    if (timer < 20) {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(timer, 0, 18, 0.0f, 0.0027f);
+    if (t < 20.0f) {
+        effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 18.0f, 0.0f, 0.0027f);
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(timer, 20, 30, 0.0027f, 0.0f);
+        effect->scale.x = eEL_CalcAdjust_F(t, 20.0f, 30.0f, 0.0027f, 0.0f);
     }
     effect->scale.y = effect->scale.x;
     effect->scale.z = effect->scale.x;

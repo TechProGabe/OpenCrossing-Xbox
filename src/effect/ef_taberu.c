@@ -64,11 +64,19 @@ static void eTaberu_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eTaberu_mv(eEC_Effect_c* effect, GAME* game) {
-    effect->effect_specific[0] += 1;
+    /* counter no longer used; lifetime drives the model index in _dw. */
 }
 
 static void eTaberu_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 idx = ((u16)effect->effect_specific[0] >> 2) & 3;
+    f32 elapsed_f = 44.0f - effect->lifetime;
+    u16 elapsed;
+    s16 idx;
+
+    if (elapsed_f < 0.0f) {
+        elapsed_f = 0.0f;
+    }
+    elapsed = (u16)elapsed_f;
+    idx = (elapsed >> 2) & 3;
 
     OPEN_DISP(game->graph);
 

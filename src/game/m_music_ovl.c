@@ -158,7 +158,7 @@ static void mMU_set_dl(Submenu* submenu, mSM_MenuInfo_c* menu_info, GAME* game) 
     
     gSPDisplayList(POLY_OPA_DISP++, mus_mark_before);
 
-    frame = game->frame_counter % 20;
+    frame = graph_dt_frame_phase(game, 20);
     if (frame > 10) {
         frame = 20 - frame;
     }

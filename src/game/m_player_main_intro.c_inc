@@ -46,7 +46,7 @@ static void Player_actor_ResetCameraPos_Intro(GAME* game) {
 static void Player_actor_request_proc_index_fromIntro(ACTOR* actor, GAME* game) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actor;
 
-    player->main_data.intro.timer += 1.0f;
+    player->main_data.intro.timer += (f32)gamePT->graph->dt_num_60fps_frames;
     if (player->main_data.intro.timer >= 4.0f) {
         Player_actor_request_main_wait_all(game, 0.0f, 0.0f, 0, 1);
     }

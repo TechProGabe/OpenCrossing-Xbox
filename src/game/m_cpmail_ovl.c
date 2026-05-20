@@ -71,16 +71,30 @@ static void mCM_move_Move(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     submenu->overlay->move_Move_proc(submenu, menu_info);
 }
 
+static f32 mCM_page_move_accum = 0.0f;
+
+static f32 mCM_page_pos_y(f32 timer) {
+    return 100.0f * sinf_table(timer * DEG2RAD(4.5f));
+}
+
 static void mCM_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mCM_Ovl_c* cpmail_ovl = submenu->overlay->cpmail_ovl;
     
     if (menu_info->open_flag == FALSE) {
         submenu->overlay->tag_ovl->chg_tag_func_proc(submenu, mTG_TABLE_CPMAIL, mTG_TYPE_NONE, 0, 0.0f, 0.0f);
         menu_info->open_flag = TRUE;
-    } else if (cpmail_ovl->page_move_timer != 0) {   
-        cpmail_ovl->page_move_timer--;
-        menu_info->position[1] = 100.0f * sinf_table(cpmail_ovl->page_move_timer * DEG2RAD(4.5f));
-        if (cpmail_ovl->page_move_timer == 20) {
+    } else if (cpmail_ovl->page_move_timer != 0) {
+        int old_timer = cpmail_ovl->page_move_timer;
+        int ticks = graph_dt_60hz_ticks(gamePT, &mCM_page_move_accum);
+
+        if (ticks > 0) {
+            cpmail_ovl->page_move_timer -= ticks;
+            if (cpmail_ovl->page_move_timer < 0) {
+                cpmail_ovl->page_move_timer = 0;
+            }
+        }
+        menu_info->position[1] = mCM_page_pos_y((f32)cpmail_ovl->page_move_timer);
+        if (old_timer > 20 && cpmail_ovl->page_move_timer <= 20) {
             u8* page_order = cpmail_ovl->page_order;
             int i;
             
@@ -96,7 +110,7 @@ static void mCM_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
             }
 
             cpmail_ovl->page_order[0] = cpmail_ovl->next_page_id;
-        } else if (cpmail_ovl->page_move_timer == 0) {
+        } else if (old_timer > 0 && cpmail_ovl->page_move_timer == 0) {
             menu_info->position[1] = 0.0f;
             submenu->overlay->hand_ovl->set_hand_func(submenu);
             submenu->overlay->tag_ovl->init_tag_data_item_win_proc(submenu);
@@ -341,8 +355,20 @@ static void mCM_cpmail_ovl_draw(Submenu* submenu, GAME* game) {
     mSM_MenuInfo_c* menu_info = &submenu->overlay->menu_info[mSM_OVL_CPMAIL];
 
     if (submenu->overlay->cpmail_ovl != NULL) {
+        mCM_Ovl_c* cpmail_ovl = submenu->overlay->cpmail_ovl;
+        f32 pos_y = menu_info->position[1];
+
         menu_info->pre_draw_func(submenu, game);
+        if (cpmail_ovl->page_move_timer != 0 && mCM_page_move_accum > 0.0f) {
+            f32 timer = (f32)cpmail_ovl->page_move_timer - mCM_page_move_accum;
+
+            if (timer < 0.0f) {
+                timer = 0.0f;
+            }
+            menu_info->position[1] = mCM_page_pos_y(timer);
+        }
         mCM_set_dl(submenu, menu_info, game);
+        menu_info->position[1] = pos_y;
     }
 }
 

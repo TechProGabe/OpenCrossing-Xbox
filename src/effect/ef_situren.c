@@ -53,40 +53,43 @@ static void eSN_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eSN_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 128 - effect->timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 128.0f - effect->lifetime;
 
-    effect->effect_specific[0] += DEG2SHORT_ANGLE2(30.94f);
+    effect->effect_specific[0] += (s16)(DEG2SHORT_ANGLE2(30.94f) * dt);
 
-    if (timer < 8) {
-        effect->position.y += 1.6f;
+    if (t < 8.0f) {
+        effect->position.y += 1.6f * dt;
     }
 }
 
 static void eSN_dw(eEC_Effect_c* effect, GAME* game) {
     Gfx* gfx;
-    s16 angle, timer;
+    s16 angle;
+    f32 t = 128.0f - effect->lifetime;
     f32 s, c, temp1, temp2, temp3;
     u8 alpha;
 
     angle = effect->effect_specific[0];
-    timer = 128 - effect->timer;
 
     s = sin_s(angle);
     c = cos_s(angle);
 
-    temp1 = eEC_CLIP->calc_adjust_proc(timer, 0, 6, 0.0f, 0.0075f);
-    temp2 = eEC_CLIP->calc_adjust_proc(timer, 0, 42, 1.4f, 1.0f);
-    temp3 = eEC_CLIP->calc_adjust_proc(timer, 0, 42, 0.6f, 1.0f);
-    alpha = (int)eEC_CLIP->calc_adjust_proc(timer, 108, 128, 255.0f, 0.0f);
+    temp1 = eEL_CalcAdjust_F(t, 0.0f, 6.0f, 0.0f, 0.0075f);
+    temp2 = eEL_CalcAdjust_F(t, 0.0f, 42.0f, 1.4f, 1.0f);
+    temp3 = eEL_CalcAdjust_F(t, 0.0f, 42.0f, 0.6f, 1.0f);
+    alpha = (int)eEL_CalcAdjust_F(t, 108.0f, 128.0f, 255.0f, 0.0f);
 
     effect->scale.x = temp1 * (temp3 + ((s + 1.0f) * 0.5f * (temp2 - temp3)));
     effect->scale.y = temp1 * (temp3 + ((c + 1.0f) * 0.5f * (temp2 - temp3)));
     effect->scale.z = 0.0075f;
 
-    if (timer == 60) {
-        gfx = ef_situren01_01_modelT;
-    } else if (timer > 60) {
+    /* Original swapped to model_01 for exactly 1 frame when timer == 60
+     * (i.e. at t == 68). Preserve that 1-frame slice as a [68,69) window. */
+    if (t < 68.0f) {
         gfx = ef_situren01_02_modelT;
+    } else if (t < 69.0f) {
+        gfx = ef_situren01_01_modelT;
     } else {
         gfx = ef_situren01_00_modelT;
     }

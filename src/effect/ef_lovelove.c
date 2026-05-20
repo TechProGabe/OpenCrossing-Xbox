@@ -1,5 +1,6 @@
 #include "ef_effect_control.h"
 
+#include "graph.h"
 #include "m_common_data.h"
 
 static void eLove_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, s16 arg0, s16 arg1);
@@ -26,6 +27,7 @@ static void eLove_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name
 
 static void eLove_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->timer = 52;
+    effect->effect_specific[0] = 0;
 }
 
 static void eLove_mv(eEC_Effect_c* effect, GAME* game) {
@@ -35,11 +37,15 @@ static void eLove_mv(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->set_continious_env_proc(effect, 52, 102);
     sAdo_OngenPos((u32)effect, 14, &effect->position);
 
-    if ((effect->timer & 7) == 0) {
-        name = effect->item_name;
-        prio = effect->prio;
-        if ((eEC_CLIP != NULL)) {
-            eEC_CLIP->effect_make_proc(eEC_EFFECT_LOVELOVE_HEART, effect->position, prio, 0, game, name, 0, 0);
+    {
+        effect->effect_specific[0] += (s16)((f32)game->graph->dt_num_60fps_frames * 100.0f);
+        if (effect->effect_specific[0] >= 800) {
+            effect->effect_specific[0] -= 800;
+            name = effect->item_name;
+            prio = effect->prio;
+            if ((eEC_CLIP != NULL)) {
+                eEC_CLIP->effect_make_proc(eEC_EFFECT_LOVELOVE_HEART, effect->position, prio, 0, game, name, 0, 0);
+            }
         }
     }
 }

@@ -152,7 +152,7 @@ static void aNPC_ctrl_umbrella(NPC_ACTOR* nactorx) {
                 return;
             }
 
-            if (ctrl->umbrella_open_timer != 0) {
+            if (ctrl->umbrella_open_timer > 0.0f) {
                 return;
             }
 
@@ -538,7 +538,7 @@ static int aNPC_love_player(NPC_ACTOR* nactorx, GAME_PLAY* play) {
         u8 act_type;
         u16 arg_data[aNPC_REQUEST_ARG_NUM];
 
-        if (nactorx->think.force_call_flag == aNPC_FORCE_CALL_NONE && nactorx->think.force_call_timer == 0) {
+        if (nactorx->think.force_call_flag == aNPC_FORCE_CALL_NONE && nactorx->think.force_call_timer <= 0.0f) {
             nactorx->think.force_call_flag = aNPC_FORCE_CALL_REQUEST;
         }
 

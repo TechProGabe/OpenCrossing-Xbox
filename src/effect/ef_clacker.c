@@ -1,4 +1,5 @@
 #include "ef_effect_control.h"
+#include "graph.h"
 #include "m_common_data.h"
 
 static void eClacker_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, s16 arg0, s16 arg1);
@@ -60,23 +61,42 @@ static void eClacker_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->velocity.z = 4.6f * sin_s(0x1000) * cos_s(effect->effect_specific[0]);
     effect->acceleration = ZeroVec;
     effect->acceleration.y = -0.125f;
+    effect->effect_specific[1] = 0; /* burst-fired flag */
+    effect->effect_specific[2] = 0;
 }
 
 static void eClacker_mv(eEC_Effect_c* effect, GAME* game) {
-    if (!(effect->timer & 7) && (effect->timer < 68)) {
-        xyz_t pos = effect->position;
-        pos.x += RANDOM2_F(100.0f);
-        pos.y += RANDOM2_F(30.0f);
-        pos.z += RANDOM2_F(100.0f);
-        eEC_CLIP->effect_make_proc(eEC_EFFECT_KIGAE_LIGHT, pos, effect->prio, 0, game, effect->item_name, 0, 0);
+    /* lifetime starts at 80, "timer < 68" means t > 12, so emit once we
+     * cross t==12 and continue every 8 ticks until effect dies. */
+    f32 t = 80.0f - effect->lifetime;
+    if (t >= 12.0f) {
+        effect->effect_specific[2] += (s16)((f32)game->graph->dt_num_60fps_frames * 100.0f);
+        if (effect->effect_specific[2] >= 800) {
+            effect->effect_specific[2] -= 800;
+            xyz_t pos = effect->position;
+            pos.x += RANDOM2_F(100.0f);
+            pos.y += RANDOM2_F(30.0f);
+            pos.z += RANDOM2_F(100.0f);
+            eEC_CLIP->effect_make_proc(eEC_EFFECT_KIGAE_LIGHT, pos, effect->prio, 0, game, effect->item_name, 0, 0);
+        }
     }
-    if (effect->timer == 76) {
+    /* one-shot at original timer == 76 (t == 4). */
+    if (effect->effect_specific[1] == 0 && t >= 4.0f) {
         eClacker_Make_Effect(effect, game);
+        effect->effect_specific[1] = 1;
     }
-    if (effect->timer < 76) {
-        xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-        xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-        xyz_t_mult_v(&effect->velocity, sqrtf(0.9));
+    if (t >= 4.0f) {
+        f32 dt = (f32)game->graph->dt_num_60fps_frames;
+        f32 decay = powf(sqrtf(0.9f), dt);
+        effect->velocity.x += effect->acceleration.x * dt;
+        effect->velocity.y += effect->acceleration.y * dt;
+        effect->velocity.z += effect->acceleration.z * dt;
+        effect->position.x += effect->velocity.x * dt;
+        effect->position.y += effect->velocity.y * dt;
+        effect->position.z += effect->velocity.z * dt;
+        effect->velocity.x *= decay;
+        effect->velocity.y *= decay;
+        effect->velocity.z *= decay;
     }
 }
 

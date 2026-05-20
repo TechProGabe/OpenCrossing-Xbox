@@ -623,7 +623,7 @@ static int neighbor_check(int* ux, int* uz, int bx, int bz) {
         return TRUE;
     }
 
-    i = gamePT->frame_counter & 0xF;
+    i = graph_dt_frame_phase(gamePT, 16);
     n_ux = *ux + neighbor_adjust[i].x;
     n_uz = *uz + neighbor_adjust[i].z;
 

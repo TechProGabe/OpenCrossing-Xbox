@@ -1,5 +1,8 @@
 static void fSKP_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    // nothing
+    ftr_actor->dynamic_work_f[0] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[0] >= 1024.0f) {
+        ftr_actor->dynamic_work_f[0] -= 1024.0f;
+    }
 }
 
 static Gfx* fSKP_GetTwoTileGfx(int x0, int y0, int x1, int y1, GAME* game) {
@@ -13,14 +16,8 @@ extern EVW_ANIME_DATA int_sugi_kpool_evw_anime;
 
 static void fSKP_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
     GAME_PLAY* play = (GAME_PLAY*)game;
-    u32 ctr_ofs;
+    int ctr_ofs = (int)ftr_actor->dynamic_work_f[0];
     Gfx* scroll_gfx;
-
-    if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
-        ctr_ofs = play->game_frame;
-    } else {
-        ctr_ofs = game->frame_counter;
-    }
 
     /* This scroll gfx goes unused lol... */
     scroll_gfx = fSKP_GetTwoTileGfx((-ctr_ofs * -1), 0, 0, (-ctr_ofs * -1) * 2, game);

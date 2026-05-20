@@ -68,19 +68,26 @@ static void eImpact_Star_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eImpact_Star_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 decay = powf(sqrtf(0.85f), dt);
 
-    effect->velocity.x *= sqrtf(0.85f);
-    effect->velocity.y *= sqrtf(0.85f);
-    effect->velocity.z *= sqrtf(0.85f);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+
+    effect->velocity.x *= decay;
+    effect->velocity.y *= decay;
+    effect->velocity.z *= decay;
 }
 
 static void eImpact_Star_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
-    u8 alpha = (int)eEC_CLIP->calc_adjust_proc(effect->timer,0,10, 0.0f, 255.0f);
-    
-    effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 26, 40, effect->offset.y, effect->offset.x);
+    u8 alpha = (int)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 10.0f, 0.0f, 255.0f);
+
+    effect->scale.x = eEL_CalcAdjust_F(effect->lifetime, 26.0f, 40.0f, effect->offset.y, effect->offset.x);
     effect->scale.y= effect->scale.z= effect->scale.x;
 
     OPEN_DISP(game->graph);

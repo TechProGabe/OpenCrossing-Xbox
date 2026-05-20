@@ -990,8 +990,11 @@ static void aNPC_greeting_area_check(GAME_PLAY* play) {
     for (n = list->num_actors; n != 0; n--) {
         NPC_ACTOR* nactor = (NPC_ACTOR*)actor;
 
-        if (nactor->palActorIgnoreTimer > 0) {
-            nactor->palActorIgnoreTimer--;
+        if (nactor->palActorIgnoreTimer > 0.0f) {
+            nactor->palActorIgnoreTimer -= (f32)gamePT->graph->dt_num_60fps_frames;
+            if (nactor->palActorIgnoreTimer < 0.0f) {
+                nactor->palActorIgnoreTimer = 0.0f;
+            }
         }
 
         actor = actor->next_actor;
@@ -1013,10 +1016,10 @@ static void aNPC_set_attention(void) {
 
 #ifndef aNPC_NPC2
 static void aNPC_force_reset_out_of_door_flg(NPC_CONTROL_ACTOR* ctrl) {
-    int timer;
+    f32 timer;
 
     ctrl->door_exit_actor = NULL;
-    timer = 1 * FRAMES_PER_SECOND + RANDOM(3) * FRAMES_PER_SECOND;
+    timer = (f32)(1 * FRAMES_PER_SECOND + RANDOM(3) * FRAMES_PER_SECOND);
     ctrl->door_exit_timer = timer;
 }
 
@@ -1027,7 +1030,7 @@ static void aNPC_reset_out_of_door_flg(NPC_CONTROL_ACTOR* ctrl, ACTOR* actorx) {
 }
 
 static void aNPC_force_reset_umb_open_flg(NPC_CONTROL_ACTOR* ctrl) {
-    int timer;
+    f32 timer;
 
     ctrl->umbrella_open_actor = NULL;
     timer = FRAMES_PER_SECOND * 0.5f + RANDOM_F(FRAMES_PER_SECOND * 0.5f);
@@ -1057,14 +1060,20 @@ static void aNPC_actor_move_c(ACTOR* actorx, GAME* game) {
         aNPC_force_reset_umb_open_flg(ctrl);
     }
 
-    if (ctrl->door_exit_timer > 0 && ctrl->door_exit_timer < (3 * FRAMES_PER_SECOND)) {
-        ctrl->door_exit_timer--;
+    if (ctrl->door_exit_timer > 0.0f && ctrl->door_exit_timer < (3 * FRAMES_PER_SECOND)) {
+        ctrl->door_exit_timer -= (f32)game->graph->dt_num_60fps_frames;
+        if (ctrl->door_exit_timer < 0.0f) {
+            ctrl->door_exit_timer = 0.0f;
+        }
     } else {
         aNPC_force_reset_out_of_door_flg(ctrl);
     }
 
-    if (ctrl->umbrella_open_timer > 0 && ctrl->umbrella_open_timer < (1 * FRAMES_PER_SECOND)) {
-        ctrl->umbrella_open_timer--;
+    if (ctrl->umbrella_open_timer > 0.0f && ctrl->umbrella_open_timer < (1 * FRAMES_PER_SECOND)) {
+        ctrl->umbrella_open_timer -= (f32)game->graph->dt_num_60fps_frames;
+        if (ctrl->umbrella_open_timer < 0.0f) {
+            ctrl->umbrella_open_timer = 0.0f;
+        }
     } else {
         aNPC_force_reset_umb_open_flg(ctrl);
     }

@@ -84,6 +84,7 @@ static void eFootPrint_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
             }
 
             effect->timer = 160;
+            effect->effect_specific[4] = 0; /* hamon-spawned flag (WAVE only) */
             return;
         }
     }
@@ -92,16 +93,19 @@ static void eFootPrint_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eFootPrint_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->arg0 == mCoBG_ATTRIBUTE_WAVE && effect->timer == 150) {
+    /* Original spawned at timer == 150 (10 frames after start). */
+    if (effect->arg0 == mCoBG_ATTRIBUTE_WAVE && effect->effect_specific[4] == 0 &&
+        (160.0f - effect->lifetime) >= 10.0f) {
         (*eEC_CLIP->effect_make_proc)(eEC_EFFECT_TURI_HAMON, effect->position, effect->prio, 0, game, effect->item_name,
                                       2, 0);
+        effect->effect_specific[4] = 1;
     }
 }
 
 extern Gfx ef_footprint01_00_modelT[];
 
 static void eFootPrint_dw(eEC_Effect_c* effect, GAME* game) {
-    u8 alpha = (int)(*eEC_CLIP->calc_adjust_proc)(160 - effect->timer, 118, 159, 150.0f, 0.0f);
+    u8 alpha = (int)eEL_CalcAdjust_F(160.0f - effect->lifetime, 118.0f, 159.0f, 150.0f, 0.0f);
     f32 scale;
 
     OPEN_DISP(game->graph);

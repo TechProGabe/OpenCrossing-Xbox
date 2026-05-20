@@ -3,14 +3,15 @@ static void fTSW_ct(FTR_ACTOR* ftr_actor, u8* data) {
 }
 
 static void fTSW_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
+    ftr_actor->dynamic_work_f[1] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[1] >= 12.0f) {
+        ftr_actor->dynamic_work_f[1] -= 12.0f;
+    }
 
     if (aFTR_CAN_PLAY_SE(ftr_actor)) {
-        u32 frame = play->game_frame;
-
         sAdo_OngenPos((u32)ftr_actor, 0x54, &ftr_actor->position);
 
-        if ((frame & 7) == 0) {
+        if (graph_dt_period_elapsed(game, &ftr_actor->dynamic_work_f[0], 8.0f)) {
             xyz_t effect_pos = ftr_actor->position;
 
             effect_pos.y += 15.0f;
@@ -34,14 +35,7 @@ extern Gfx int_tak_stew_nabe_onT_model[];
 extern Gfx int_tak_stew_a1T_model[];
 
 static void fTSW_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    u32 ctr_ofs;
-
-    if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
-        ctr_ofs = play->game_frame;
-    } else {
-        ctr_ofs = game->frame_counter;
-    }
+    int ctr_ofs = (int)ftr_actor->dynamic_work_f[1];
 
     OPEN_DISP(game->graph);
 

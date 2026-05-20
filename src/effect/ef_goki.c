@@ -50,29 +50,35 @@ static void eGoki_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eGoki_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 now_timer = effect->timer;
-    if (effect->timer > 160) {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0xa0, EFFECT_LIFETIME, 0.005f, 0.f);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 lt = effect->lifetime;
+
+    if (lt > 160.0f) {
+        effect->scale.x = eEL_CalcAdjust_F(lt, 0xa0, EFFECT_LIFETIME, 0.005f, 0.f);
         effect->scale.y = effect->scale.z = effect->scale.x;
-    } else if (effect->timer < 60) {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 0x3c, 0.f, 0.005f);
-        effect->scale.y = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 0x3c, 0.01f, 0.005f);
+    } else if (lt < 60.0f) {
+        effect->scale.x = eEL_CalcAdjust_F(lt, 0.0f, 0x3c, 0.f, 0.005f);
+        effect->scale.y = eEL_CalcAdjust_F(lt, 0.0f, 0x3c, 0.01f, 0.005f);
     }
-    if (effect->timer < 80) {
+    if (lt < 80.0f) {
         add_calc0(&effect->offset.y, CALC_EASE(0.06f), 0.5f);
         add_calc0(&effect->offset.z, CALC_EASE(0.06f), 50.f);
     }
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-    effect->velocity.y *= sqrtf(0.65f);
-    effect->effect_specific[1] += 1000;
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+    effect->velocity.y *= powf(sqrtf(0.65f), dt);
+    effect->effect_specific[1] += (s16)(1000 * dt);
     effect->offset.x = effect->offset.y * sin_s(effect->effect_specific[1]);
     effect->effect_specific[0] = -effect->offset.z * cos_s(effect->effect_specific[1]);
 }
 
 static void eGoki_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
-    int opacity = (u8)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 20, 100.f, 255.f);
+    int opacity = (u8)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 20.0f, 100.f, 255.f);
     _texture_z_light_fog_prim_xlu(game->graph);
     OPEN_DISP(game->graph);
     Matrix_translate(effect->position.x + effect->offset.x, effect->position.y, effect->position.z, MTX_LOAD);

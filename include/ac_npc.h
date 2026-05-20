@@ -29,6 +29,25 @@ extern "C" {
 // To use this enum, make sure that m_common_data.h is included!
 #define NPC_CLIP CLIP(npc_clip)
 
+static inline s16 aNPC_dt_angle_step(s16 step) {
+    f32 dt_step;
+
+    if (step == 0) {
+        return 0;
+    }
+
+    dt_step = (f32)step * (f32)gamePT->graph->dt_num_60fps_frames;
+    if (dt_step < 1.0f) {
+        dt_step = 1.0f;
+    }
+
+    return (s16)dt_step;
+}
+
+static inline f32 aNPC_dt_float_step(f32 step) {
+    return step * (f32)gamePT->graph->dt_num_60fps_frames;
+}
+
 enum {
     aNPC_JOINT_BASE_ROOT,
     aNPC_JOINT_BASE,
@@ -456,7 +475,7 @@ typedef struct npc_think_info_s {
     /* 0x00 */ int idx;
     /* 0x04 */ u8 end_flag;
     /* 0x05 */ u8 force_call_flag;
-    /* 0x06 */ u16 force_call_timer;
+    /* 0x06 */ f32 force_call_timer;
     /* 0x08 */ int force_call_msg_no;
     /* 0x0C */ u8 force_call_camera_type;
     /* 0x10 */ aNPC_THINK_PROC think_proc;
@@ -678,7 +697,7 @@ typedef struct npc_action_s {
     u8 type;
     u8 prev_idx;
     u8 prev_step;
-    u16 act_timer;
+    f32 act_timer;
     u8 feel;
     u8 act_obj;
     u16 act_obj_id;
@@ -735,7 +754,7 @@ typedef struct npc_condition_s {
     u8 greeting_flag;
     u8 entrance_flag;
     u16 fatigue;
-    int feel_tim;
+    f32 feel_tim;
     int _0C;
     u32 demo_flg;
     u32 talk_demo_flg_save;
@@ -841,7 +860,7 @@ typedef struct npc_movement_s {
     f32 dst_pos_z;
     f32 avoid_pos_x;
     f32 avoid_pos_z;
-    s16 move_timer;
+    f32 move_timer;
     u8 avoid_direction;
     u8 range_type;
     f32 range_center_x;
@@ -855,7 +874,7 @@ typedef struct npc_movement_s {
     s8 movement_ut_z;
     s16 body_angle;
     u8 override_body_angle_flag;
-    u8 demo_move_timer;
+    f32 demo_move_timer;
 } aNPC_movement_c;
 
 enum {
@@ -915,7 +934,7 @@ typedef struct npc_actor_talk_info_s {
     s16 npc_voice_id;
     u8 feel;
     u8 memory;
-    u8 kutipaku_timer; // frames of mouth movement animation
+    f32 kutipaku_timer; // frames of mouth movement animation
 } aNPC_talk_info_c;
 
 typedef struct npc_accessory_s {
@@ -968,12 +987,12 @@ struct npc_actor_s {
     mActor_proc move_proc;
     mActor_proc draw_proc;
     ACTOR* palActor;
-    int palActorIgnoreTimer;
+    f32 palActorIgnoreTimer;
     aNPC_movement_c movement;
     aNPC_collision_c collision;
     aNPC_talk_info_c talk_info;
     aNPC_accessory_c accessory;
-    int act_react_tool_timer;
+    f32 act_react_tool_timer;
     int _98C;
     int _990;
 };

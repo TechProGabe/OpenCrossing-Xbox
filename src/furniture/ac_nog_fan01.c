@@ -116,7 +116,7 @@ static void aNogFan_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u
     if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
         idx = ftr_actor->tex_animation.frame >> 1;
     } else {
-        int fctr = ABS((int)game->frame_counter % 6);
+        int fctr = graph_dt_frame_phase(game, 6);
         idx = fctr >> 1;
     }
 

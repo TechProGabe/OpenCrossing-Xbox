@@ -80,15 +80,31 @@ static void eHalloween_Smoke_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) 
 }
 
 static void eHalloween_Smoke_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 }
 
 static void eHalloween_Smoke_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 frame = 18 - effect->timer;
-    int tex_idx = frame >> 1;
-    int tile_idx0 = eHalloween_2tile_texture_idx[tex_idx][0];
-    int tile_idx1 = eHalloween_2tile_texture_idx[tex_idx][1];
+    f32 k = (18.0f - effect->lifetime) * 0.5f;
+    int i, j;
+    f32 frac;
+    int tile_idx0, tile_idx1;
+    u8 prim_f;
+
+    if (k < 0.0f) k = 0.0f;
+    if (k > 8.0f) k = 8.0f;
+    i = (int)k;
+    if (i > 8) i = 8;
+    j = (i < 8) ? i + 1 : i;
+    frac = k - (f32)i;
+    tile_idx0 = eHalloween_2tile_texture_idx[i][0];
+    tile_idx1 = eHalloween_2tile_texture_idx[i][1];
+    prim_f = (u8)(eHalloween_prim_f[i] + (eHalloween_prim_f[j] - eHalloween_prim_f[i]) * frac);
 
     OPEN_DISP(game->graph);
 
@@ -96,7 +112,7 @@ static void eHalloween_Smoke_dw(eEC_Effect_c* effect, GAME* game) {
 
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_1_TXT_SEG, eHalloween_texture_table[tile_idx0]);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_2_TXT_SEG, eHalloween_texture_table[tile_idx1]);
-    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, eHalloween_prim_f[tex_idx], 200, 0, 255, 120);
+    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, 200, 0, 255, 120);
     gSPDisplayList(NEXT_POLY_XLU_DISP, ef_haro01_00_modelT);
 
     CLOSE_DISP(game->graph);

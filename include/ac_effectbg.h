@@ -67,6 +67,7 @@ typedef struct effectbg_entry_s {
     s16 variant;
     s16 add_angle;
     s16 leaf_angle;
+    f32 timer_accum;
     u8 status;
     int block_ux;
     int block_uz;

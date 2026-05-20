@@ -26,11 +26,11 @@ static int aWeatherSnow_DecideMakeSnowCount(ACTOR* actor, GAME* game) {
     WEATHER_ACTOR* weather = (WEATHER_ACTOR*)actor;
 
     if (weather->current_level == mEnv_WEATHER_INTENSITY_LIGHT) {
-        return (game->frame_counter & 7) == 0;
+        return aWeather_ShouldSpawnEvery(actor, 8.0f);
     } else if (weather->current_level == mEnv_WEATHER_INTENSITY_NORMAL) {
-        return (game->frame_counter & 3) == 0;
+        return aWeather_ShouldSpawnEvery(actor, 4.0f);
     }
-    return (game->frame_counter & 1); // HEAVY
+    return aWeather_ShouldSpawnEvery(actor, 2.0f);
 }
 
 static void aWeatherSnow_make(ACTOR* actor, GAME* game) {
@@ -147,9 +147,12 @@ static void aWeatherSnow_SetWind2Snow(aWeather_Priv* priv, GAME* game) {
 
 static void aWeatherSnow_move(aWeather_Priv* priv, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
+    const float dt = (float)game->graph->dt_num_60fps_frames;
 
-    xyz_t_add(&priv->pos, &priv->speed, &priv->pos);
-    priv->work[0] += (float)priv->work[1] * game->graph->dt_num_60fps_frames;
+    priv->pos.x += priv->speed.x * dt;
+    priv->pos.y += priv->speed.y * dt;
+    priv->pos.z += priv->speed.z * dt;
+    priv->work[0] += (float)priv->work[1] * dt;
     aWeatherSnow_SetWind2Snow(priv, game);
     aWeatherSnow_CheckSnowScroll(priv, play);
 }

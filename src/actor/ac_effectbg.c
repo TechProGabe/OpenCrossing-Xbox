@@ -818,54 +818,16 @@ static void EffectBG_object_ct(EffectBg_c* efbg, GAME* game, s16 type, s16 varia
     }
 
     efbg->timer = 0;
+    efbg->timer_accum = 0.0f;
 }
 
 static void EffectBG_object_dt(EffectBg_c* efbg, GAME* game) {
     efbg->status = 0;
 }
 
-static void EffectBG_object_move(EffectBg_c* efbg, GAME* game) {
-    xyz_t check_pos = efbg->effect_pos;
-    f32 ground_y;
-
-    if (efbg->type == EffectBG_EFFECT_CUT_RIGHT) {
-        check_pos.x -= 21.0f;
-    } else if (efbg->type == EffectBG_EFFECT_CUT_LEFT) {
-        check_pos.x += 21.0f;
-    }
-
-    ground_y = mCoBG_GetBgY_AngleS_FromWpos(NULL, check_pos, 0.0f);
-    if ((efbg->status & 0x02) == 0 && !EffectBG_IS_SHAKE(efbg->type) && efbg->effect_pos.y < ground_y) {
-        if (!EfbgBgitemTreeCheck(check_pos)) {
-            s16 count;
-
-            switch (efbg->variant) {
-                case EffectBG_VARIANT_TREE_MED:
-                    count = 5;
-                    break;
-                case EffectBG_VARIANT_TREE_LARGE:
-                    count = 7;
-                    break;
-                case EffectBG_VARIANT_TREE_FULL:
-                    count = 9;
-                    break;
-                default:
-                    count = 5;
-                    break;
-            }
-
-            EffectBG_Make_Leafs(efbg, game, efbg->effect_pos, count, 1);
-            efbg->leaf_angle = 0x2BC;
-            sAdo_OngenTrgStart(NA_SE_108, &efbg->base_pos);
-            efbg->status |= 0x02;
-        }
-    }
-
-    if ((efbg->status & 0x02) == 0) {
-        cKF_SkeletonInfo_R_play(&efbg->keyframe);
-    } else {
+static int EffectBG_object_timer_step(EffectBg_c* efbg, GAME* game) {
+    if ((efbg->status & 0x02) != 0) {
         efbg->add_angle += 0xDAC;
-        add_calc_short_angle2(&efbg->leaf_angle, 0, 1.0f - sqrtf(1.0f - (1.0f - sqrtf(0.9f))), 125, 0);
     }
 
     if (efbg->timer == 70 && (efbg->type == EffectBG_EFFECT_CUT_RIGHT || efbg->type == EffectBG_EFFECT_CUT_LEFT) &&
@@ -903,9 +865,64 @@ static void EffectBG_object_move(EffectBg_c* efbg, GAME* game) {
 
     if (efbg->timer >= efbg->timer_max) {
         EffectBG_object_dt(efbg, game);
+        return FALSE;
     }
 
     efbg->timer++;
+    return TRUE;
+}
+
+static void EffectBG_object_move(EffectBg_c* efbg, GAME* game) {
+    xyz_t check_pos = efbg->effect_pos;
+    f32 ground_y;
+    int ticks;
+    int i;
+
+    if (efbg->type == EffectBG_EFFECT_CUT_RIGHT) {
+        check_pos.x -= 21.0f;
+    } else if (efbg->type == EffectBG_EFFECT_CUT_LEFT) {
+        check_pos.x += 21.0f;
+    }
+
+    ground_y = mCoBG_GetBgY_AngleS_FromWpos(NULL, check_pos, 0.0f);
+    if ((efbg->status & 0x02) == 0 && !EffectBG_IS_SHAKE(efbg->type) && efbg->effect_pos.y < ground_y) {
+        if (!EfbgBgitemTreeCheck(check_pos)) {
+            s16 count;
+
+            switch (efbg->variant) {
+                case EffectBG_VARIANT_TREE_MED:
+                    count = 5;
+                    break;
+                case EffectBG_VARIANT_TREE_LARGE:
+                    count = 7;
+                    break;
+                case EffectBG_VARIANT_TREE_FULL:
+                    count = 9;
+                    break;
+                default:
+                    count = 5;
+                    break;
+            }
+
+            EffectBG_Make_Leafs(efbg, game, efbg->effect_pos, count, 1);
+            efbg->leaf_angle = 0x2BC;
+            sAdo_OngenTrgStart(NA_SE_108, &efbg->base_pos);
+            efbg->status |= 0x02;
+        }
+    }
+
+    if ((efbg->status & 0x02) == 0) {
+        cKF_SkeletonInfo_R_play(&efbg->keyframe);
+    } else {
+        add_calc_short_angle2(&efbg->leaf_angle, 0, 1.0f - sqrtf(1.0f - (1.0f - sqrtf(0.9f))), 125, 0);
+    }
+
+    ticks = graph_dt_60hz_ticks(game, &efbg->timer_accum);
+    for (i = 0; i < ticks; i++) {
+        if (!EffectBG_object_timer_step(efbg, game)) {
+            break;
+        }
+    }
 }
 
 static void Effectbg_actor_move(ACTOR* actorx, GAME* game) {

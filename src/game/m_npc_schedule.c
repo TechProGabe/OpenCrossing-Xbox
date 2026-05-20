@@ -149,7 +149,7 @@ extern void mNPS_reset_schedule_area(AnmPersonalID_c* anm_id) {
   }
 }
 
-static void mNPS_schedule_manager_sub(mNPS_schedule_c* schedule) {
+static void mNPS_schedule_manager_sub(mNPS_schedule_c* schedule, int forced_ticks) {
   int now_sec = Common_Get(time.now_sec);
   int count = schedule->data_table->count;
   mNPS_schedule_data_c* schedule_entry = schedule->data_table->sched_data;
@@ -166,7 +166,10 @@ static void mNPS_schedule_manager_sub(mNPS_schedule_c* schedule) {
   schedule->saved_type = schedule_entry->type;
   if (schedule->forced_timer > 0) {
     schedule->current_type = schedule->forced_type;
-    schedule->forced_timer--;
+    schedule->forced_timer -= forced_ticks;
+    if (schedule->forced_timer < 0) {
+      schedule->forced_timer = 0;
+    }
   }
   else {
     schedule->current_type = schedule->saved_type;
@@ -187,29 +190,31 @@ static void mNPS_schedule_manager_sub0() {
   }
 }
 
-static void mNPS_schedule_manager_sub1() {
+static void mNPS_schedule_manager_sub1(int forced_ticks) {
   mNPS_schedule_c* schedule = Common_Get(npc_schedule);
   int i;
 
   /* Set all town animals to go about their intended schedule */
   for (i = 0; i < ANIMAL_NUM_MAX; i++) {
     if (schedule->id != NULL) {
-      mNPS_schedule_manager_sub(schedule);
+      mNPS_schedule_manager_sub(schedule, forced_ticks);
     }
 
     schedule++;
   }
 }
 
-static void mNPS_island_schedule_manager() {
+static void mNPS_island_schedule_manager(int forced_ticks) {
   mNPS_schedule_c* schedule = Common_GetPointer(npc_schedule[ANIMAL_NUM_MAX]);
 
   if (schedule->id != NULL) {
-    mNPS_schedule_manager_sub(schedule);
+    mNPS_schedule_manager_sub(schedule, forced_ticks);
   }
 }
 
 extern void mNPS_schedule_manager() {
+  static float forced_accum = 0.0f;
+  int forced_ticks = graph_dt_60hz_ticks(gamePT, &forced_accum);
   int force_outside = FALSE;
 
   if (mEv_CheckFirstJob() == TRUE || mEv_check_status(mEv_EVENT_HALLOWEEN, mEv_STATUS_ACTIVE)) {
@@ -220,10 +225,10 @@ extern void mNPS_schedule_manager() {
     mNPS_schedule_manager_sub0();
   }
   else {
-    mNPS_schedule_manager_sub1();
+    mNPS_schedule_manager_sub1(forced_ticks);
   }
 
-  mNPS_island_schedule_manager();
+  mNPS_island_schedule_manager(forced_ticks);
 }
 
 extern void mNPS_set_all_schedule_area() {

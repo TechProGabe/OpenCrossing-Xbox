@@ -79,8 +79,9 @@ static void aTOU_set_bgOffset(TOUDAI_ACTOR* light, int idx){
     }
 }
 
-static void aTOU_color_ctrl(TOUDAI_ACTOR* light) {
+static void aTOU_color_ctrl(TOUDAI_ACTOR* light, GAME* game) {
     f32 factor;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     int timer;
 
     if (light->ready_flag == 0) {
@@ -103,16 +104,16 @@ static void aTOU_color_ctrl(TOUDAI_ACTOR* light) {
         add_calc(&light->unk2CC, 0.0f, 1.0f - sqrtf(0.7), 50.0f, 0.5f);
 
     } else if (timer < 10) {
-        light->unk2C8 += (4.5f * factor);
-        light->unk2CC += (7.0f * factor);
+        light->unk2C8 += 4.5f * factor * dt;
+        light->unk2CC += 7.0f * factor * dt;
 
     } else if (timer < 30) {
-        light->unk2C8 += (1.25f * factor);
-        light->unk2CC += (2.25f * factor);
+        light->unk2C8 += 1.25f * factor * dt;
+        light->unk2CC += 2.25f * factor * dt;
 
     } else {
-        light->unk2C8 += (4.0f * factor);
-        light->unk2CC += (0.5f * factor);
+        light->unk2C8 += 4.0f * factor * dt;
+        light->unk2CC += 0.5f * factor * dt;
     }
 
     add_calc(&light->unk2D0, 255.0f, 1.0f - sqrtf(0.9), 50.0f, 0.5f);
@@ -195,7 +196,7 @@ static void aTOU_actor_move(ACTOR* actor, GAME* game){
             mPlib_request_main_door_type1(game, &pos, 0, 1, light); 
         }
     } 
-    aTOU_color_ctrl(light); 
+    aTOU_color_ctrl(light, game); 
 }
 
 static void aTOU_actor_init(ACTOR* actor, GAME* game){

@@ -43,14 +43,11 @@ extern Gfx ef_pun01_01_modelT[];
 
 static void ePunRed_dw(eEC_Effect_c* effect, GAME* game) {
     int a;
-    xyz_t* scale;
-    s16 now_timer;
+    xyz_t* scale = &effect->scale;
+    f32 now = 16.0f - effect->lifetime;
 
-    scale = &effect->scale;
-
-    now_timer = 16 - effect->timer;
-    a = (u8)eEC_CLIP->calc_adjust_proc(now_timer, 8, 16, 150.0f, 0.0f);
-    scale->z = scale->y = scale->x = eEC_CLIP->calc_adjust_proc(now_timer, 0, 16, 0.0105f, 0.0189f);
+    a = (u8)eEL_CalcAdjust_F(now, 8.0f, 16.0f, 150.0f, 0.0f);
+    scale->z = scale->y = scale->x = eEL_CalcAdjust_F(now, 0.0f, 16.0f, 0.0105f, 0.0189f);
 
     OPEN_DISP(game->graph);
 

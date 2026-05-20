@@ -65,7 +65,7 @@ struct boat_demo_s {
     int action;
     aBTD_PROC action_proc;
     int demo_act;
-    int song_bgm_timer;
+    f32 song_bgm_timer;
     BOAT_ACTOR* boat_actor;
     NPC_SENDO_ACTOR* npc_sendo_actor;
     EV_CASTAWAY_ACTOR* castaway_actor;
@@ -80,7 +80,7 @@ struct boat_demo_s {
     u8 sing_2nd_part;
     u8 sing_2nd_part_bgm_no;
     int sing_msg_no;
-    u16 touch_wharf_timer;
+    f32 touch_wharf_timer;
     u8 touching_wharf;
 };
 

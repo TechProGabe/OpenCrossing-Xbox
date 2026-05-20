@@ -1,6 +1,7 @@
 #include "ef_effect_control.h"
 
 #include "m_common_data.h"
+#include "m_lib.h"
 #include "sys_matrix.h"
 #include "m_rcp.h"
 
@@ -125,8 +126,10 @@ static void eKL_mv(eEC_Effect_c* effect, GAME* game) {
             effect->scale.z = dist / 16.0f;
 
             if (effect->effect_specific[0] == 0) {
-                effect->velocity.x *= 0.5f;
-                effect->velocity.z *= 0.5f;
+                f32 damp = DTCONV_GAME(0.5f, game);
+
+                effect->velocity.x *= damp;
+                effect->velocity.z *= damp;
                 effect->effect_specific[0] = 1;
             }
         } else {

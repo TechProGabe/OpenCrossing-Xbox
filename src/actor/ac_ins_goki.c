@@ -40,13 +40,23 @@ enum {
 #define aIGK_RANDOM_ANGLE2() ((s16)((fqrand() - 0.5f) * (f32)DEG2SHORT_ANGLE2(120.0f)))
 
 #define aIGK_TARGET_ANGLE(insect) ((insect)->s32_work0)
-#define aIGK_CHANGE_WAIT_TIMER(insect) ((insect)->s32_work1)
-#define aIGK_MOVE_TIMER(insect) ((insect)->s32_work2)
+#define aIGK_CHANGE_WAIT_TIMER(insect) ((insect)->f32_work0)
+#define aIGK_MOVE_TIMER(insect) ((insect)->f32_work1)
 #define aIGK_GET_ITEM_P(insect) ((insect)->s32_work3)
 #define aIGK_SET_ITEM_P(insect, item_p) ((insect)->s32_work3 = (int)item_p)
 
 static void aIGK_actor_move(ACTOR* actorx, GAME* game);
 static void aIGK_setupAction(aINS_INSECT_ACTOR* insect, int action, GAME* game);
+
+static s16 aIGK_dt_angle_step(GAME* game, s16 step) {
+    f32 dt_step = (f32)step * (f32)game->graph->dt_num_60fps_frames;
+
+    if (dt_step < 1.0f) {
+        dt_step = 1.0f;
+    }
+
+    return (s16)dt_step;
+}
 
 extern void aIGK_actor_init(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
@@ -120,8 +130,8 @@ extern void aIGK_actor_init(ACTOR* actorx, GAME* game) {
     aIGK_setupAction(insect, act, game);
 }
 
-static void aIGK_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.5f;
+static void aIGK_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += 0.5f * (f32)game->graph->dt_num_60fps_frames;
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -218,14 +228,14 @@ static void aIGK_avoid(ACTOR* actorx, GAME* game) {
     f32 grav;
 
     grav = actorx->gravity;
-    grav *= 1.1f;
+    grav *= DTCONV_GAME(1.1f, game);
     if (grav > 12.0f) {
         grav = 12.0f;
     }
 
     actorx->gravity = grav;
     sAdo_OngenPos((u32)actorx, NA_SE_26, &actorx->world.position);
-    aIGK_anime_proc(insect);
+    aIGK_anime_proc(insect, game);
 
     if (insect->bg_type == 0) {
         int h_ut_x;
@@ -248,12 +258,13 @@ static void aIGK_wait_on_flower(ACTOR* actorx, GAME* game) {
     if (aIGK_check_patience(insect) == TRUE) {
         aIGK_setupAction(insect, aIGK_ACTION_AVOID, game);
     } else {
-        insect->timer--;
+        insect->timer -= (f32)game->graph->dt_num_60fps_frames;
 
-        if (insect->timer <= 0) {
+        if (insect->timer <= 0.0f) {
             aIGK_setupAction(insect, aIGK_ACTION_MOVE_ON_FLOWER, game);
         } else {
-            chase_angle(&actorx->world.angle.y, aIGK_TARGET_ANGLE(insect), DEG2SHORT_ANGLE2(8.4375f));
+            chase_angle(&actorx->world.angle.y, aIGK_TARGET_ANGLE(insect),
+                        aIGK_dt_angle_step(game, DEG2SHORT_ANGLE2(8.4375f)));
             actorx->shape_info.rotation.y = actorx->world.angle.y;
         }
     }
@@ -265,9 +276,9 @@ static void aIGK_move_on_flower(ACTOR* actorx, GAME* game) {
     if (aIGK_check_patience(insect) == TRUE) {
         aIGK_setupAction(insect, aIGK_ACTION_AVOID, game);
     } else {
-        aIGK_MOVE_TIMER(insect)--;
+        aIGK_MOVE_TIMER(insect) -= (f32)game->graph->dt_num_60fps_frames;
 
-        if (aIGK_MOVE_TIMER(insect) <= 0) {
+        if (aIGK_MOVE_TIMER(insect) <= 0.0f) {
             sAdo_OngenPos((u32)actorx, NA_SE_GOKI_MOVE, &actorx->world.position);
             insect->timer = (int)(2 * (90.0f + RANDOM_F(90.0f)));
             aIGK_setupAction(insect, aIGK_ACTION_WAIT_ON_FLOWER, game);
@@ -310,7 +321,8 @@ static void aIGK_move_on_flower(ACTOR* actorx, GAME* game) {
                 insect->timer = 10;
                 aIGK_setupAction(insect, aIGK_ACTION_WAIT_ON_FLOWER, game);
             } else {
-                int done = chase_angle(&actorx->world.angle.y, aIGK_TARGET_ANGLE(insect), DEG2SHORT_ANGLE2(8.4375f));
+                int done = chase_angle(&actorx->world.angle.y, aIGK_TARGET_ANGLE(insect),
+                                       aIGK_dt_angle_step(game, DEG2SHORT_ANGLE2(8.4375f)));
 
                 if (done == TRUE) {
                     aIGK_TARGET_ANGLE(insect) = actorx->world.angle.y + aIGK_RANDOM_ANGLE();
@@ -328,8 +340,8 @@ static void aIGK_wait_on_tree(ACTOR* actorx, GAME* game) {
     if (aIGK_check_patience(insect) == TRUE) {
         aIGK_setupAction(insect, aIGK_ACTION_AVOID, game);
     } else {
-        insect->timer--;
-        if (insect->timer <= 0) {
+        insect->timer -= (f32)game->graph->dt_num_60fps_frames;
+        if (insect->timer <= 0.0f) {
             aIGK_setupAction(insect, insect->action + 1, game);
         }
     }
@@ -341,12 +353,12 @@ static void aIGK_move_on_tree(ACTOR* actorx, GAME* game) {
     if (aIGK_check_patience(insect) == TRUE) {
         aIGK_setupAction(insect, aIGK_ACTION_AVOID, game);
     } else {
-        chase_angle(&actorx->shape_info.rotation.y, aIGK_TARGET_ANGLE(insect), 128);
-        aIGK_MOVE_TIMER(insect)--;
+        chase_angle(&actorx->shape_info.rotation.y, aIGK_TARGET_ANGLE(insect), aIGK_dt_angle_step(game, 128));
+        aIGK_MOVE_TIMER(insect) -= (f32)game->graph->dt_num_60fps_frames;
 
-        if (aIGK_MOVE_TIMER(insect) <= 0) {
-            aIGK_CHANGE_WAIT_TIMER(insect)--;
-            if (aIGK_CHANGE_WAIT_TIMER(insect) <= 0) {
+        if (aIGK_MOVE_TIMER(insect) <= 0.0f) {
+            aIGK_CHANGE_WAIT_TIMER(insect) -= (f32)game->graph->dt_num_60fps_frames;
+            if (aIGK_CHANGE_WAIT_TIMER(insect) <= 0.0f) {
                 aIGK_setupAction(insect, insect->action - 1, game);
             } else {
                 aIGK_TARGET_ANGLE(insect) = -aIGK_TARGET_ANGLE(insect);
@@ -408,7 +420,7 @@ static void aIGK_wait_on_flower_init(aINS_INSECT_ACTOR* insect, GAME* game) {
 }
 
 static void aIGK_move_on_flower_init(aINS_INSECT_ACTOR* insect, GAME* game) {
-    if (aIGK_MOVE_TIMER(insect) == 0) {
+    if (aIGK_MOVE_TIMER(insect) == 0.0f) {
         aIGK_MOVE_TIMER(insect) = (int)(2 * (90.0f + RANDOM_F(210.0f)));
     }
 

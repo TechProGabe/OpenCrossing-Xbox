@@ -337,7 +337,7 @@ static void mAD_turn_page_proc(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
 
     adrs_ovl->pos_x += adrs_ovl->speed_x;
     for (i = 0; i < mAD_PAGE_NUM; i++) {
-        chase_f(&adrs_ovl->pile[i], adrs_ovl->goal_pile[i], 0.6f);
+        chase_f(&adrs_ovl->pile[i], adrs_ovl->goal_pile[i], 0.6f * (f32)gamePT->graph->dt_num_60fps_frames);
     }
 }
 

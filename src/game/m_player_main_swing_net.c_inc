@@ -244,7 +244,7 @@ static int Player_actor_CatchSomethingCheck_common(ACTOR* actor, f32 frame) {
         s8 type;
         u32 pl_label = player->item_net_catch_label;
 
-        main_swing->swing_timer += 0.5f;
+        main_swing->swing_timer += 0.5f * (f32)gamePT->graph->dt_num_60fps_frames;
 
         if (pl_label == 0) {
             if (Player_actor_CheckCapture_forNet(actor, &label, &type)) {

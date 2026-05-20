@@ -5,6 +5,10 @@ extern Gfx int_ike_kama_danro01_on_model[];
 extern Gfx int_ike_kama_danrofire_off_model[];
 
 static void fIKD_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data){
+    ftr_actor->dynamic_work_f[0] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[0] >= 1024.0f) {
+        ftr_actor->dynamic_work_f[0] -= 1024.0f;
+    }
 
     if(aFTR_CAN_PLAY_SE(ftr_actor)){
         sAdo_OngenPos((u32)ftr_actor, 0x46, &ftr_actor->position);
@@ -15,16 +19,8 @@ static Gfx* fIKD_GetTwoTileGfx(int x0, int y0, int x1, int y1, GAME* game) {
 }
 
 static void fIKD_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data){
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    int ctr;
+    int ctr = (int)ftr_actor->dynamic_work_f[0];
     Gfx* gfx;
-
-    if(ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY){
-        ctr = play->game_frame;
-    }
-    else{
-        ctr = game->frame_counter;
-    } 
 
     gfx = fIKD_GetTwoTileGfx(0,0,0,-ctr << 2,game);
 

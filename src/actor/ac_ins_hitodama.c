@@ -66,8 +66,8 @@ extern void aIHD_actor_init(ACTOR* actorx, GAME* game) {
     aIHD_setupAction(insect, act, game);
 }
 
-static void aIHD_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.5f;
+static void aIHD_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += 0.5f * (f32)game->graph->dt_num_60fps_frames;
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -92,11 +92,12 @@ static void aIHD_unregist_set_block_table(ACTOR* actorx) {
     }
 }
 
-static void aIHD_fuwafuwa(aINS_INSECT_ACTOR* insect, int avoid_flag) {
+static void aIHD_fuwafuwa(aINS_INSECT_ACTOR* insect, GAME* game, int avoid_flag) {
     f32 last_angle;
     f32 grav;
     int dir;
     f32 now_grav;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (avoid_flag == FALSE) {
         dir = 0x100 + RANDOM(0x300);
@@ -107,7 +108,7 @@ static void aIHD_fuwafuwa(aINS_INSECT_ACTOR* insect, int avoid_flag) {
     }
 
     last_angle = aIHD_ANGLE_F(insect) * 10.0f;
-    aIHD_ANGLE(insect) += dir;
+    aIHD_ANGLE(insect) += (int)((f32)dir * dt);
     now_grav = grav * aIHD_ANGLE_F(insect);
     insect->tools_actor.actor_class.position_speed.y =
         insect->tools_actor.actor_class.gravity + (now_grav - last_angle);
@@ -165,11 +166,15 @@ static void aIHD_calc_move_drt(aINS_INSECT_ACTOR* insect, GAME* game) {
 static void aIHD_light_proc(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
     GAME_PLAY* play = (GAME_PLAY*)game;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (insect->tools_actor.init_matrix == TRUE || insect->insect_flags.bit_1 == TRUE) {
         if (mPlib_get_player_actor_main_index(game) == mPlayer_INDEX_PUTAWAY_NET) {
-            if ((play->game_frame & 1) == 0 && ((int)insect->_1E0) > 0) {
-                insect->_1E0--;
+            if (insect->_1E0 > 0.0f) {
+                insect->_1E0 -= 0.5f * dt;
+                if (insect->_1E0 < 0.0f) {
+                    insect->_1E0 = 0.0f;
+                }
             }
         } else {
             insect->light_step = 0;
@@ -210,9 +215,10 @@ static void aIHD_light_proc(ACTOR* actorx, GAME* game) {
 
 static void aIHD_avoid(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
-    aIHD_fuwafuwa(insect, TRUE);
-    actorx->gravity += 0.1f;
+    aIHD_fuwafuwa(insect, game, TRUE);
+    actorx->gravity += 0.1f * dt;
 }
 
 static void aIHD_fly(ACTOR* actorx, GAME* game) {
@@ -221,7 +227,7 @@ static void aIHD_fly(ACTOR* actorx, GAME* game) {
     actorx->scale.x = actorx->scale.y = actorx->scale.z = 0.01f;
     insect->target_speed = 0.3f;
     insect->speed_step = 0.1f;
-    aIHD_fuwafuwa(insect, FALSE);
+    aIHD_fuwafuwa(insect, game, FALSE);
     aIHD_calc_move_drt(insect, game);
 }
 
@@ -294,7 +300,7 @@ static void aIHD_actor_move(ACTOR* actorx, GAME* game) {
 
     aIHD_light_proc(actorx, game);
     if (mPlib_get_player_actor_main_index(game) != mPlayer_INDEX_PUTAWAY_NET) {
-        aIHD_anime_proc(insect);
+        aIHD_anime_proc(insect, game);
     }
 
     label = mPlib_Get_item_net_catch_label();
