@@ -23,6 +23,7 @@
 #include "m_flashrom.h"
 #ifdef PC_ENHANCEMENTS
 #include "pc_settings.h"
+#include "pc_settings_menu.h"
 #include "main.h"
 #include <stdio.h>
 #endif
@@ -126,10 +127,16 @@ static void aAL_actor_ct(ACTOR* actor, GAME* game) {
 static void aAL_actor_dt(ACTOR* actor, GAME* game) {
     ANIMAL_LOGO_ACTOR* logo_actor = (ANIMAL_LOGO_ACTOR*)actor;
 
-    if (Common_Get(clip.animal_logo_clip) != NULL) {
-        zelda_free(Common_Get(clip.animal_logo_clip));
-        Common_Set(clip.animal_logo_clip, NULL);
-    }
+#ifdef TARGET_PC
+  /* Stop blocking pause once the title actor is gone. */
+  { extern int g_pc_title_main_menu_visible;
+    g_pc_title_main_menu_visible = 0; }
+#endif
+
+  if (Common_Get(clip.animal_logo_clip) != NULL) {
+    zelda_free(Common_Get(clip.animal_logo_clip));
+    Common_Set(clip.animal_logo_clip, NULL);
+  }
 
     if (mEv_CheckTitleDemo() != mEv_TITLEDEMO_LOGO) {
         mEv_SetTitleDemo(mEv_TITLEDEMO_NONE);
@@ -147,10 +154,18 @@ static void aAL_actor_dt(ACTOR* actor, GAME* game) {
 static void aAL_title_game_data_init_start_select(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
 
-    play->fb_fade_type = FADE_TYPE_SELECT;
-    play->fb_wipe_type = WIPE_TYPE_FADE_BLACK;
-    Common_Set(transition.wipe_type, WIPE_TYPE_FADE_BLACK);
-    mBGMPsComp_make_ps_wipe(0x1168);
+#ifdef TARGET_PC
+  /* Reload save from disk; the title demo mutated save data in RAM.
+   * On GC the memory card is re-read; on PC re-read the GCI file. */
+  if (pc_save_loaded) {
+    pc_save_reload();
+  }
+#endif
+
+  play->fb_fade_type = FADE_TYPE_SELECT;
+  play->fb_wipe_type = WIPE_TYPE_FADE_BLACK;
+  Common_Set(transition.wipe_type, WIPE_TYPE_FADE_BLACK);
+  mBGMPsComp_make_ps_wipe(0x1168);
 }
 
 static void aAL_title_decide_p_sel_npc() {
@@ -329,157 +344,77 @@ static void aAL_pc_game_start_wait(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
     /* No blinking — full opacity for menu */
     actor->press_start_opacity = 255.0f;
 
-    if (play->fb_fade_type == FADE_TYPE_SELECT_END) {
-        aAL_setupAction(actor, game, aAL_ACTION_6);
-        return;
-    }
+  if (play->fb_fade_type == FADE_TYPE_SELECT_END) {
+    aAL_setupAction(actor, game, aAL_ACTION_6);
+    return;
+  }
 
-    /* Debounce */
-    if (actor->pc_cursor_cooldown > 0) {
-        actor->pc_cursor_cooldown--;
-    }
+  /* Debounce */
+  if (actor->pc_cursor_cooldown > 0) {
+    actor->pc_cursor_cooldown--;
+  }
 
-    if (actor->pc_options_open) {
-        s8 stick_x = gamePT->pads[PAD0].now.stick_x;
-        int changed = 0;
+  if (actor->pc_options_open) {
+    s8 stick_x = gamePT->pads[PAD0].now.stick_x;
 
-        /* START to save, apply, and close */
-        if (on_btn & BUTTON_START) {
-            pc_settings_save();
-            pc_settings_apply();
-            actor->pc_options_open = 0;
-            actor->pc_cursor_cooldown = 10;
-            return;
-        }
-
-        /* B to discard and close */
-        if (on_btn & BUTTON_B) {
-            pc_settings_load();
-            actor->pc_options_open = 0;
-            actor->pc_cursor_cooldown = 10;
-            return;
-        }
-
-        /* Up/down navigation within options (5 items: 0=res, 1=fs, 2=vsync, 3=msaa, 4=textures) */
-        if (actor->pc_cursor_cooldown == 0) {
-            if (stick_y > 30 || (on_btn & BUTTON_DUP)) {
-                if (actor->pc_options_sel > 0) {
-                    actor->pc_options_sel--;
-                    actor->pc_cursor_cooldown = 8;
-                }
-            } else if (stick_y < -30 || (on_btn & BUTTON_DDOWN)) {
-                if (actor->pc_options_sel < 4) {
-                    actor->pc_options_sel++;
-                    actor->pc_cursor_cooldown = 8;
-                }
-            }
-
-            /* Left/right to change values */
-            /* Resolution presets — custom .ini values snap to nearest on left/right */
-            {
-                static const int res_w[] = { 640, 960, 1280, 1600, 1920, 2560, 3840 };
-                static const int res_h[] = { 480, 720, 720, 900, 1080, 1440, 2160 };
-                enum { RES_COUNT = 7 };
-
-                if (stick_x > 30 || (on_btn & BUTTON_DRIGHT)) {
-                    changed = 1;
-                    actor->pc_cursor_cooldown = 8;
-                    switch (actor->pc_options_sel) {
-                        case 0: { /* Resolution — cycle up */
-                            int i;
-                            for (i = 0; i < RES_COUNT - 1; i++) {
-                                if (g_pc_settings.window_width <= res_w[i])
-                                    break;
-                            }
-                            if (i < RES_COUNT - 1)
-                                i++;
-                            g_pc_settings.window_width = res_w[i];
-                            g_pc_settings.window_height = res_h[i];
-                        } break;
-                        case 1:
-                            g_pc_settings.fullscreen = (g_pc_settings.fullscreen + 1) % 3;
-                            break;
-                        case 2:
-                            g_pc_settings.vsync = !g_pc_settings.vsync;
-                            break;
-                        case 3: { /* MSAA cycle up: 0→2→4→8 */
-                            if (g_pc_settings.msaa == 0)
-                                g_pc_settings.msaa = 2;
-                            else if (g_pc_settings.msaa < 8)
-                                g_pc_settings.msaa *= 2;
-                        } break;
-                        case 4: { /* Textures cycle up: 0→1→2 */
-                            if (g_pc_settings.preload_textures < 2)
-                                g_pc_settings.preload_textures++;
-                        } break;
-                    }
-                } else if (stick_x < -30 || (on_btn & BUTTON_DLEFT)) {
-                    changed = 1;
-                    actor->pc_cursor_cooldown = 8;
-                    switch (actor->pc_options_sel) {
-                        case 0: { /* Resolution — cycle down */
-                            int i;
-                            for (i = RES_COUNT - 1; i > 0; i--) {
-                                if (g_pc_settings.window_width >= res_w[i])
-                                    break;
-                            }
-                            if (i > 0)
-                                i--;
-                            g_pc_settings.window_width = res_w[i];
-                            g_pc_settings.window_height = res_h[i];
-                        } break;
-                        case 1:
-                            g_pc_settings.fullscreen = (g_pc_settings.fullscreen + 2) % 3;
-                            break;
-                        case 2:
-                            g_pc_settings.vsync = !g_pc_settings.vsync;
-                            break;
-                        case 3: { /* MSAA cycle down: 8→4→2→0 */
-                            if (g_pc_settings.msaa > 2)
-                                g_pc_settings.msaa /= 2;
-                            else
-                                g_pc_settings.msaa = 0;
-                        } break;
-                        case 4: { /* Textures cycle down: 2→1→0 */
-                            if (g_pc_settings.preload_textures > 0)
-                                g_pc_settings.preload_textures--;
-                        } break;
-                    }
-                }
-            } /* end resolution presets block */
-        }
-        (void)changed;
-        return;
-    }
-
-    /* Main menu navigation */
+    /* Drive the shared settings menu. It returns 0 when the user picks
+     * Back from the main settings page, which we treat as "close". */
     if (actor->pc_cursor_cooldown == 0) {
-        if (stick_y > 30 || (on_btn & BUTTON_DUP)) {
-            if (actor->pc_menu_sel > 0) {
-                actor->pc_menu_sel--;
-                actor->pc_cursor_cooldown = 10;
-            }
-        } else if (stick_y < -30 || (on_btn & BUTTON_DDOWN)) {
-            if (actor->pc_menu_sel < 1) {
-                actor->pc_menu_sel++;
-                actor->pc_cursor_cooldown = 10;
-            }
-        }
+      if (on_btn & BUTTON_A || on_btn & BUTTON_START) {
+        if (!pc_settings_menu_confirm()) actor->pc_options_open = 0;
+        actor->pc_cursor_cooldown = 10;
+      } else if (on_btn & BUTTON_B) {
+        if (!pc_settings_menu_cancel()) actor->pc_options_open = 0;
+        actor->pc_cursor_cooldown = 10;
+      } else if (stick_y > 30 || (on_btn & BUTTON_DUP)) {
+        pc_settings_menu_nav_up();   actor->pc_cursor_cooldown = 8;
+      } else if (stick_y < -30 || (on_btn & BUTTON_DDOWN)) {
+        pc_settings_menu_nav_down(); actor->pc_cursor_cooldown = 8;
+      } else if (stick_x > 30 || (on_btn & BUTTON_DRIGHT)) {
+        pc_settings_menu_nav_right(); actor->pc_cursor_cooldown = 8;
+      } else if (stick_x < -30 || (on_btn & BUTTON_DLEFT)) {
+        pc_settings_menu_nav_left(); actor->pc_cursor_cooldown = 8;
+      }
     }
+    return;
+  }
 
-    /* Select */
-    if (on_btn & (BUTTON_A | BUTTON_START)) {
-        if (actor->pc_menu_sel == 0) {
-            /* Start Game */
-            if (mLd_CheckStartFlag() == TRUE && aAL_wipe_end_check(game) == TRUE && mTD_tdemo_button_ok_check()) {
-                aAL_setupAction(actor, game, aAL_ACTION_FADE_OUT_START);
-            }
-        } else {
-            /* Options */
-            actor->pc_options_open = 1;
-            actor->pc_cursor_cooldown = 10;
-        }
+  /* Main menu navigation (3 items: Start / Options / Quit) */
+  if (actor->pc_cursor_cooldown == 0) {
+    if (stick_y > 30 || (on_btn & BUTTON_DUP)) {
+      if (actor->pc_menu_sel > 0) {
+        actor->pc_menu_sel--;
+        actor->pc_cursor_cooldown = 10;
+      }
+    } else if (stick_y < -30 || (on_btn & BUTTON_DDOWN)) {
+      if (actor->pc_menu_sel < 2) {
+        actor->pc_menu_sel++;
+        actor->pc_cursor_cooldown = 10;
+      }
     }
+  }
+
+  /* Select */
+  if (on_btn & (BUTTON_A | BUTTON_START)) {
+    switch (actor->pc_menu_sel) {
+      case 0: /* Start Game */
+        if (mLd_CheckStartFlag() == TRUE &&
+            aAL_wipe_end_check(game) == TRUE &&
+            mTD_tdemo_button_ok_check()) {
+          aAL_setupAction(actor, game, aAL_ACTION_FADE_OUT_START);
+        }
+        break;
+      case 1: /* Options */
+        actor->pc_options_open = 1;
+        actor->pc_cursor_cooldown = 10;
+        pc_settings_menu_enter();
+        break;
+      case 2: /* Quit Game */
+        g_pc_running = 0;
+        actor->pc_cursor_cooldown = 10;
+        break;
+    }
+  }
 }
 #endif
 
@@ -770,149 +705,6 @@ static void aAL_title_draw(GAME* game, ANIMAL_LOGO_ACTOR* actor) {
 }
 
 #ifdef PC_ENHANCEMENTS
-static void aAL_pc_options_draw(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
-    GRAPH* graph = game->graph;
-    char buf[48];
-    int len;
-    f32 x = 80.0f;
-    f32 y = 68.0f;
-    f32 line_h = 16.0f;
-
-    /* Semi-transparent background behind options panel */
-    {
-        Gfx* gfx;
-        int x0 = 45, y0_bg = 58, x1 = 295, y1_bg = 196;
-        OPEN_DISP(graph);
-        gfx = NOW_FONT_DISP;
-        gDPPipeSync(gfx++);
-        gDPSetOtherMode(gfx++,
-                        G_AD_DISABLE | G_CD_MAGICSQ | G_CK_NONE | G_TC_FILT | G_TF_POINT | G_TT_NONE | G_TL_TILE |
-                            G_TD_CLAMP | G_TP_NONE | G_CYC_1CYCLE | G_PM_NPRIMITIVE,
-                        G_AC_NONE | G_ZS_PRIM | G_RM_XLU_SURF | G_RM_XLU_SURF2);
-        gDPSetCombineMode(gfx++, G_CC_PRIMITIVE, G_CC_PRIMITIVE);
-        gDPSetPrimColor(gfx++, 0, 0, 0, 0, 0, 160);
-        gfx = gfx_gSPTextureRectangle1(gfx, x0 << 2, y0_bg << 2, x1 << 2, y1_bg << 2, 0, 0, 0, 0, 0);
-        gDPPipeSync(gfx++);
-        SET_FONT_DISP(gfx);
-        CLOSE_DISP(graph);
-    }
-
-    int sel = actor->pc_options_sel;
-    int item = 0;
-    static u8 str_arrow[] = { '>' };
-
-    /* Title */
-    {
-        static u8 str_title[] = { '-', ' ', 'O', 'p', 't', 'i', 'o', 'n', 's', ' ', '-' };
-        f32 tw = (f32)mFont_GetStringWidth(str_title, sizeof(str_title), TRUE);
-        mFont_SetLineStrings(game, str_title, sizeof(str_title), (SCREEN_WIDTH_F - tw) * 0.5f, y, 255, 255, 255, 255,
-                             FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
-    }
-    y += line_h * 1.2f;
-
-    /* Resolution */
-    len = sprintf(buf, "< %dx%d >", g_pc_settings.window_width, g_pc_settings.window_height);
-    {
-        static u8 lbl[] = { 'R', 'e', 's', 'o', 'l', 'u', 't', 'i', 'o', 'n' };
-        mFont_SetLineStrings(game, lbl, sizeof(lbl), x, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                             sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    }
-    mFont_SetLineStrings(game, (u8*)buf, len, 180.0f, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                         sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
-    if (sel == item)
-        mFont_SetLineStrings(game, str_arrow, 1, x - 12.0f, y, 255, 255, 255, 255, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    item++;
-    y += line_h;
-
-    /* Fullscreen */
-    {
-        const char* fs = g_pc_settings.fullscreen == 0   ? "< Windowed >"
-                         : g_pc_settings.fullscreen == 1 ? "< Fullscreen >"
-                                                         : "< Borderless >";
-        len = sprintf(buf, "%s", fs);
-    }
-    {
-        static u8 lbl[] = { 'D', 'i', 's', 'p', 'l', 'a', 'y' };
-        mFont_SetLineStrings(game, lbl, sizeof(lbl), x, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                             sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    }
-    mFont_SetLineStrings(game, (u8*)buf, len, 180.0f, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                         sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
-    if (sel == item)
-        mFont_SetLineStrings(game, str_arrow, 1, x - 12.0f, y, 255, 255, 255, 255, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    item++;
-    y += line_h;
-
-    /* VSync */
-    len = sprintf(buf, "< %s >", g_pc_settings.vsync ? "On" : "Off");
-    {
-        static u8 lbl[] = { 'V', 'S', 'y', 'n', 'c' };
-        mFont_SetLineStrings(game, lbl, sizeof(lbl), x, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                             sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    }
-    mFont_SetLineStrings(game, (u8*)buf, len, 180.0f, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                         sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
-    if (sel == item)
-        mFont_SetLineStrings(game, str_arrow, 1, x - 12.0f, y, 255, 255, 255, 255, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    item++;
-    y += line_h;
-
-    /* MSAA */
-    if (g_pc_settings.msaa > 0)
-        len = sprintf(buf, "< %dx >", g_pc_settings.msaa);
-    else
-        len = sprintf(buf, "< Off >");
-    {
-        static u8 lbl[] = { 'M', 'S', 'A', 'A' };
-        mFont_SetLineStrings(game, lbl, sizeof(lbl), x, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                             sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    }
-    mFont_SetLineStrings(game, (u8*)buf, len, 180.0f, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                         sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
-    if (sel == item)
-        mFont_SetLineStrings(game, str_arrow, 1, x - 12.0f, y, 255, 255, 255, 255, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    item++;
-    y += line_h;
-
-    /* Textures */
-    {
-        const char* tp = g_pc_settings.preload_textures == 0   ? "< On Demand >"
-                         : g_pc_settings.preload_textures == 1 ? "< Preload >"
-                                                               : "< Preload&Cache >";
-        len = sprintf(buf, "%s", tp);
-    }
-    {
-        static u8 lbl[] = { 'T', 'e', 'x', 't', 'u', 'r', 'e', 's' };
-        mFont_SetLineStrings(game, lbl, sizeof(lbl), x, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                             sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    }
-    mFont_SetLineStrings(game, (u8*)buf, len, 180.0f, y, sel == item ? 255 : 180, sel == item ? 255 : 180,
-                         sel == item ? 255 : 180, sel == item ? 255 : 160, FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
-    if (sel == item)
-        mFont_SetLineStrings(game, str_arrow, 1, x - 12.0f, y, 255, 255, 255, 255, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    y += line_h * 1.5f;
-
-    /* Hints */
-    {
-        static u8 str_save[] = { 'S', 'T', 'A', 'R', 'T', ':', ' ', 'S', 'a', 'v', 'e' };
-        static u8 str_back[] = { 'B', ':', ' ', 'B', 'a', 'c', 'k' };
-        mFont_SetLineStrings(game, str_save, sizeof(str_save), x, y, 255, 255, 255, 160, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-        mFont_SetLineStrings(game, str_back, sizeof(str_back), 190.0f, y, 255, 255, 255, 160, FALSE, TRUE, 1.0f, 1.0f,
-                             mFont_MODE_FONT);
-    }
-}
-
 static void aAL_pc_menu_draw(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
     GRAPH* graph = game->graph;
     int td = actor->titledemo_no;
@@ -934,40 +726,49 @@ static void aAL_pc_menu_draw(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
     static const u32 dim_g[5] = { 40, 50, 40, 50, 50 };
     static const u32 dim_b[5] = { 40, 30, 60, 70, 60 };
 
-    static u8 str_start[] = { 'S', 't', 'a', 'r', 't', ' ', 'G', 'a', 'm', 'e' };
-    static u8 str_options[] = { 'O', 'p', 't', 'i', 'o', 'n', 's' };
-    static u8 str_arrow[] = { '>' };
+  static u8 str_start[]   = "Start Game";
+  static u8 str_options[] = "Options";
+  static u8 str_quit[]    = "Quit Game";
 
-    f32 start_w = (f32)mFont_GetStringWidth(str_start, sizeof(str_start), TRUE);
-    f32 opt_w = (f32)mFont_GetStringWidth(str_options, sizeof(str_options), TRUE);
-    f32 start_x = (SCREEN_WIDTH_F - start_w) * 0.5f;
-    f32 opt_x = (SCREEN_WIDTH_F - opt_w) * 0.5f;
-    f32 y0 = 135.0f;
-    f32 y1 = 153.0f;
-    int sel = actor->pc_menu_sel;
+  static u8* const labels[3] = { str_start, str_options, str_quit };
+  static const int label_lens[3] = {
+    sizeof(str_start)   - 1,
+    sizeof(str_options) - 1,
+    sizeof(str_quit)    - 1,
+  };
 
-    /* "Start Game" */
-    mFont_SetLineStrings(game, str_start, sizeof(str_start), start_x, y0, sel == 0 ? sel_r[td] : dim_r[td],
-                         sel == 0 ? sel_g[td] : dim_g[td], sel == 0 ? sel_b[td] : dim_b[td], sel == 0 ? 255 : 160,
-                         FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
+  f32 y_base = 135.0f;
+  f32 line_h = 18.0f;
+  int sel = actor->pc_menu_sel;
 
-    /* "Options" */
-    mFont_SetLineStrings(game, str_options, sizeof(str_options), opt_x, y1, sel == 1 ? sel_r[td] : dim_r[td],
-                         sel == 1 ? sel_g[td] : dim_g[td], sel == 1 ? sel_b[td] : dim_b[td], sel == 1 ? 255 : 160,
-                         FALSE, TRUE, 1.0f, 1.0f, mFont_MODE_FONT);
-
-    /* Cursor ">" */
-    {
-        f32 arrow_x = (sel == 0 ? start_x : opt_x) - 14.0f;
-        f32 arrow_y = sel == 0 ? y0 : y1;
-        mFont_SetLineStrings(game, str_arrow, 1, arrow_x, arrow_y, sel_r[td], sel_g[td], sel_b[td], 255, FALSE, TRUE,
-                             1.0f, 1.0f, mFont_MODE_FONT);
+  /* Hide the title's main menu items while the Options overlay is open —
+   * otherwise Start/Options/Quit bleed through the dimmed backdrop. */
+  if (!actor->pc_options_open) {
+    /* Match the pause/settings menu's selection style. */
+    for (int i = 0; i < 3; i++) {
+      f32 sc = (sel == i) ? 1.15f : 1.0f;
+      f32 w = (f32)mFont_GetStringWidth(labels[i], label_lens[i], TRUE) * sc;
+      f32 x = (SCREEN_WIDTH_F - w) * 0.5f;
+      mFont_SetLineStrings(game, labels[i], label_lens[i], x,
+        y_base + i * line_h,
+        sel == i ? sel_r[td] : dim_r[td],
+        sel == i ? sel_g[td] : dim_g[td],
+        sel == i ? sel_b[td] : dim_b[td],
+        sel == i ? 255 : 220,
+        FALSE, TRUE, sc, sc, mFont_MODE_FONT);
     }
+  }
 
-    /* Options sub-menu overlay */
-    if (actor->pc_options_open) {
-        aAL_pc_options_draw(actor, game);
+  /* Options sub-menu — shared with the in-game pause menu. */
+  if (actor->pc_options_open) {
+    pc_settings_menu_tick();
+    pc_settings_menu_draw(game, /*with_dim_backdrop=*/1);
+    /* The shared module may close itself from inside (Back from
+     * settings, or the res-confirm timer snapping back). */
+    if (!pc_settings_menu_active()) {
+      actor->pc_options_open = 0;
     }
+  }
 }
 #endif
 
@@ -978,52 +779,54 @@ static void aAL_actor_draw(ACTOR* actor, GAME* game) {
     int pad_connected = padmgr_isConnectedController(PAD0);
 
 #ifdef TARGET_PC
-    {
-        extern int g_pc_verbose;
-        if (g_pc_verbose && (aAL_draw_log_counter % 60) == 0) {
-            printf("[LOGO] draw: action=%d pad_connected=%d back_opacity=%d copyright_opacity=%d "
-                   "press_start_opacity=%.0f\n",
-                   logo_actor->action, pad_connected, logo_actor->back_opacity, logo_actor->copyright_opacity,
-                   logo_actor->press_start_opacity);
-        }
-    }
-#else
-    if ((aAL_draw_log_counter % 60) == 0) {
-        printf(
-            "[LOGO] draw: action=%d pad_connected=%d back_opacity=%d copyright_opacity=%d press_start_opacity=%.0f\n",
-            logo_actor->action, pad_connected, logo_actor->back_opacity, logo_actor->copyright_opacity,
-            logo_actor->press_start_opacity);
-    }
+  /* Default each frame to "menu not visible". The menu-draw branch below
+   * sets it back to 1 if it actually runs. Cleared on actor cleanup. */
+  { extern int g_pc_title_main_menu_visible;
+    g_pc_title_main_menu_visible = 0; }
 #endif
-    aAL_draw_log_counter++;
 
-    mFont_SetMatrix(graph, mFont_MODE_FONT);
+#ifdef TARGET_PC
+  { extern int g_pc_verbose; if (g_pc_verbose && (aAL_draw_log_counter % 60) == 0) {
+    printf("[LOGO] draw: action=%d pad_connected=%d back_opacity=%d copyright_opacity=%d press_start_opacity=%.0f\n",
+           logo_actor->action, pad_connected, logo_actor->back_opacity, logo_actor->copyright_opacity, logo_actor->press_start_opacity);
+  }}
+#else
+  if ((aAL_draw_log_counter % 60) == 0) {
+    printf("[LOGO] draw: action=%d pad_connected=%d back_opacity=%d copyright_opacity=%d press_start_opacity=%.0f\n",
+           logo_actor->action, pad_connected, logo_actor->back_opacity, logo_actor->copyright_opacity, logo_actor->press_start_opacity);
+  }
+#endif
+  aAL_draw_log_counter++;
 
-    if (logo_actor->action >= aAL_ACTION_BACK_FADE_IN) {
-        aAL_back_draw(graph, logo_actor);
-    }
+  mFont_SetMatrix(graph, mFont_MODE_FONT);
 
-    aAL_title_draw(game, logo_actor);
+  if (logo_actor->action >= aAL_ACTION_BACK_FADE_IN) {
+    aAL_back_draw(graph, logo_actor);
+  }
 
-    if (logo_actor->action >= aAL_ACTION_START_KEY_CHK_START) {
-        aAL_copyright_draw(logo_actor, graph);
-        aAL_tm_draw(graph);
-    }
+  aAL_title_draw(game, logo_actor);
 
-    mFont_SetMode(graph, mFont_MODE_FONT);
-    if (pad_connected) {
-        switch (logo_actor->action) {
-            case aAL_ACTION_GAME_START:
-            case aAL_ACTION_FADE_OUT_START:
-            case aAL_ACTION_OUT:
+  if (logo_actor->action >= aAL_ACTION_START_KEY_CHK_START) {
+    aAL_copyright_draw(logo_actor, graph);
+    aAL_tm_draw(graph);
+  }
+
+  mFont_SetMode(graph, mFont_MODE_FONT);
+  if (pad_connected) {
+    switch (logo_actor->action) {
+      case aAL_ACTION_GAME_START:
+      case aAL_ACTION_FADE_OUT_START:
+      case aAL_ACTION_OUT:
 #ifdef PC_ENHANCEMENTS
-                aAL_pc_menu_draw(logo_actor, game);
+        { extern int g_pc_title_main_menu_visible;
+          g_pc_title_main_menu_visible = 1; }
+        aAL_pc_menu_draw(logo_actor, game);
 #else
-                aAL_press_start_draw(logo_actor, graph);
+        aAL_press_start_draw(logo_actor, graph);
 #endif
-                break;
-        }
+        break;
     }
+  }
 
     mFont_UnSetMatrix(graph, mFont_MODE_FONT);
     game_debug_draw_last(game, graph);

@@ -69,6 +69,8 @@ extern int           g_pc_running;
 extern int           g_pc_verbose;
 extern int           g_pc_no_framelimit;
 extern int           g_pc_time_override;
+extern int           g_pc_min_override;
+extern int           g_pc_sec_override;
 extern u32           g_frame_limiter;
 
 extern int g_pc_window_w;
@@ -122,6 +124,7 @@ extern int pc_gx_draw_call_count;
 extern int pc_save_loaded;
 int  pc_audio_get_buffer_fill(void);
 int  pc_audio_is_active(void);
+void pc_audio_set_paused(int paused); // Can be used to pause the audio. Not used at the moment.
 void pc_audio_shutdown(void);
 void pc_audio_start_producer_thread(void);
 void pc_audio_mq_init(void);

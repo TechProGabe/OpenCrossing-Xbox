@@ -6,6 +6,8 @@
 #include "pc_keybindings.h"
 #include "pc_assets.h"
 #include "pc_disc.h"
+#include "pc_typing.h"
+#include "pc_pause_menu.h"
 
 /* prefer discrete GPU on laptops */
 #ifdef _WIN32
@@ -19,11 +21,13 @@ int           g_pc_running = 1;
 int           g_pc_no_framelimit = 0;
 int           g_pc_verbose = 0;
 int           g_pc_time_override = -1; /* -1=system clock, 0-23=override hour */
+int           g_pc_min_override = -1; /* -1=system clock, 0-59=override minute */
+int           g_pc_sec_override = -1; /* -1=system clock, 0-59=override second */
 int           g_pc_window_w = PC_SCREEN_WIDTH;
 int           g_pc_window_h = PC_SCREEN_HEIGHT;
 int           g_pc_widescreen_stretch = 0;
 
-/* exe image range — used by seg2k0 to distinguish pointers from segment addresses */
+/* exe image range -- used by seg2k0 to distinguish pointers from segment addresses */
 unsigned int pc_image_base = 0;
 unsigned int pc_image_end  = 0;
 
@@ -208,48 +212,43 @@ void pc_platform_swap_buffers(void) {
     SDL_GL_SwapWindow(g_pc_window);
 }
 
-static int pc_confirm_quit(void) {
-    const SDL_MessageBoxButtonData buttons[] = {
-        { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel" },
-        { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Quit" },
-    };
-    const SDL_MessageBoxData data = {
-        SDL_MESSAGEBOX_INFORMATION, g_pc_window,
-        "Animal Crossing", "Are you sure you want to quit?",
-        2, buttons, NULL
-    };
-    int button = 0;
-    if (SDL_ShowMessageBox(&data, &button) < 0)
-        return 1; /* on error, just quit */
-    return button == 1;
-}
-
 int pc_platform_poll_events(void) {
     SDL_Event event;
+
+    pc_typing_update();
+
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
             case SDL_QUIT:
-                if (pc_confirm_quit()) {
-                    g_pc_running = 0;
-                    return 0;
-                }
-                break;
+                g_pc_running = 0;
+                return 0;
             case SDL_WINDOWEVENT:
                 if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                     pc_platform_update_window_size();
                 }
                 break;
             case SDL_KEYDOWN:
-                if (event.key.keysym.sym == SDLK_ESCAPE) {
-                    if (pc_confirm_quit()) {
-                        g_pc_running = 0;
-                        return 0;
+                if (event.key.keysym.sym == SDLK_ESCAPE && !event.key.repeat) {
+                    if (g_pc_paused) {
+                        pc_pause_menu_handle_event(&event);
+                    } else {
+                        pc_pause_menu_toggle();
                     }
+                    break;
+                }
+                if (g_pc_paused) {
+                    pc_pause_menu_handle_event(&event);
+                    break; /* swallow all keys while paused */
                 }
                 if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat) {
                     g_pc_no_framelimit ^= 1;
                     printf("[PC] Frame limiter %s\n", g_pc_no_framelimit ? "OFF" : "ON");
                 }
+                pc_typing_handle_event(&event);
+                break;
+            case SDL_TEXTINPUT:
+                if (g_pc_paused) break;
+                pc_typing_handle_event(&event);
                 break;
         }
     }
@@ -268,7 +267,7 @@ int main(int argc, char* argv[]) {
             printf("  --no-framelimit     Disable frame limiter\n");
             printf("  --framelimit [N]    Set the target frame rate\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
-            printf("  --time HOUR         Override in-game hour (0-23)\n");
+            printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
             printf("  --help, -h          Show this help message\n");
             return 0;
         } else if (strcmp(argv[i], "--framelimit") == 0) {
@@ -287,8 +286,11 @@ int main(int argc, char* argv[]) {
                 i++;
             }
         } else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc) {
-            g_pc_time_override = atoi(argv[i + 1]);
-            if (g_pc_time_override < 0 || g_pc_time_override > 23) g_pc_time_override = -1;
+            int h = -1, m = -1, s = -1;
+            sscanf(argv[i + 1], "%d:%d:%d", &h, &m, &s);
+            if (h >= 0 && h <= 23) g_pc_time_override = h;
+            if (m >= 0 && m <= 59) g_pc_min_override = m;
+            if (s >= 0 && s <= 59) g_pc_sec_override = s;
             i++;
         }
     }

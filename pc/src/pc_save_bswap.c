@@ -279,13 +279,17 @@ static void swap_Anmplmail(Anmplmail_c* pm) {
     swap_lbRTC_ymd(&pm->date);
 }
 
-static void swap_Anmmem(Anmmem_c* mem, pc_bswap_dir_t dir) {
+static void swap_Anmmem(Anmmem_c* mem, pc_bswap_dir_t dir, int is_island) {
     swap_PersonalID(&mem->memory_player_id);
     swap_lbRTC_time(&mem->last_speak_time);
-    /* Swap both union interpretations (overlapping but self-inverse) */
-    swap16(&mem->memuni.land.id);
-    swap32(&mem->memuni.island.check);
-    swap16(&mem->memuni.island.have_bitfield);
+    /* memuni is a union: land (name[8]+id) vs island (check+have_bitfield).
+     * The island fields overlap land.name — only swap them for island animals. */
+    if (is_island) {
+        swap32(&mem->memuni.island.check);
+        swap16(&mem->memuni.island.have_bitfield);
+    } else {
+        swap16(&mem->memuni.land.id);
+    }
     swap64(&mem->saved_town_tune);
     repack_u8_11111_3((u8*)&mem->letter_info, dir);
     swap_Anmplmail(&mem->letter);
@@ -295,16 +299,20 @@ static void swap_AnmHPMail(AnmHPMail_c* hp) {
     swap_lbRTC_time(&hp->receive_time);
 }
 
-static void swap_Animal(Animal_c* anm, pc_bswap_dir_t dir) {
+static void swap_Animal(Animal_c* anm, pc_bswap_dir_t dir, int is_island) {
     int i;
     swap_AnmPersonalID(&anm->id);
 
     for (i = 0; i < ANIMAL_MEMORY_NUM; i++) {
-        swap_Anmmem(&anm->memories[i], dir);
+        swap_Anmmem(&anm->memories[i], dir, is_island);
     }
 
     swap_mQst_contest(&anm->contest_quest, dir);
-    swap16_array(anm->anmuni.island_ftr, mNpc_ISLAND_FTR_SAVE_NUM);
+    /* anmuni is a union: island animal uses island_ftr (u16[4], needs swap),
+       regular villagers use previous_land_name (u8[8], must NOT swap) 
+       GBA messes with me even when the functionality is off. */
+    if (is_island)
+        swap16_array(anm->anmuni.island_ftr, mNpc_ISLAND_FTR_SAVE_NUM);
 
     swap16(&anm->previous_land_id);
     swap16(&anm->cloth);
@@ -740,7 +748,7 @@ static void swap_Island(Island_c* isl, pc_bswap_dir_t dir) {
     swap_mLd_land_info(&isl->landinfo);
     swap_mFM_fg_array(&isl->fgblock[0][0], mISL_FG_BLOCK_Z_NUM * mISL_FG_BLOCK_X_NUM);
     swap_mHm_cottage(&isl->cottage, dir);
-    swap_Animal(&isl->animal, dir);
+    swap_Animal(&isl->animal, dir, 1);
     swap16_array(&isl->deposit[0][0], mISL_FG_BLOCK_X_NUM * mISL_FG_BLOCK_Z_NUM * UT_Z_NUM);
     swap_lbRTC_time(&isl->renew_time);
 }
@@ -844,7 +852,7 @@ void pc_save_bswap(Save_t* save, pc_bswap_dir_t dir) {
     swap_combi_table(save->combi_table, dir);
 
     for (i = 0; i < ANIMAL_NUM_MAX; i++)
-        swap_Animal(&save->animals[i], dir);
+        swap_Animal(&save->animals[i], dir, 0);
 
     swap_AnmPersonalID(&save->last_removed_animal_id);
     swap_Shop(&save->shop, dir);
@@ -992,6 +1000,13 @@ int pc_save_bswap_verify_roundtrip_diary(const u8* original_be, u32 size) {
     result = verify_compare("keep_diary", original_be, temp, size);
     free(temp);
     return result;
+}
+
+void pc_save_bswap_foreigner(mCD_foreigner_c* f, pc_bswap_dir_t dir) {
+    swap16(&f->checksum);
+    swap_Private(&f->priv, dir);
+    swap_Animal(&f->remove_animal, dir, 0);
+    swap16(&f->copy_protect);
 }
 
 /* BE-aware checksum matching mFRm_GetFlatCheckSum on GC.
