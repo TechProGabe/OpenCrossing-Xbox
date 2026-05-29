@@ -805,11 +805,7 @@ static void aAL_pc_menu_draw(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   /* Hide the title's main menu items while the Options overlay is open —
    * otherwise Start/Options/Quit bleed through the dimmed backdrop. */
   if (!actor->pc_options_open) {
-    /* Match the pause/settings menu's selection style: scale the selected
-     * row up (no cursor glyph), and keep unselected rows a little more
-     * opaque than the old 160-alpha — they were hard to read against the
-     * bright title background. Each row's X is recomputed per-scale so the
-     * wider selected label stays centred. */
+    /* Match the pause/settings menu's selection style. */
     for (int i = 0; i < 3; i++) {
       f32 sc = (sel == i) ? 1.15f : 1.0f;
       f32 w = (f32)mFont_GetStringWidth(labels[i], label_lens[i], TRUE) * sc;

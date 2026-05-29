@@ -231,12 +231,7 @@ int pc_platform_poll_events(void) {
                 }
                 break;
             case SDL_KEYDOWN:
-                /* ESC toggles the in-game pause menu. Once paused, all
-                 * keystrokes route to the menu first; only fall through
-                 * to game input if the menu didn't consume them. */
                 if (event.key.keysym.sym == SDLK_ESCAPE && !event.key.repeat) {
-                    /* If the menu is open, let it handle ESC (closes
-                     * sub-pages or unpauses). Otherwise toggle on. */
                     if (g_pc_paused) {
                         pc_pause_menu_handle_event(&event);
                     } else {

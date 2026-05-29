@@ -230,7 +230,7 @@ static void mTD_game_end_init(GAME_PLAY* play) {
 extern void title_demo_move(GAME_PLAY* play) {
     if (mEv_IsTitleDemo()) {
 #ifdef TARGET_PC
-        /* Hold the demo while the Options overlay owns the screen — neither
+        /* Hold the demo while the Options overlay owns the screen: neither
          * advance time nor feed recorded input, so the villager parks and
          * the wipe-to-next-demo cutoff stays paused too. */
         {

@@ -1,20 +1,3 @@
-/* pc_settings_menu.c — see pc_settings_menu.h.
- *
- * Tabbed settings shared by pc_pause_menu (in-game) and ac_animal_logo
- * (title screen). Each tab declares its own item list; adding a new
- * setting is a matter of adding one row to a tab and one case branch per
- * dispatch helper (cycle / format / changed). All tabs share a single
- * pending-settings snapshot and the Apply/Back + resolution-confirm
- * workflow at the bottom.
- *
- * Navigation rows (s_sel is an int):
- *   -1                     = tab row (Left/Right cycles active tab)
- *   0 .. items-1           = items for the active tab
- *   items                  = Apply
- *   items + 1              = Back
- *
- * Where `items` is the item count for the active tab. */
-
 #include "pc_settings_menu.h"
 #include "pc_settings.h"
 #include "pc_text_draw.h"
@@ -107,12 +90,7 @@ static int    s_res_sel = 1;
 static int    s_back_sel = 0; /* 0 = Keep editing (safe default), 1 = Discard */
 
 /* Startup snapshot + restart-required flag. Some settings (MSAA, texture
- * pack preload mode) only take effect on process restart — pc_settings_apply
- * can mutate g_pc_settings all it wants but the running context keeps its
- * initial values. We capture the startup snapshot on first menu entry and,
- * after every Apply, flag whether any restart-required setting has diverged
- * from that snapshot. The flag drives a persistent banner on the settings
- * page and clears naturally next boot. */
+ * pack preload mode) only take effect on process restart. More might appear.*/
 static PCSettings s_startup;
 static int        s_startup_captured = 0;
 static int        s_pending_restart = 0;
@@ -138,8 +116,8 @@ static void snapshot(void) {
     s_pending_dirty = 0;
 }
 
-/* --- Per-item dispatch: cycle, format, changed. Add cases here when a
- *     new setting row is added to any tab. --- */
+/* Per-item dispatch: cycle, format, changed. Add cases here when a
+ * new setting row is added to any tab. */
 
 static void item_cycle(int id, int dir) {
     switch (id) {
@@ -249,7 +227,7 @@ static int item_changed(int id) {
     return 0;
 }
 
-/* For items flagged restart=1 — does the live g_pc_settings value differ
+/* For items flagged restart=1. Does the live g_pc_settings value differ
  * from what the process booted with? Used after Apply to decide whether
  * the "restart required" banner should show. */
 static int item_differs_from_startup(int id) {

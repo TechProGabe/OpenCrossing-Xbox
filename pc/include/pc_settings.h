@@ -23,11 +23,6 @@ extern PCSettings g_pc_settings;
 void pc_settings_load(void);
 void pc_settings_save(void);
 void pc_settings_apply(void);
-
-/* Step the window resolution through a shared preset table. `dir > 0` cycles
- * up, `dir < 0` cycles down. Custom *width/*height from settings.ini snap
- * to the nearest preset on the first call. Used by both the title-screen
- * options menu and the in-game pause menu so they share one table. */
 void pc_settings_cycle_resolution(int* width, int* height, int dir);
 
 #ifdef __cplusplus

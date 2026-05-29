@@ -365,8 +365,6 @@ static void graph_main(GRAPH* this, GAME* game) {
     game_main(game);
     PC_DIAG(10, "graph_main: game_main returned, frame_counter=%d\n", this->frame_counter);
 #ifdef TARGET_PC
-    /* Pause overlay (Resume/Settings/Quit). Appended after game_main so it
-     * draws on top of the scene's font/UI layer. No-op when not paused. */
     pc_pause_menu_draw(game);
 #endif
     GRAPH_SET_DOING_POINT(this, GAME_MAIN_FINISHED);
