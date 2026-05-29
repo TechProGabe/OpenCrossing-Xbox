@@ -462,7 +462,7 @@ static void aETKY_GetTalkStartStatus(int* msg_no, int* next_talk_act, ACTOR* act
     aEv_turkey_common_c* common_p = turkey->ev_common_p;
 
     if (turkey->_9B1 == 1) {
-        *msg_no = 0x3C1D + gamePT->frame_counter % 5;
+        *msg_no = 0x3C1D + graph_dt_frame_phase(gamePT, 5);
         *next_talk_act = aETKY_TALK_WAIT_END;
     } else {
         *msg_no = 0x3BFE;

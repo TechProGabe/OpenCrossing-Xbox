@@ -116,31 +116,48 @@ static void eSoba_Yuge_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eSoba_Yuge_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-
-    effect->velocity.y *= GETREG(TAKREG, 0x39) * 0.001f + 0.95f;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 decay = powf(GETREG(TAKREG, 0x39) * 0.001f + 0.95f, dt);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+    effect->velocity.y *= decay;
 }
 
 static void eSoba_Yuge_dw(eEC_Effect_c* effect, GAME* game) {
     int alpha;
-    s16 timer = 44 - effect->timer;
-    s16 idx = CLAMP(timer >> 1, 0, 22);
-    int texIdx1 = eSoba_Yuge_2tile_texture_idx[idx].tex0;
-    int texIdx2 = eSoba_Yuge_2tile_texture_idx[idx].tex1;
+    f32 t = 44.0f - effect->lifetime;
+    f32 k = t * 0.5f;
+    int i, j;
+    f32 frac;
+    int texIdx1, texIdx2;
+    u8 prim_f;
+
+    if (k < 0.0f) k = 0.0f;
+    if (k > 21.0f) k = 21.0f;
+    i = (int)k;
+    if (i > 21) i = 21;
+    j = (i < 21) ? i + 1 : i;
+    frac = k - (f32)i;
+    texIdx1 = eSoba_Yuge_2tile_texture_idx[i].tex0;
+    texIdx2 = eSoba_Yuge_2tile_texture_idx[i].tex1;
+    prim_f = (u8)(eSoba_Yuge_prim_f[i] + (eSoba_Yuge_prim_f[j] - eSoba_Yuge_prim_f[i]) * frac);
 
     if (effect->arg1 == 0) {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(timer, 0, 44, GETREG(TAKREG, 0x37) * 0.0001f + 0.001f,
-                                                     GETREG(TAKREG, 0x38) * 0.0001f + 0.005f);
+        effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 44.0f, GETREG(TAKREG, 0x37) * 0.0001f + 0.001f,
+                                           GETREG(TAKREG, 0x38) * 0.0001f + 0.005f);
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(timer, 0, 44, 0.001f, 0.01f);
+        effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 44.0f, 0.001f, 0.01f);
     }
     effect->scale.y = effect->scale.z = effect->scale.x;
 
     if (effect->arg1 == 0) {
-        alpha = eEC_CLIP->calc_adjust_proc(timer, 0, 44, GETREG(TAKREG, 0x35) + 130.0f, GETREG(TAKREG, 0x36) + 10.0f);
+        alpha = (int)eEL_CalcAdjust_F(t, 0.0f, 44.0f, GETREG(TAKREG, 0x35) + 130.0f, GETREG(TAKREG, 0x36) + 10.0f);
     } else {
-        alpha = eEC_CLIP->calc_adjust_proc(timer, 0, 44, GETREG(TAKREG, 0x35) + 190.0f, GETREG(TAKREG, 0x36) + 10.0f);
+        alpha = (int)eEL_CalcAdjust_F(t, 0.0f, 44.0f, GETREG(TAKREG, 0x35) + 190.0f, GETREG(TAKREG, 0x36) + 10.0f);
     }
 
     OPEN_DISP(game->graph);
@@ -151,9 +168,9 @@ static void eSoba_Yuge_dw(eEC_Effect_c* effect, GAME* game) {
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_2_TXT_SEG, eSoba_Yuge_texture_table[texIdx2]);
 
     if (effect->arg1 == 0) {
-        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, eSoba_Yuge_prim_f[idx], 255, 255, 255, alpha);
+        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, 255, 255, 255, alpha);
     } else {
-        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, eSoba_Yuge_prim_f[idx], 255, 200, 130, alpha);
+        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, 255, 200, 130, alpha);
     }
 
     if (effect->arg1 == 0) {

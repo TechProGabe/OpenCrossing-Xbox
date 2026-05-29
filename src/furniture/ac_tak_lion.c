@@ -19,6 +19,11 @@ static void fTL_ct(FTR_ACTOR* ftr_actor, u8* data) {
 static void fTL_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
     f32 l;
 
+    ftr_actor->dynamic_work_f[1] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[1] >= 1024.0f) {
+        ftr_actor->dynamic_work_f[1] -= 1024.0f;
+    }
+
     if (ftr_actor->dynamic_work_s[0] == 1) {
         l = 126.0f;
     } else {
@@ -57,16 +62,9 @@ extern Gfx int_tak_lion_onT_model[];
 extern Gfx int_tak_lion_alphaT_model[];
 
 static void fTL_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    u32 ctr_ofs;
+    int ctr_ofs = (int)ftr_actor->dynamic_work_f[1];
     Gfx* scroll_gfx;
     u8 l;
-
-    if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
-        ctr_ofs = play->game_frame;
-    } else {
-        ctr_ofs = game->frame_counter;
-    }
 
     scroll_gfx = fTL_GetTwoTileGfx(-ctr_ofs, ctr_ofs * 4, ctr_ofs, ctr_ofs * 4, game);
 

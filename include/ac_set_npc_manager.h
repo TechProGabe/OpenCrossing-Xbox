@@ -83,6 +83,7 @@ struct set_npc_manager_actor_s {
     aSNMgr_scope_c scope;
     aSNMgr_scope_c guest_scope;
     aSNMgr_npc_info_c npc_info;
+    f32 walk_accum;
 };
 
 extern ACTOR_PROFILE Set_Npc_Manager_Profile;

@@ -52,6 +52,7 @@ static void eYoung_Tree_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     }
     effect->effect_specific[1] = 0;
     effect->effect_specific[2] = 0;
+    effect->effect_specific[3] = 0; /* per-instance dt accumulator x100 for emit cadence */
 
     xyz_t_sub(&camera->lookat.eye, &camera->lookat.center, &effect->offset);
     xyz_t_mult_v(&effect->offset, 1.0f / dist);
@@ -59,25 +60,35 @@ static void eYoung_Tree_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eYoung_Tree_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     f32 fVar4;
     f32 dVar3;
     xyz_t effPos;
     xyz_t effPos2;
     s16 uVar2;
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
     if (effect->arg0 == 1) {
-        effect->effect_specific[1] = effect->effect_specific[1] + 384;
+        effect->effect_specific[1] += (s16)(384 * dt);
     } else if (effect->arg0 == 2) {
-        effect->effect_specific[1] = effect->effect_specific[1] - 384;
+        effect->effect_specific[1] -= (s16)(384 * dt);
     } else {
-        dVar3 = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 0x28, 0.0f, 2184.0f);
+        /* calc_adjust uses the original countdown semantics; lifetime mirrors timer. */
+        s16 timer_like = (s16)effect->lifetime;
+        dVar3 = eEC_CLIP->calc_adjust_proc(timer_like, 0, 0x28, 0.0f, 2184.0f);
         fVar4 = sin_s(effect->effect_specific[2]);
 
         effect->effect_specific[1] = dVar3 * fVar4;
-        effect->effect_specific[2] = effect->effect_specific[2] + 0xC68;
-        if ((effect->timer & 0x1F) == 0) {
+        effect->effect_specific[2] += (s16)(0xC68 * dt);
+        /* Emit every 32 60Hz frames; accumulator stored x1000 in effect_specific[3]. */
+        effect->effect_specific[3] += (s16)(1000.0f * dt);
+        if (effect->effect_specific[3] >= 32000) {
+            effect->effect_specific[3] -= 32000;
             effPos = effect->position;
             if (Common_Get(time).term_idx == mTM_TERM_4) {
                 uVar2 = 6;
@@ -123,13 +134,14 @@ static void eYoung_Tree_dw(eEC_Effect_c* effect, GAME* game) {
     u16* cedar_pal = field_pal->cedar_tree_pal;
     u16* palm_pal = field_pal->palm_tree_pal;
     u16* golden_pal = field_pal->golden_tree_pal;
-    s16 remain = 0x28 - effect->timer;
+    s16 timer_like = (s16)effect->lifetime;
+    s16 remain = 0x28 - timer_like;
     u8 alpha;
 
     if (effect->arg0 == 2 || effect->arg0 == 1) {
         alpha = (int)eEC_CLIP->calc_adjust_proc(remain, 0, 0x28, 255.0f, 0.0f);
     } else {
-        alpha = (int)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 8, 0.0f, 255.0f);
+        alpha = (int)eEC_CLIP->calc_adjust_proc(timer_like, 0, 8, 0.0f, 255.0f);
     }
 
     graph = game->graph;

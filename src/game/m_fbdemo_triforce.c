@@ -27,9 +27,10 @@ fbdemo_triforce* fbdemo_triforce_init(fbdemo_triforce* this) {
 }
 
 void fbdemo_triforce_move(fbdemo_triforce* this, int updaterate) {
-  int d;
-  f32 t;
-  t = (1.0f - (this->txt / 548.0f));
+  static f32 triforce_accum = 0.0f;
+  f32 d;
+  f32 t = (1.0f - (this->txt / 548.0f));
+  f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
   if ((this->textureno == 1) || (this->textureno == 2)) {
     d = 0.5f * (14.0f + (12.0f * t));
   } else {
@@ -37,13 +38,19 @@ void fbdemo_triforce_move(fbdemo_triforce* this, int updaterate) {
   }
 
   if (this->direction != 0) {
-    this->txt += d;
+    triforce_accum += d * dt;
+    int steps = (int)triforce_accum;
+    triforce_accum -= (f32)steps;
+    this->txt += steps;
     if (this->txt >= 548) {
       this->txt = 548;
       this->finished = TRUE;
     }
   } else {
-    this->txt -= d;
+    triforce_accum += d * dt;
+    int steps = (int)triforce_accum;
+    triforce_accum -= (f32)steps;
+    this->txt -= steps;
     if (this->txt <= 0) {
       this->txt = 0;
       this->finished = TRUE;

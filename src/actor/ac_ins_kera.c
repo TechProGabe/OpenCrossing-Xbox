@@ -16,6 +16,7 @@
 #define aIKR_SCALE_TOGGLE(ins) ((ins)->s32_work3)
 
 #define aIKR_DIRT_TIMER(ins) ((ins)->f32_work0)
+#define aIKR_AVOID_TIMER_ACCUM(ins) ((ins)->f32_work1)
 #define aIKR_BK_CENTER_X(ins) ((ins)->f32_work2)
 #define aIKR_BK_CENTER_Z(ins) ((ins)->f32_work3)
 
@@ -203,7 +204,7 @@ static void aIKR_calc_direction_angl(ACTOR* actorx) {
         }
     }
 
-    chase_angle(&actorx->shape_info.rotation.y, actorx->world.angle.y, 0x800);
+    chase_angle(&actorx->shape_info.rotation.y, actorx->world.angle.y, aINS_dt_angle_step((GAME*)gamePT, 0x800));
 }
 
 /**
@@ -216,8 +217,8 @@ static void aIKR_calc_direction_angl(ACTOR* actorx) {
 static void aIKR_avoid(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
     
-    chase_angle(&actorx->shape_info.rotation.x, 0, 0x1000);
-    aIKR_AVOID_TIMER(insect)--;
+    chase_angle(&actorx->shape_info.rotation.x, 0, aINS_dt_angle_step(game, 0x1000));
+    aINS_dt_dec_s32_timer(game, &aIKR_AVOID_TIMER(insect), &aIKR_AVOID_TIMER_ACCUM(insect));
     if (aIKR_AVOID_TIMER(insect) <= 0) {
         insect->target_speed = (1.1f - RANDOM_F(0.2f)) * 1.5f;
         aIKR_AVOID_TIMER(insect) = 10;
@@ -329,7 +330,7 @@ static void aIKR_dug(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
 
     aIKR_calc_move_scale(actorx);
-    aIKR_DIRT_TIMER(insect) -= 0.5f;
+    aIKR_DIRT_TIMER(insect) -= 0.5f * (float)game->graph->dt_num_60fps_frames;
     if (aIKR_DIRT_TIMER(insect) <= 0.0f) {
         int type = 3.0f + RANDOM_F(3.0f);
 
@@ -337,7 +338,7 @@ static void aIKR_dug(ACTOR* actorx, GAME* game) {
         aIKR_DIRT_TIMER(insect) = 6.0f;
     }
 
-    chase_angle(&actorx->shape_info.rotation.x, DEG2SHORT_ANGLE2(157.5f), 0x300);
+    chase_angle(&actorx->shape_info.rotation.x, DEG2SHORT_ANGLE2(157.5f), aINS_dt_angle_step(game, 0x300));
     sAdo_OngenPos((u32)actorx, NA_SE_MOLE_CRICKET_OUT, &actorx->world.position);
 }
 
@@ -351,6 +352,7 @@ static void aIKR_avoid_init(aINS_INSECT_ACTOR* insect, GAME* game) {
     insect->target_speed = 1.5f;
     insect->speed_step = 0.3f;
     insect->tools_actor.actor_class.shape_info.rotation.x = 0;
+    aIKR_AVOID_TIMER_ACCUM(insect) = 0.0f;
 }
 
 /**

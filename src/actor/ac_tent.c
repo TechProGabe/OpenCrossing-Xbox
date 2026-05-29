@@ -218,7 +218,7 @@ static void aTnt_actor_move(ACTOR* actor, GAME* game) {
         tent->action_proc(tent, play);
 
         window = (aTnt_ControlLight(actor) != 0) ? 1.0f : 0.0f;
-        chase_f(&tent->arg0_f, window, 0.019532442f);
+        chase_f(&tent->arg0_f, window, 0.019532442f * (f32)game->graph->dt_num_60fps_frames);
     }
 }
 

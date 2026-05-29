@@ -4,6 +4,7 @@
 #include "ac_museum_fish.h"
 #include "m_msg.h"
 #include "m_common_data.h"
+#include "m_lib.h"
 #include "sys_matrix.h"
 #include "m_player_lib.h"
 #include "m_debug_mode.h"
@@ -142,7 +143,8 @@ struct _FISH_PRIVATE_DATA {
     s16 _642;
     s16 _644;
     s16 _646;
-}; // size 648
+    f32 hamon_accum;
+}; // size 64C
 
 // Holds data for the underwater grass
 typedef mfish_keyframe_c MUSEUM_FISH_KUSA_DATA;
@@ -180,7 +182,8 @@ typedef struct _MUSEUM_FISH_ACTOR {
     s16 _14dc2;        // offset: 0x14dc2, size: 2
     s16 _14dc4;        // offset: 0x14dc4, size: 2
     s16 _14dc8;        // offset: 0x14dc8, size: 2
-} MUSEUM_FISH_ACTOR;   // size 14DCA
+    f32 logic_accum;    // offset: 0x14dcc, size: 4
+} MUSEUM_FISH_ACTOR;   // size 14DD0
 
 //  data
 extern ACTOR_PROFILE Museum_Fish_Profile;

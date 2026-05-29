@@ -336,7 +336,8 @@ static void aCNV_actor_move(ACTOR* actor, GAME* game) {
     conveni->struct_class.keyframe_saved_keyframe = conveni->struct_class.keyframe.frame_control.current_frame;
 
     (*conveni->struct_class.action_proc)((STRUCTURE_ACTOR*)conveni, play);
-    chase_f(&conveni->struct_class.arg0_f, aCNV_ctrl_light(conveni), 0.019532442f); // approx sqrt(0.000385f)
+    chase_f(&conveni->struct_class.arg0_f, aCNV_ctrl_light(conveni),
+            0.019532442f * (f32)game->graph->dt_num_60fps_frames); // approx sqrt(0.000385f)
 }
 
 static void aCNV_actor_init(ACTOR* actor, GAME* game) {

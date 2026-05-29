@@ -78,15 +78,21 @@ static void eCoin_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eCoin_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
     if (effect->effect_specific[0] == FALSE) {
 
         eEC_CLIP->set_continious_env_proc(effect, 100, 100);
-        effect->effect_specific[1] += DEG2SHORT_ANGLE(21.093750f);
-        effect->effect_specific[2] += DEG2SHORT_ANGLE(18.281250f);
-        effect->effect_specific[3] += DEG2SHORT_ANGLE(19.687500f);
+        effect->effect_specific[1] += (s16)(DEG2SHORT_ANGLE(21.093750f) * dt);
+        effect->effect_specific[2] += (s16)(DEG2SHORT_ANGLE(18.281250f) * dt);
+        effect->effect_specific[3] += (s16)(DEG2SHORT_ANGLE(19.687500f) * dt);
 
         if (effect->position.y <= effect->offset.x) {
             xyz_t pos = effect->position;
@@ -111,6 +117,7 @@ static void eCoin_mv(eEC_Effect_c* effect, GAME* game) {
             effect->velocity.z = 0.0f;
 
             effect->timer = 300;
+            effect->lifetime = 300.0f;
         }
     } else if (effect->position.y <= effect->offset.y) {
         effect->position.y = effect->offset.y;
@@ -124,7 +131,7 @@ static void eCoin_mv(eEC_Effect_c* effect, GAME* game) {
         effect->effect_specific[3] = 0;
 
     } else {
-        effect->effect_specific[4] += DEG2SHORT_ANGLE(7.031250f);
+        effect->effect_specific[4] += (s16)(DEG2SHORT_ANGLE(7.031250f) * dt);
         effect->effect_specific[1] = sin_s(effect->effect_specific[4]) * 2048.0f;
         effect->effect_specific[3] = cos_s(effect->effect_specific[4]) * 2048.0f;
         effect->effect_specific[2] = 0;
@@ -173,7 +180,8 @@ static void eCoin_dw(eEC_Effect_c* effect, GAME* game) {
 
         CLOSE_DISP(game->graph);
     } else {
-        u8 alpha = (int)eEC_CLIP->calc_adjust_proc(300 - effect->timer, 0, 300, 180.0f, 0.0f);
+        f32 t = 300.0f - effect->lifetime;
+        u8 alpha = (int)eEL_CalcAdjust_F(t, 0.0f, 300.0f, 180.0f, 0.0f);
 
         _texture_z_light_fog_prim_xlu(game->graph);
         Setpos_HiliteReflect_xlu_init(&effect->position, play);

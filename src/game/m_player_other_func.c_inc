@@ -247,7 +247,7 @@ static void Player_actor_move_other_func1(ACTOR* actor, GAME* game) {
     Player_actor_Culc_player_frame_counter(actor);
     Player_actor_Check_player_sunburn_ChangeDay();
     Player_actor_Check_player_sunburn_for_main(actor);
-    Player_actor_Check_player_change_color_for_main(actor);
+    Player_actor_Check_player_change_color_for_main(actor, game);
 #if VERSION >= VER_GAFU01_00
     Player_actor_Reset_item_net_catch_correct_pos(actor);
 #endif
@@ -262,7 +262,7 @@ static void Player_actor_move_other_func2(ACTOR* actor, GAME* game) {
     Player_actor_check_forward(actor, game);
     mFI_SetPlayerWade(game);
     Player_actor_check_little_shake_tree(actor, game);
-    Player_actor_check_shake_tree_timer(actor);
+    Player_actor_check_shake_tree_timer(actor, game);
     Player_actor_check_pitfall(actor, game);
     Player_actor_set_ripple(actor, game);
 

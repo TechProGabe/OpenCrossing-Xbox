@@ -1,9 +1,10 @@
 static void aINS_position_move(ACTOR* actorx) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
     s16 angleY = actorx->world.angle.y;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
 
     xyz_t_move(&actorx->last_world_position, &actorx->world.position);
-    chase_f(&actorx->speed, insect->target_speed, insect->speed_step * 0.5f);
+    chase_f(&actorx->speed, insect->target_speed, insect->speed_step * 0.5f * dt);
     actorx->position_speed.x = actorx->speed * sin_s(angleY);
     actorx->position_speed.z = actorx->speed * cos_s(angleY);
 
@@ -18,7 +19,7 @@ static void aINS_position_move(ACTOR* actorx) {
             break;
 
         default:
-            chase_f(&actorx->position_speed.y, actorx->max_velocity_y, actorx->gravity * 0.5f);
+            chase_f(&actorx->position_speed.y, actorx->max_velocity_y, actorx->gravity * 0.5f * dt);
             break;
     }
 
@@ -182,7 +183,7 @@ static void aINS_calc_patience(ACTOR* actorx, GAME* game) {
     f32 stress = aINS_get_stress(actorx, game);
 
     if (F32_IS_ZERO(stress)) {
-        insect->patience -= aINS_PATIENCE_STEP;
+        insect->patience -= aINS_PATIENCE_STEP * (f32)game->graph->dt_num_60fps_frames;
         if (insect->patience < 0.0f) {
             insect->patience = 0.0f;
         }
@@ -194,34 +195,38 @@ static void aINS_calc_patience(ACTOR* actorx, GAME* game) {
     }
 }
 
-static void aINS_calc_life_time(aINS_INSECT_ACTOR* insect) {
-    insect->life_time--;
+static void aINS_calc_life_time(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->life_time -= (f32)game->graph->dt_num_60fps_frames;
 
-    if (insect->life_time <= 0) {
+    if (insect->life_time <= 0.0f) {
         insect->insect_flags.bit_3 = TRUE;
-        insect->life_time = 0;
+        insect->life_time = 0.0f;
     }
 }
 
-static void aINS_calc_alpha_time(aINS_INSECT_ACTOR* insect) {
-    if (insect->life_time != 0) {
+static void aINS_calc_alpha_time(aINS_INSECT_ACTOR* insect, GAME* game) {
+    f32 dt;
+    f32 fade_frames;
+
+    if (insect->life_time != 0.0f) {
         return;
     }
 
-    if (insect->alpha_time <= 0) {
+    if (insect->alpha_time <= 0.0f) {
         return;
     }
 
-    insect->alpha_time--;
-    if (insect->alpha_time >= 24) {
+    dt = (f32)game->graph->dt_num_60fps_frames;
+    insect->alpha_time -= dt;
+    fade_frames = 24.0f - insect->alpha_time;
+    if (fade_frames <= 0.0f) {
         return;
     }
 
     switch (insect->type) {
         case aINS_INSECT_TYPE_FIREFLY: {
-            int alpha = insect->alpha2;
+            int alpha = (int)(fade_frames * 11.0f);
 
-            alpha += 11;
             if (alpha >= 255) {
                 alpha = 255;
                 insect->alpha0 = 0;
@@ -234,9 +239,8 @@ static void aINS_calc_alpha_time(aINS_INSECT_ACTOR* insect) {
         }
 
         default: {
-            int alpha = insect->alpha0;
+            int alpha = 255 - (int)(fade_frames * 11.0f);
 
-            alpha -= 11;
             if (alpha <= 0) {
                 alpha = 0;
                 insect->insect_flags.destruct = TRUE;
@@ -378,8 +382,8 @@ static void aINS_actor_move(ACTOR* actorx, GAME* game) {
                 aINS_set_player_info(actorx, player);
                 aINS_BGcheck(actorx);
                 aINS_calc_patience(actorx, game);
-                aINS_calc_life_time(insect);
-                aINS_calc_alpha_time(insect);
+                aINS_calc_life_time(insect, game);
+                aINS_calc_alpha_time(insect, game);
                 (*actorx->mv_proc)(actorx, game);
                 Actor_world_to_eye(actorx, 0.0f);
                 aINS_set_catch_range(actorx);

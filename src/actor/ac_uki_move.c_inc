@@ -15,6 +15,25 @@ static void aUKI_set_value(ACTOR* actorx, xyz_t pos, xyz_t pos_speed, int angle_
     uki->command = command;
 }
 
+static f32 aUKI_dt_step(f32 step) {
+    return step * (f32)gamePT->graph->dt_num_60fps_frames;
+}
+
+static s16 aUKI_dt_angle_step(s16 step) {
+    f32 dt_step;
+
+    if (step == 0) {
+        return 0;
+    }
+
+    dt_step = (f32)step * (f32)gamePT->graph->dt_num_60fps_frames;
+    if (dt_step < 1.0f) {
+        dt_step = 1.0f;
+    }
+
+    return (s16)dt_step;
+}
+
 static mActor_name_t aUKI_get_fish_type(ACTOR* actorx) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
     // clang-format off
@@ -138,7 +157,7 @@ static void aUKI_BGcheck(ACTOR* actorx) {
                     uki->range = 12.0f;
                     y = 0.0f;
                 } else {
-                    chase_f(&uki->range, 40.0f, 0.05f);
+                    chase_f(&uki->range, 40.0f, aUKI_dt_step(0.05f));
                     y = -12.0f;
                 }
             } else {
@@ -315,9 +334,9 @@ static void aUKI_movement(ACTOR* actorx, GAME* game) {
                 uki->touch_timer = 0;
             }
 
-            chase_f(&actorx->speed, 0.45f, 0.1f);
+            chase_f(&actorx->speed, 0.45f, aUKI_dt_step(0.1f));
         } else {
-            chase_f(&actorx->speed, 0.225f, 0.1f);
+            chase_f(&actorx->speed, 0.225f, aUKI_dt_step(0.1f));
         }
 
         actorx->position_speed.x = actorx->speed * sin_s(flow_angle);
@@ -334,7 +353,7 @@ static void aUKI_movement(ACTOR* actorx, GAME* game) {
         actorx->position_speed.z = actorx->speed * cos_s(actorx->player_angle_y);
     }
 
-    if (actorx->player_distance_xz > 127.0f && (play->game_frame % 10) == 0) {
+    if (actorx->player_distance_xz > 127.0f && graph_dt_period_elapsed(game, &uki->hamon_accum, 10.0f)) {
         aUKI_effect_hamon(actorx, game, 4);
     }
 }
@@ -432,7 +451,7 @@ static void aUKI_set_spd_relations_in_water(ACTOR* actorx, GAME* game) {
             flow_angle = aUKI_Get_flow_angle(actorx);
             idx = ABS((s16)(actorx->world.angle.y - flow_angle)) > DEG2SHORT_ANGLE2(90.0f);
 
-            chase_angle(&actorx->world.angle.y, flow_angle, angl_add_table[idx]);
+            chase_angle(&actorx->world.angle.y, flow_angle, aUKI_dt_angle_step(angl_add_table[idx]));
             actorx->shape_info.rotation.y = actorx->world.angle.y;
         }
 
@@ -592,7 +611,7 @@ static void aUKI_wait(ACTOR* actorx, GAME* game) {
 
     uki->hit_water_flag = FALSE;
     uki->uki_pos = actorx->world.position;
-    chase_f(&actorx->position_speed.y, actorx->max_velocity_y, actorx->gravity);
+    chase_f(&actorx->position_speed.y, actorx->max_velocity_y, aUKI_dt_step(actorx->gravity));
 
     if (aUKI_force_command(actorx, game) == FALSE) {
         int timer;
@@ -651,7 +670,7 @@ static void aUKI_hit(ACTOR* actorx, GAME* game) {
 static void aUKI_touch(ACTOR* actorx, GAME* game) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
 
-    chase_f(&actorx->position_speed.y, actorx->max_velocity_y, actorx->gravity);
+    chase_f(&actorx->position_speed.y, actorx->max_velocity_y, aUKI_dt_step(actorx->gravity));
     if (aUKI_force_command(actorx, game) == FALSE) {
         if (uki->gyo_command == 2) {
             aUKI_touch_vib_proc(uki);
@@ -704,7 +723,7 @@ static void aUKI_bite(ACTOR* actorx, GAME* game) {
     };
     // clang-format on
 
-    chase_f(&actorx->position_speed.y, actorx->max_velocity_y, actorx->gravity);
+    chase_f(&actorx->position_speed.y, actorx->max_velocity_y, aUKI_dt_step(actorx->gravity));
     if (aUKI_force_command(actorx, game) == FALSE) {
         if (uki->gyo_command == 2) {
             if (uki->command == 6) {
@@ -725,7 +744,7 @@ static void aUKI_bite(ACTOR* actorx, GAME* game) {
                     s16 idx = gyoei_type[uki->gyo_type].size;
                     f32 angle = angl[idx];
 
-                    actorx->world.angle.y += (int)(angle * 0.5f);
+                    actorx->world.angle.y += (int)aUKI_dt_step(angle * 0.5f);
                     actorx->shape_info.rotation.y = actorx->world.angle.y;
                     actorx->speed = spd[idx];
                     actorx->position_speed.x = actorx->speed * sin_s(actorx->world.angle.y);
@@ -742,7 +761,7 @@ static void aUKI_bite(ACTOR* actorx, GAME* game) {
                     uki->status = aUKI_STATUS_VIB;
                 }
             } else {
-                if ((game->frame_counter % 10) == 0) {
+                if (graph_dt_period_elapsed(game, &uki->touch_vib_accum, 10.0f)) {
                     aUKI_touch_vib_proc(uki);
                 }
 

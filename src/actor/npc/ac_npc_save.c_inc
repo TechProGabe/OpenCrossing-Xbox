@@ -17,7 +17,7 @@ static void aNPC_actor_save_for_normal(ACTOR* actorx) {
     animal->cloth = nactorx->draw.next_cloth_no;
     animal->cloth_original_id = nactorx->draw.next_org_idx;
 
-    if (nactorx->condition_info.feel_tim == 0) {
+    if (nactorx->condition_info.feel_tim <= 0.0f) {
         animal->mood = mNpc_FEEL_NORMAL;
         animal->mood_time = 0;
     } else {
@@ -36,7 +36,7 @@ static void aNPC_actor_save_for_normal(ACTOR* actorx) {
                 feel_tim = 0;
                 break;
             default:
-                feel_tim = nactorx->condition_info.feel_tim / FRAMES_PER_MINUTE;
+                feel_tim = (int)(nactorx->condition_info.feel_tim / FRAMES_PER_MINUTE);
                 break;
         }
 

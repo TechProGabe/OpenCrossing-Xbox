@@ -43,7 +43,7 @@ static void Player_actor_request_proc_index_fromDemo_get_golden_axe_wait(ACTOR* 
     timer_p = &demo_get_golden_axe_wait_p->timer;
 
     if (*timer_p < 320.0f) {
-        (*timer_p) += 1.0f;
+        (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
     } else {
         mPlib_request_main_demo_get_golden_item2_type1(game, mPlayer_GOLDEN_ITEM_TYPE_AXE);
     }

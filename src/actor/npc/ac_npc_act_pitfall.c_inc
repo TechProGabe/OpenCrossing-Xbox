@@ -28,8 +28,8 @@ static void aNPC_act_pitfall_totter(NPC_ACTOR* nactorx, GAME_PLAY* play) {
         move_flag = TRUE;
     }
 
-    move_flag &= chase_f(&nactorx->actor_class.world.position.x, nactorx->movement.dst_pos_x, 1.5f);
-    move_flag &= chase_f(&nactorx->actor_class.world.position.z, nactorx->movement.dst_pos_z, 1.5f);
+    move_flag &= chase_f(&nactorx->actor_class.world.position.x, nactorx->movement.dst_pos_x, aNPC_dt_float_step(1.5f));
+    move_flag &= chase_f(&nactorx->actor_class.world.position.z, nactorx->movement.dst_pos_z, aNPC_dt_float_step(1.5f));
 
     if (!aNPC_act_anm_seq(nactorx) && move_flag == TRUE) {
         u8 step;

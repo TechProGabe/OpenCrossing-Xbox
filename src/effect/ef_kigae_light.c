@@ -45,22 +45,24 @@ static void eKigae_Light_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eKigae_Light_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     f32 scale;
 
-    if (effect->timer > 20) {
-        scale = eEC_CLIP->calc_adjust_proc(effect->timer, 20, 30, 0.009f, 0.0f);
-        effect->scale.x = scale;
-        effect->scale.y = scale;
-        effect->scale.z = scale;
+    if (effect->lifetime > 20.0f) {
+        scale = eEL_CalcAdjust_F(effect->lifetime, 20.0f, 30.0f, 0.009f, 0.0f);
     } else {
-        scale = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 20, 0.0f, 0.009f);
-        effect->scale.x = scale;
-        effect->scale.y = scale;
-        effect->scale.z = scale;
+        scale = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 20.0f, 0.0f, 0.009f);
     }
+    effect->scale.x = scale;
+    effect->scale.y = scale;
+    effect->scale.z = scale;
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 }
 
 extern Gfx ef_takurami01_normal_render_mode[];

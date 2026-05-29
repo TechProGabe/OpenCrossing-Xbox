@@ -172,7 +172,7 @@ static int Player_actor_MessageControl_Pull_net(ACTOR* actor) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actor;
     mPlayer_main_pull_net_c* main_pull = &player->main_data.pull_net;
 
-    main_pull->timer += 1.0f;
+    main_pull->timer += (f32)gamePT->graph->dt_num_60fps_frames;
 
     if (main_pull->timer > 50.0f) {
         main_pull->timer = 50.0f;

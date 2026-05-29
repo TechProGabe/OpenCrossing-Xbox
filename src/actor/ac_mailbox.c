@@ -181,9 +181,10 @@ static void aMBX_actor_draw(ACTOR* actorx, GAME* game) {
         _texture_z_light_fog_prim(graph);
 
         if (actor->anim_idx1 == aMBX_ANIME_FLAG_UP_WAIT) {
+            static f32 mbx_se_accum = 0.0f;
             Evw_Anime_Set(play, evw_table[Common_Get(time.season) == mTM_SEASON_WINTER]);
             if (Common_Get(player_no) == mHS_get_pl_no(actor->arrange_idx) &&
-                play->game_frame % FRAMES_PER_SECOND == 0) {
+                graph_dt_period_elapsed(game, &mbx_se_accum, (f32)FRAMES_PER_SECOND)) {
                 sAdo_OngenTrgStart(0x43B, &actorx->world.position);
             }
         } else {

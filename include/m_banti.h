@@ -35,7 +35,7 @@ typedef struct banti_callback_s {
 typedef struct banti_s {
   int addressable_type;
   int disabled;
-  int timer;
+  f32 timer;
   f32 alpha;
   int disp_left;
   int move_left;

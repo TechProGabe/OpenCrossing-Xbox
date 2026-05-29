@@ -95,7 +95,8 @@ static void aNM2_set_camera(NPC_MASK_CAT2_ACTOR* actorx, GAME_PLAY* play) {
     eye.z = 400.0f;
 
     /* Move NPC head to current target */
-    chase_f(&actorx->npc_class.eye_y, obj_look_y_max[obj_look_type], obj_look_y_spd[obj_look_type] * 0.5f);
+    chase_f(&actorx->npc_class.eye_y, obj_look_y_max[obj_look_type],
+            aNPC_dt_float_step(obj_look_y_spd[obj_look_type] * 0.5f));
 
     /* Set ground pos */
     ground.x = actorx->npc_class.draw.shadow_pos.x;
@@ -108,7 +109,7 @@ static void aNM2_set_camera(NPC_MASK_CAT2_ACTOR* actorx, GAME_PLAY* play) {
         ground_y = mCoBG_GetBgY_OnlyCenter_FromWpos2(ground, 0.0f);
     }
 
-    chase_f(&actorx->obj_dist_ground, ground_y, 0.5f);
+    chase_f(&actorx->obj_dist_ground, ground_y, aNPC_dt_float_step(0.5f));
     ground.y = actorx->obj_dist_ground;
 
     /* Set camera center pos */
@@ -436,7 +437,7 @@ static void aNM2_walk_deck(ACTOR* actorx, GAME* game) {
 static void aNM2_turn_deck(ACTOR* actorx, GAME* game) {
     NPC_MASK_CAT2_ACTOR* mask_cat2_actor = (NPC_MASK_CAT2_ACTOR*)actorx;
     GAME_PLAY* play = (GAME_PLAY*)game;
-    if (chase_angle(&actorx->shape_info.rotation.y, 0, 0x600) == TRUE) {
+    if (chase_angle(&actorx->shape_info.rotation.y, 0, aNPC_dt_angle_step(0x600)) == TRUE) {
         aNM2_setupAction(actorx, game, aNM2_MOVE_ENTER);
         mask_cat2_actor->npc_class.draw.main_animation.keyframe.morph_counter = 0.0f;
     }
@@ -534,7 +535,8 @@ static void aNM2_talk_start_wait(ACTOR* actorx, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
     if (mDemo_Check(mDemo_TYPE_SPEAK, actorx) == TRUE) {
         if ((mDemo_Check_ListenAble() == FALSE) &&
-            (chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, 0x400) == TRUE)) {
+            (chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, aNPC_dt_angle_step(0x400)) ==
+             TRUE)) {
             aNM2_setupAction(&mask_cat2_actor->npc_class.actor_class, game, aNM2_MOVE_SITDOWN_START_WAIT);
             mDemo_Set_ListenAble();
         }
@@ -559,7 +561,8 @@ static void aNM2_talk_start_wait2(ACTOR* actorx, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
     if (mDemo_Check(mDemo_TYPE_SPEAK, actorx) == TRUE) {
         if ((mDemo_Check_ListenAble() == FALSE) &&
-            (chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, 0x400) == TRUE)) {
+            (chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, aNPC_dt_angle_step(0x400)) ==
+             TRUE)) {
             aNM2_setupAction(&mask_cat2_actor->npc_class.actor_class, game, 17);
             mDemo_Set_ListenAble();
         }

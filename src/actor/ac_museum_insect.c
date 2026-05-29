@@ -688,6 +688,8 @@ const f32 base_high_tbl[4] = {
 
 // clang-format on
 MUSEUM_INSECT_ACTOR* MI_Control_Actor = NULL;
+static MUSEUM_INSECT_PRIVATE_DATA* MI_Draw_1894 = NULL;
+static MUSEUM_INSECT_PRIVATE_DATA* MI_Draw_1CA0 = NULL;
 
 #include "../src/actor/ac_museum_insect_base.c_inc"
 
@@ -817,10 +819,217 @@ void Museum_Insect_Talk_process(ACTOR* actorx, GAME* game) {
     }
 }
 
+static f32 Museum_Insect_LerpF(f32 from, f32 to, f32 alpha) {
+    return from + ((to - from) * alpha);
+}
+
+static s16 Museum_Insect_LerpAngle(s16 from, s16 to, f32 alpha) {
+    s16 diff = (s16)(to - from);
+    return from + (s16)((f32)diff * alpha);
+}
+
+static xyz_t Museum_Insect_LerpXYZ(xyz_t from, xyz_t to, f32 alpha) {
+    xyz_t out;
+
+    out.x = Museum_Insect_LerpF(from.x, to.x, alpha);
+    out.y = Museum_Insect_LerpF(from.y, to.y, alpha);
+    out.z = Museum_Insect_LerpF(from.z, to.z, alpha);
+
+    return out;
+}
+
+static s_xyz Museum_Insect_LerpSXYZ(s_xyz from, s_xyz to, f32 alpha) {
+    s_xyz out;
+
+    out.x = Museum_Insect_LerpAngle(from.x, to.x, alpha);
+    out.y = Museum_Insect_LerpAngle(from.y, to.y, alpha);
+    out.z = Museum_Insect_LerpAngle(from.z, to.z, alpha);
+
+    return out;
+}
+
+static BOOL Museum_Insect_ShouldInterpolateMotion(s16 type) {
+    switch (type) {
+        case aINS_INSECT_TYPE_COMMON_BUTTERFLY:
+        case aINS_INSECT_TYPE_YELLOW_BUTTERFLY:
+        case aINS_INSECT_TYPE_TIGER_BUTTERFLY:
+        case aINS_INSECT_TYPE_PURPLE_BUTTERFLY:
+        case aINS_INSECT_TYPE_ROBUST_CICADA:
+        case aINS_INSECT_TYPE_WALKER_CICADA:
+        case aINS_INSECT_TYPE_EVENING_CICADA:
+        case aINS_INSECT_TYPE_BROWN_CICADA:
+        case aINS_INSECT_TYPE_BEE:
+        case aINS_INSECT_TYPE_COMMON_DRAGONFLY:
+        case aINS_INSECT_TYPE_RED_DRAGONFLY:
+        case aINS_INSECT_TYPE_DARNER_DRAGONFLY:
+        case aINS_INSECT_TYPE_BANDED_DRAGONFLY:
+        case aINS_INSECT_TYPE_FIREFLY:
+        case aINS_INSECT_TYPE_BAGWORM:
+        case aINS_INSECT_TYPE_SPIDER:
+        case aINS_INSECT_TYPE_MOSQUITO:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
+static void Museum_Insect_CopyLogicState(MUSEUM_INSECT_ACTOR* actor) {
+    int i;
+
+    for (i = 0; i < aINS_INSECT_TYPE_NUM; i++) {
+        actor->prevPrivInsects[i] = actor->privInsects[i];
+    }
+
+    for (i = 0; i < 6; i++) {
+        actor->prev_1894[i] = actor->_1894[i];
+    }
+
+    for (i = 0; i < 15; i++) {
+        actor->prev_1CA0[i] = actor->_1CA0[i];
+    }
+}
+
+static void Museum_Insect_RefreshPosSounds(MUSEUM_INSECT_ACTOR* actor, GAME* game) {
+    static u8 batta_sound_data[4] = { 0x9f, 0x9e, 0xa0, 0x9d };
+    static const u8 semi_sound_data[4] = { 0x9b, 0x9a, 0x98, 0x97 };
+    PLAYER_ACTOR* player = get_player_actor_withoutCheck((GAME_PLAY*)game);
+    xyz_t player_pos = player->actor_class.world.position;
+    MUSEUM_INSECT_PRIVATE_DATA* insect;
+    f32 dist;
+
+    insect = &actor->privInsects[aINS_INSECT_TYPE_COCKROACH];
+    if ((insect->_8C & 1) && insect->_72 == 0 && insect->_40 > 0.0f) {
+        sAdo_OngenPos((u32)insect, 0xa8, &insect->_1C);
+    }
+
+    insect = &actor->privInsects[aINS_INSECT_TYPE_MOSQUITO];
+    if ((insect->_8C & 1) && search_position_distanceXZ(&insect->_1C, &player_pos) < 300.0f) {
+        sAdo_OngenPos((u32)insect, 0xcf, &insect->_1C);
+    }
+
+    insect = &actor->privInsects[aINS_INSECT_TYPE_MOLE_CRICKET];
+    if (insect->_8C & 1) {
+        dist = search_position_distance(&insect->_1C, &player_pos);
+        if (insect->_04 == okera_dig_wait_process && dist < 200.0f) {
+            sAdo_OngenPos((u32)insect, 68, &insect->_1C);
+        } else if (insect->_04 == okera_dig_up_process && dist < 200.0f) {
+            sAdo_OngenPos((u32)insect, 69, &insect->_1C);
+        }
+    }
+
+    {
+        int i;
+
+        for (i = aINS_INSECT_TYPE_ROBUST_CICADA; i <= aINS_INSECT_TYPE_BROWN_CICADA; i++) {
+            insect = &actor->privInsects[i];
+            if ((insect->_8C & 1) && insect->_8E && insect->_78 == 1 && insect->_72 == insect->_74 &&
+                search_position_distance(&insect->_1C, &player_pos) < 200.0f) {
+                sAdo_OngenPos((u32)insect, semi_sound_data[i - aINS_INSECT_TYPE_ROBUST_CICADA], &insect->_1C);
+            }
+        }
+
+        for (i = aINS_INSECT_TYPE_CRICKET; i <= aINS_INSECT_TYPE_PINE_CRICKET; i++) {
+            insect = &actor->privInsects[i];
+            if ((insect->_8C & 1) && insect->_04 != minsect_batta_jump_process &&
+                ((insect->_04 != minsect_batta_silent_process && insect->_8E) ||
+                 (insect->_04 == minsect_batta_silent_process && insect->_8E == 0)) &&
+                search_position_distanceXZ(&insect->_1C, &player_pos) < 200.0f) {
+                sAdo_OngenPos((u32)insect, batta_sound_data[i - aINS_INSECT_TYPE_CRICKET], &insect->_1C);
+            }
+        }
+    }
+}
+
+static void Museum_Insect_InterpolatePrivate(MUSEUM_INSECT_PRIVATE_DATA* out,
+                                             const MUSEUM_INSECT_PRIVATE_DATA* from,
+                                             const MUSEUM_INSECT_PRIVATE_DATA* to, f32 alpha, BOOL allow_motion) {
+    *out = *to;
+
+    if ((from->_8C & 1) == 0 || (to->_8C & 1) == 0) {
+        return;
+    }
+
+    if (!allow_motion || !Museum_Insect_ShouldInterpolateMotion(to->_00)) {
+        return;
+    }
+
+    out->_1C = Museum_Insect_LerpXYZ(from->_1C, to->_1C, alpha);
+    out->_28 = Museum_Insect_LerpXYZ(from->_28, to->_28, alpha);
+    out->_34 = Museum_Insect_LerpXYZ(from->_34, to->_34, alpha);
+    out->_44 = Museum_Insect_LerpXYZ(from->_44, to->_44, alpha);
+    out->_68 = Museum_Insect_LerpSXYZ(from->_68, to->_68, alpha);
+    out->_58 = Museum_Insect_LerpF(from->_58, to->_58, alpha);
+    out->_60 = Museum_Insect_LerpF(from->_60, to->_60, alpha);
+
+    if (to->_00 != aINS_INSECT_TYPE_FIREFLY) {
+        out->_5C = Museum_Insect_LerpF(from->_5C, to->_5C, alpha);
+    } else {
+        out->_0C = Museum_Insect_LerpF(from->_0C, to->_0C, alpha);
+        out->_76 = Museum_Insect_LerpAngle(from->_76, to->_76, alpha);
+        out->_7A = Museum_Insect_LerpAngle(from->_7A, to->_7A, alpha);
+        out->_7E = Museum_Insect_LerpAngle(from->_7E, to->_7E, alpha);
+    }
+}
+
+static void Museum_Insect_InterpolateFireflyFields(MUSEUM_INSECT_PRIVATE_DATA* out,
+                                                   const MUSEUM_INSECT_PRIVATE_DATA* from,
+                                                   const MUSEUM_INSECT_PRIVATE_DATA* to, f32 alpha) {
+    if ((from->_8C & 1) == 0 || (to->_8C & 1) == 0) {
+        return;
+    }
+
+    out->_0C = Museum_Insect_LerpF(from->_0C, to->_0C, alpha);
+    out->_76 = Museum_Insect_LerpAngle(from->_76, to->_76, alpha);
+    out->_7A = Museum_Insect_LerpAngle(from->_7A, to->_7A, alpha);
+    out->_7E = Museum_Insect_LerpAngle(from->_7E, to->_7E, alpha);
+}
+
+static void Museum_Insect_InterpolateArray(MUSEUM_INSECT_PRIVATE_DATA* out, MUSEUM_INSECT_PRIVATE_DATA* from,
+                                           MUSEUM_INSECT_PRIVATE_DATA* to, int count, f32 alpha, BOOL firefly_fields,
+                                           BOOL allow_motion) {
+    int i;
+
+    for (i = 0; i < count; i++) {
+        Museum_Insect_InterpolatePrivate(&out[i], &from[i], &to[i], alpha, allow_motion);
+        if (firefly_fields) {
+            Museum_Insect_InterpolateFireflyFields(&out[i], &from[i], &to[i], alpha);
+        }
+    }
+}
+
+static void Museum_Insect_RunLogicTick(MUSEUM_INSECT_ACTOR* actor, GAME* game) {
+    int i;
+
+    Museum_Insect_CopyLogicState(actor);
+    for (i = 0; i < aINS_INSECT_TYPE_NUM; i++) {
+        if (actor->privInsects[i]._8C & 1) {
+            minsect_mv[i](&actor->privInsects[i], game);
+        }
+    }
+}
+
+static void Museum_Insect_RunFixedTicks(MUSEUM_INSECT_ACTOR* actor, GAME* game, int ticks) {
+    double saved_dt;
+    int tick;
+
+    if (ticks <= 0) {
+        return;
+    }
+
+    /* Fixed-step museum logic calls dt-aware helpers, so each tick must look like one frame. */
+    saved_dt = game->graph->dt_num_60fps_frames;
+    game->graph->dt_num_60fps_frames = 1.0f;
+    for (tick = 0; tick < ticks; tick++) {
+        Museum_Insect_RunLogicTick(actor, game);
+    }
+    game->graph->dt_num_60fps_frames = saved_dt;
+}
+
 void Museum_Insect_Actor_ct(ACTOR* actorx, GAME* game) {
     int i;
     MUSEUM_INSECT_ACTOR* actor = (MUSEUM_INSECT_ACTOR*)actorx;
     MI_Control_Actor = actor;
+    actor->logic_accum = 0.0f;
     for (i = 0; i < 5; i++) {
         actor->_2F9C[i] = 0;
     }
@@ -833,6 +1042,7 @@ void Museum_Insect_Actor_ct(ACTOR* actorx, GAME* game) {
             minsect_ct[i](&actor->privInsects[i], game);
         }
     }
+    Museum_Insect_CopyLogicState(actor);
 }
 
 void Museum_Insect_Actor_dt(ACTOR* actor, GAME* game) {
@@ -841,13 +1051,16 @@ void Museum_Insect_Actor_dt(ACTOR* actor, GAME* game) {
 
 void Museum_Insect_Actor_move(ACTOR* actorx, GAME* game) {
     MUSEUM_INSECT_ACTOR* actor = (MUSEUM_INSECT_ACTOR*)actorx;
-    int i;
+    int ticks;
+
     actorx->world.position.y = 4000.f;
     Museum_Insect_Talk_process(actorx, game);
-    for (i = 0; i < aINS_INSECT_TYPE_NUM; i++) {
-        if (actor->privInsects[i]._8C & 1) {
-            minsect_mv[i](&actor->privInsects[i], game);
-        }
+
+    ticks = graph_dt_60hz_ticks(game, &actor->logic_accum);
+    Museum_Insect_RunFixedTicks(actor, game, ticks);
+
+    if (ticks == 0) {
+        Museum_Insect_RefreshPosSounds(actor, game);
     }
 }
 
@@ -856,7 +1069,17 @@ extern Gfx obj_museum4_water_modelT[];
 
 void Museum_Insect_Actor_draw(ACTOR* actorx, GAME* game) {
     MUSEUM_INSECT_ACTOR* actor = (MUSEUM_INSECT_ACTOR*)actorx;
+    MUSEUM_INSECT_PRIVATE_DATA draw_actor;
+    MUSEUM_INSECT_PRIVATE_DATA draw_1894[6];
+    MUSEUM_INSECT_PRIVATE_DATA draw_1CA0[15];
+    f32 alpha = actor->logic_accum;
     int i;
+
+    if (alpha < 0.0f) {
+        alpha = 0.0f;
+    } else if (alpha > 1.0f) {
+        alpha = 1.0f;
+    }
 
     _texture_z_light_fog_prim_xlu(game->graph);
     Evw_Anime_Set((GAME_PLAY*)game, &obj_museum4_water_evw_anime);
@@ -869,16 +1092,23 @@ void Museum_Insect_Actor_draw(ACTOR* actorx, GAME* game) {
     gSPDisplayList(NEXT_POLY_XLU_DISP, obj_museum4_water_modelT);
     
     CLOSE_DISP(game->graph);
+
+    Museum_Insect_InterpolateArray(draw_1894, actor->prev_1894, actor->_1894, 6, alpha, TRUE, TRUE);
+    Museum_Insect_InterpolateArray(draw_1CA0, actor->prev_1CA0, actor->_1CA0, 15, alpha, FALSE, FALSE);
+    MI_Draw_1894 = draw_1894;
+    MI_Draw_1CA0 = draw_1CA0;
     
     for (i = 0; i < aINS_INSECT_TYPE_NUM; i++) {
         if (actor->privInsects[i]._8C & 1) {
+            Museum_Insect_InterpolatePrivate(&draw_actor, &actor->prevPrivInsects[i], &actor->privInsects[i], alpha,
+                                             TRUE);
             if (GETREG(TAKREG, 0) == i + 1) {
-                actor->privInsects[i]._14 = (GETREG(TAKREG, 1) * 0.0001f) + minsect_scale_tbl[i];
+                draw_actor._14 = (GETREG(TAKREG, 1) * 0.0001f) + minsect_scale_tbl[i];
             }
-            minsect_dw[i](&actor->privInsects[i], game);
-            if (GETREG(TAKREG, 0) == i + 1) {
-                actor->privInsects[i]._14 = minsect_scale_tbl[i];
-            }
+            minsect_dw[i](&draw_actor, game);
         }
     }
+
+    MI_Draw_1894 = NULL;
+    MI_Draw_1CA0 = NULL;
 }

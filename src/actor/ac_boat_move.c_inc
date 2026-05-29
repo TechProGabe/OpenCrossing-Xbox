@@ -16,6 +16,20 @@ static void aBT_passenger_ctrl(BOAT_ACTOR* boat_actor) {
     }
 }
 
+static f32 aBT_dt_step(f32 step) {
+    return step * (f32)gamePT->graph->dt_num_60fps_frames;
+}
+
+static s16 aBT_dt_angle_step(s16 step) {
+    f32 dt_step = (f32)step * (f32)gamePT->graph->dt_num_60fps_frames;
+
+    if (dt_step < 1.0f) {
+        dt_step = 1.0f;
+    }
+
+    return (s16)dt_step;
+}
+
 static int aBT_check_other_boat(ACTOR* actorx, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
     ACTOR* actor = play->actor_info.list[ACTOR_PART_ITEM].actor;
@@ -162,8 +176,8 @@ static void aBT_calc_wave_angl(BOAT_ACTOR* boat_actor, s16 angle) {
         var_r30 = 20;
     }
 
-    chase_angle(&_2CC_diff, 0, var_r5);
-    chase_angle(&_2D0_diff, 0, var_r30);
+    chase_angle(&_2CC_diff, 0, aBT_dt_angle_step(var_r5));
+    chase_angle(&_2D0_diff, 0, aBT_dt_angle_step(var_r30));
     boat_actor->_2CC = _2CC_diff;
     boat_actor->_2D0 = _2D0_diff;
 }
@@ -186,7 +200,7 @@ static void aBT_ctrl_rudder(BOAT_ACTOR* boat_actor, s16 p0, s16 p1, s16 p2) {
         step = 16;
     }
 
-    step /= 2.0f;
+    step = aBT_dt_angle_step((s16)(step * 0.5f));
     if (p0 == 0) {
         rudder = 0;
     } else if (p0 < 0) {
@@ -227,7 +241,7 @@ static void aBT_ctrl_direction(BOAT_ACTOR* boat_actor) {
 
     aBT_ctrl_rudder(boat_actor, p0, p1, p2);
 
-    rudder = FRAMERATE_ADJ(boat_actor->rudder * 0.5f);
+    rudder = aBT_dt_step(FRAMERATE_ADJ(boat_actor->rudder * 0.5f));
     if ((f32)p0 * rudder <= 0.0f && (f32)p1 < ABS(rudder)) {
         boat_actor->actor_class.world.angle.y = p2;
     } else {
@@ -260,7 +274,7 @@ static void aBT_calc_speed(BOAT_ACTOR* boat_actor) {
         step = 0.01f;
     }
 
-    chase_f(&boat_actor->actor_class.speed, target, step);
+    chase_f(&boat_actor->actor_class.speed, target, aBT_dt_step(step));
 }
 
 static void aBT_demo_ctrl_birth_wait(BOAT_ACTOR* boat_actor, GAME_PLAY* play) {
@@ -369,11 +383,11 @@ static void aBT_draw_up(BOAT_ACTOR* boat_actor, GAME_PLAY* play) {
     s16 anglY = boat_actor->actor_class.shape_info.rotation.y;
     int drawn_up_point = 0;
 
-    chase_f(&boat_actor->rudder, 16.0f, 0.5f);
+    chase_f(&boat_actor->rudder, 16.0f, aBT_dt_step(0.5f));
 
     /* Wait for proper rotation */
     if (chase_angle(&boat_actor->actor_class.shape_info.rotation.y, aBT_init_angleY[boat_actor->direction],
-                    FRAMERATE_ADJ(boat_actor->rudder)) == TRUE) {
+                    aBT_dt_angle_step(FRAMERATE_ADJ(boat_actor->rudder))) == TRUE) {
         drawn_up_point++;
     }
 
@@ -381,12 +395,12 @@ static void aBT_draw_up(BOAT_ACTOR* boat_actor, GAME_PLAY* play) {
     aBT_calc_wave_angl(boat_actor, boat_actor->actor_class.shape_info.rotation.y - anglY);
 
     /* Wait for proper X coordinate */
-    if (chase_f(&boat_actor->actor_class.world.position.x, last_chk_point->x, 0.05f) == TRUE) {
+    if (chase_f(&boat_actor->actor_class.world.position.x, last_chk_point->x, aBT_dt_step(0.05f)) == TRUE) {
         drawn_up_point++;
     }
 
     /* Wait for proper Z coordinate */
-    if (chase_f(&boat_actor->actor_class.world.position.z, last_chk_point->z, 0.05f) == TRUE) {
+    if (chase_f(&boat_actor->actor_class.world.position.z, last_chk_point->z, aBT_dt_step(0.05f)) == TRUE) {
         drawn_up_point++;
     }
 

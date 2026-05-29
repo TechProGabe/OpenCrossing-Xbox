@@ -240,6 +240,7 @@ struct furniture_actor_s {
     cKF_TextureAnimation_c tex_animation; /* used for texture animations like TVs */
     xyz_t scale;
     f32 birth_scale_modifier; /* modifies scale for "birth" animation */
+    f32 birth_anim_counter_f;
     s16 birth_anim_counter;
     s16 birth_anim_step;
     s16 rotation_delay_timer;
@@ -248,6 +249,7 @@ struct furniture_actor_s {
     s16 layer;             /* layer the furniture actor resides on */
     s16 _83E;
     s16 demo_status; /* set when a music player is interacted with */
+    f32 dust_timer_f;
     s16 dust_timer;
     mActor_name_t items[aFTR_KEEP_ITEM_COUNT]; /* used for holding items (music players & wardrobes)  */
     int _84C;

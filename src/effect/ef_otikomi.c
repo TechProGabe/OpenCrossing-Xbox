@@ -47,10 +47,11 @@ static void eOMN_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eOMN_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     float vel;
 
-    effect->effect_specific[0] += DEG2SHORT_ANGLE2(2.29f);
-    effect->effect_specific[1] += (int)effect->acceleration.x;
+    effect->effect_specific[0] += (s16)(DEG2SHORT_ANGLE2(2.29f) * dt);
+    effect->effect_specific[1] += (int)(effect->acceleration.x * dt);
 
     vel = effect->velocity.x * sin_s(effect->effect_specific[1]);
     effect->velocity.y = 1.0f - vel;
@@ -68,35 +69,40 @@ static void eOMN_dw(eEC_Effect_c* effect, GAME* game) {
     u8 alpha, alpha2;
     f32 scale_m, scale_y;
     GAME_PLAY* play = (GAME_PLAY*)game;
+    int scroll_t = (int)(graph_dt_frame_time(game) * 25.0);
 
-    gfx = two_tex_scroll_dolphin(game->graph, 0, 0, 0, 16, 16, 1, 0, play->game_frame * 25, 64, 32);
+    gfx = two_tex_scroll_dolphin(game->graph, 0, 0, 0, 16, 16, 1, 0, scroll_t, 64, 32);
 
-    switch (effect->state) {
-        case eEC_STATE_NORMAL:
-            timer = 22 - effect->timer;
-            scale_m = eEC_CLIP->calc_adjust_proc(timer, 0, 10, 0.0f, 0.01f);
-            scale_y = eEC_CLIP->calc_adjust_proc(timer, 10, 21, 0.0f, 0.0135f);
-            alpha = 255;
-            alpha2 = 100;
-            sAdo_OngenPos((u32)effect, 0x59, &effect->position);
-            break;
+    {
+        f32 t;
+        switch (effect->state) {
+            case eEC_STATE_NORMAL:
+                t = 22.0f - effect->lifetime;
+                scale_m = eEL_CalcAdjust_F(t, 0.0f, 10.0f, 0.0f, 0.01f);
+                scale_y = eEL_CalcAdjust_F(t, 10.0f, 21.0f, 0.0f, 0.0135f);
+                alpha = 255;
+                alpha2 = 100;
+                sAdo_OngenPos((u32)effect, 0x59, &effect->position);
+                break;
 
-        case eEC_STATE_CONTINUOUS:
-            sAdo_OngenPos((u32)effect, 0x59, &effect->position);
-            scale_m = 0.01f;
-            alpha = 255;
-            scale_y = 0.0135f;
-            alpha2 = 100;
-            break;
+            case eEC_STATE_CONTINUOUS:
+                sAdo_OngenPos((u32)effect, 0x59, &effect->position);
+                scale_m = 0.01f;
+                alpha = 255;
+                scale_y = 0.0135f;
+                alpha2 = 100;
+                break;
 
-        default:
-            timer = 10 - effect->timer;
-            scale_m = 0.01f;
-            scale_y = 0.0135f;
-            alpha = (int)eEC_CLIP->calc_adjust_proc(timer, 0, 9, 255.0f, 0.0f);
-            alpha2 = (int)eEC_CLIP->calc_adjust_proc(timer, 0, 9, 100.0f, 0.0f);
-            break;
+            default:
+                t = 10.0f - effect->lifetime;
+                scale_m = 0.01f;
+                scale_y = 0.0135f;
+                alpha = (int)eEL_CalcAdjust_F(t, 0.0f, 9.0f, 255.0f, 0.0f);
+                alpha2 = (int)eEL_CalcAdjust_F(t, 0.0f, 9.0f, 100.0f, 0.0f);
+                break;
+        }
     }
+    (void)timer;
 
     _texture_z_light_fog_prim_xlu(game->graph);
 

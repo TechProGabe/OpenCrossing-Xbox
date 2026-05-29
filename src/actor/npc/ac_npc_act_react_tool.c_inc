@@ -25,7 +25,7 @@ static void aNPC_act_react_tool_surprise(NPC_ACTOR* nactorx, GAME_PLAY* play) {
 
 static void aNPC_act_react_tool_surprise2(NPC_ACTOR* nactorx, GAME_PLAY* play) {
     if (!aNPC_act_anm_seq(nactorx)) {
-        nactorx->act_react_tool_timer = 5 * FRAMES_PER_SECOND;
+        nactorx->act_react_tool_timer = (f32)(5 * FRAMES_PER_SECOND);
         aNPC_act_react_tool_chg_step(nactorx, aNPC_ACT_REACT_TOOL_STEP_LOOK_PLAYER);
     }
 }
@@ -37,8 +37,8 @@ static void aNPC_act_react_tool_look_player(NPC_ACTOR* nactorx, GAME_PLAY* play)
         aNPC_set_head_request(nactorx, 4, aNPC_HEAD_TARGET_ACTOR, playerx, NULL);
     }
 
-    nactorx->act_react_tool_timer--;
-    if (nactorx->act_react_tool_timer < 0) {
+    nactorx->act_react_tool_timer -= (f32)play->game.graph->dt_num_60fps_frames;
+    if (nactorx->act_react_tool_timer <= 0.0f) {
         aNPC_setup_react_tool_end(nactorx);
     }
 }

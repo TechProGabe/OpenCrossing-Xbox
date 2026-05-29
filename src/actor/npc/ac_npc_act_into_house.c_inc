@@ -41,10 +41,11 @@ static void aNPC_act_into_house_turn(NPC_ACTOR* nactorx, GAME_PLAY* play) {
 }
 
 static void aNPC_act_into_house_approach(NPC_ACTOR* nactorx, GAME_PLAY* play) {
-    chase_f(&nactorx->actor_class.world.position.x, nactorx->movement.dst_pos_x, 0.25f);
+    chase_f(&nactorx->actor_class.world.position.x, nactorx->movement.dst_pos_x, aNPC_dt_float_step(0.25f));
 
     if (!aNPC_act_move(nactorx) &&
-        chase_angle(&nactorx->actor_class.shape_info.rotation.y, DEG2SHORT_ANGLE2(180.0f), 0x600)) {
+        chase_angle(&nactorx->actor_class.shape_info.rotation.y, DEG2SHORT_ANGLE2(180.0f),
+                    aNPC_dt_angle_step(0x600))) {
         if (nactorx->right_hand.item_type == aNPC_ITEM_TYPE_UMBRELLA) {
             if (CLIP(tools_clip)
                     ->aTOL_chg_request_mode_proc((ACTOR*)nactorx, nactorx->right_hand.item_actor_p,
@@ -89,9 +90,9 @@ static void aNPC_act_into_house_into(NPC_ACTOR* nactorx, GAME_PLAY* play) {
         nactorx->action.step = aNPC_ACTION_END_STEP;
     }
 
-    chase_f(&nactorx->actor_class.world.position.x, nactorx->movement.dst_pos_x, 0.5f);
-    chase_f(&nactorx->actor_class.world.position.z, nactorx->movement.dst_pos_z - 4.0f, 0.5f);
-    chase_angle(&nactorx->actor_class.shape_info.rotation.y, DEG2SHORT_ANGLE2(180.0f), 0x600);
+    chase_f(&nactorx->actor_class.world.position.x, nactorx->movement.dst_pos_x, aNPC_dt_float_step(0.5f));
+    chase_f(&nactorx->actor_class.world.position.z, nactorx->movement.dst_pos_z - 4.0f, aNPC_dt_float_step(0.5f));
+    chase_angle(&nactorx->actor_class.shape_info.rotation.y, DEG2SHORT_ANGLE2(180.0f), aNPC_dt_angle_step(0x600));
 }
 
 static void aNPC_act_into_house_main_proc(NPC_ACTOR* nactorx, GAME_PLAY* play) {

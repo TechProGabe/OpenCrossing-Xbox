@@ -21,18 +21,20 @@ enum {
 
 static void mCW_move_Move(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mCW_Ovl_c* cpwarning_ovl = submenu->overlay->cpwarning_ovl;
+    f32 dt = gamePT->graph->dt_num_60fps_frames;
 
     if (cpwarning_ovl->move_dir == mCW_MOVE_IN) {
-        cpwarning_ovl->scale += 0.2f;
+        cpwarning_ovl->scale += 0.2f * dt;
 
         if (cpwarning_ovl->scale > 1.0f) {
             cpwarning_ovl->scale = 1.0f;
             menu_info->proc_status = menu_info->next_proc_status;
             cpwarning_ovl->_00 = 0;
             cpwarning_ovl->_01 = 0;
+            cpwarning_ovl->counter_accum = 0.0f;
         }
     } else if (cpwarning_ovl->move_dir == mCW_MOVE_OUT) {
-        cpwarning_ovl->scale -= 0.2f;
+        cpwarning_ovl->scale -= 0.2f * dt;
 
         if (cpwarning_ovl->scale < 0.0f) {
             cpwarning_ovl->scale = 0.0f;
@@ -51,7 +53,7 @@ static void mCW_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         cpwarning_ovl->move_dir = mCW_MOVE_OUT;
         menu_info->proc_status = mSM_OVL_PROC_MOVE;
         cpwarning_ovl->scale = 1.0f;
-        cpwarning_ovl->_0C = 1.0f;
+        cpwarning_ovl->counter_accum = 0.0f;
         Now_Private->calendar.edit = cpwarning_ovl->diary_edit_mode;
     } else if ((trigger & BUTTON_CLEFT) != 0) {
         if (cpwarning_ovl->diary_edit_mode == 1) {
@@ -65,7 +67,12 @@ static void mCW_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         }
     }
 
-    cpwarning_ovl->_00 = (cpwarning_ovl->_00 + 1) % 30;
+    cpwarning_ovl->counter_accum += gamePT->graph->dt_num_60fps_frames;
+    while (cpwarning_ovl->counter_accum >= 1.0f) {
+        cpwarning_ovl->_00 = (cpwarning_ovl->_00 + 1) % 30;
+        cpwarning_ovl->counter_accum -= 1.0f;
+    }
+
     if (cpwarning_ovl->_00 < 15) {
         cpwarning_ovl->_01 = (int)(((f32)cpwarning_ovl->_00 * 255.0f) / 15.0f);
     } else {
@@ -170,7 +177,7 @@ static void mCW_cpwarning_ovl_init(Submenu* submenu, mSM_MenuInfo_c* menu_info) 
     menu_info->next_proc_status = mSM_OVL_PROC_PLAY;
     cpwarning_ovl->_06 = 30;
     cpwarning_ovl->scale = 0.0f;
-    cpwarning_ovl->_0C = 0.0f;
+    cpwarning_ovl->counter_accum = 0.0f;
     cpwarning_ovl->move_dir = mCW_MOVE_IN;
     sAdo_SysTrgStart(MONO(NA_SE_3));
     cpwarning_ovl->diary_edit_mode = Now_Private->calendar.edit;

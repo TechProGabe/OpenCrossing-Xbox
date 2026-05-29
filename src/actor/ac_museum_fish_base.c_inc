@@ -879,7 +879,7 @@ void Museum_Fish_DonkoBGCheck(MUSEUM_FISH_PRIVATE_DATA* actor, GAME* gamex) {
     actor->_612.x = atans_table(1.0f, -f26);
     if (f27 > 0.0f) {
         actor->position.y += f27;
-        actor->_5D0.y *= 0.95f;
+        actor->_5D0.y *= DTCONV_GAME(0.95f, gamex);
     }
 }
 
@@ -1559,7 +1559,7 @@ s16 mfish_get_escape_angle(MUSEUM_FISH_PRIVATE_DATA* actor, GAME* game) {
             if (actor->_5E8 > 0.0f) {
                 add_calc2(&actor->_5E8, actor->init_data._14 + actor->init_data._10, 0.25f, 0.1f);
             } else {
-                actor->_5E8 *= 0.95f;
+                actor->_5E8 *= DTCONV_GAME(0.95f, game);
             }
         }
 
@@ -1634,8 +1634,7 @@ void mfish_move_smooth(MUSEUM_FISH_PRIVATE_DATA* actor, GAME* game) {
 }
 
 void mfish_hamon_make(MUSEUM_FISH_PRIVATE_DATA* actor, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    if ((play->game_frame & 7) == 0 &&
+    if (graph_dt_period_elapsed(game, &actor->hamon_accum, 8.0f) &&
         ((actor->_62E_flags & 0x1e) == 0 || ABS((s16)(actor->_62C - actor->_60C.y)) < DEG2SHORT_ANGLE(80))) {
         xyz_t p = actor->position;
         p.y = 115.0f;

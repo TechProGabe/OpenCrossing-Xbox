@@ -91,7 +91,7 @@ static int Player_actor_MessageControl_Notice_bee(ACTOR* actorx) {
     switch (*msg_mode_p) {
         case 0: {
             if (*timer_p < 0.0f) {
-                (*timer_p) += 1.0f;
+                (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
             } else {
                 *msg_mode_p = 1;
             }

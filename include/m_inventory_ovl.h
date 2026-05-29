@@ -56,7 +56,7 @@ enum {
 };
 
 typedef struct inventory_effect_s {
-    int timer;
+    f32 timer;
     xyz_t pos;
     f32 scale;
     f32 speed;

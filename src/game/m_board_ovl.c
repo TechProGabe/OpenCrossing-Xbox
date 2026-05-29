@@ -780,7 +780,7 @@ static void mBD_roll_control(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
                 }
             }
 
-            chase_f(&menu_info->position[1], pos, menu_info->speed[1]);
+            chase_f(&menu_info->position[1], pos, menu_info->speed[1] * (f32)gamePT->graph->dt_num_60fps_frames);
         } else {
             /* Close enough so immediately move to final position */
             menu_info->position[1] = pos;

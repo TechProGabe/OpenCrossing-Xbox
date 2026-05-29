@@ -606,7 +606,7 @@ static int aNPC_force_talk_request(ACTOR* actorx) {
         int friendship = *friendship_p + nactorx->condition_info.over_friendship;
 
         if (friendship > 0x80 && nactorx->action.type == aNPC_ACT_TYPE_SEARCH &&
-            nactorx->action.act_obj == aNPC_ACT_OBJ_PLAYER && nactorx->think.force_call_timer == 0 &&
+            nactorx->action.act_obj == aNPC_ACT_OBJ_PLAYER && nactorx->think.force_call_timer <= 0.0f &&
             actorx->player_distance_xz < 80.0f && ABS(actorx->player_distance_y) < 60.0f) {
             mDemo_Request(mDemo_TYPE_SPEAK, actorx, &aNPC_set_talk_info_talk_request_check);
             ret = TRUE;

@@ -12,7 +12,7 @@ static int aNPC_act_chase_insect_check_end(NPC_ACTOR* nactorx) {
     ACTOR* target = nactorx->movement.target;
     int ret = FALSE;
 
-    if (nactorx->action.act_timer == 0) {
+    if (nactorx->action.act_timer <= 0.0f) {
         ret = TRUE;
     } else if (nactorx->action.act_obj == aNPC_ACT_OBJ_INSECT) {
         switch (target->id) {

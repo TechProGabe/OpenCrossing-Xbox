@@ -140,7 +140,7 @@ static int aPMAN_search_angle(NPC_POST_MAN* actor) {
     int idx = actor->move_idx;
     s16 target_angle = search_position_angleY(&actor->npc_class.actor_class.world.position, &aPMAN_move_pos[idx]);
     s16* angle_p = &actor->npc_class.actor_class.shape_info.rotation.y;
-    int ret = chase_angle(angle_p, target_angle, DEG2SHORT_ANGLE2(5.625f));
+    int ret = chase_angle(angle_p, target_angle, aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f)));
 
     actor->npc_class.actor_class.world.angle.y = *angle_p;
     return ret;
@@ -180,7 +180,8 @@ static void aPMAN_enter(NPC_POST_MAN* actor, GAME_PLAY* play) {
 
     {
         s16 angle = search_position_angleY(pos_p, &landing_pos);
-        chase_angle(&actor->npc_class.actor_class.world.angle.y, angle, DEG2SHORT_ANGLE2(5.625f));
+        chase_angle(&actor->npc_class.actor_class.world.angle.y, angle,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f)));
         actor->npc_class.actor_class.shape_info.rotation.y = actor->npc_class.actor_class.world.angle.y;
     }
 
@@ -266,7 +267,7 @@ static void aPMAN_delivery_turn(NPC_POST_MAN* actor, GAME_PLAY* play) {
     s16 target_angle = search_position_angleY(&actor->npc_class.actor_class.world.position, &aPMAN_mailbox_pos[idx]);
     s16* angle_p = &actor->npc_class.actor_class.shape_info.rotation.y;
 
-    if (chase_angle(angle_p, target_angle, DEG2SHORT_ANGLE2(5.625f)) == TRUE) {
+    if (chase_angle(angle_p, target_angle, aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f))) == TRUE) {
         aPMAN_setupAction(actor, play, aPMAN_ACT_DELIVERY);
     }
 
@@ -290,7 +291,8 @@ static void aPMAN_delivery(NPC_POST_MAN* actor, GAME_PLAY* play) {
 static void aPMAN_talk_turn(NPC_POST_MAN* actor, GAME_PLAY* play) {
     s16* angle_p = &actor->npc_class.actor_class.shape_info.rotation.y;
 
-    if (chase_angle(angle_p, actor->npc_class.actor_class.player_angle_y, DEG2SHORT_ANGLE2(5.625f)) == TRUE) {
+    if (chase_angle(angle_p, actor->npc_class.actor_class.player_angle_y,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f))) == TRUE) {
         aPMAN_setupAction(actor, play, aPMAN_ACT_TALK_END_WAIT);
     }
 
@@ -344,7 +346,8 @@ static void aPMAN_exit(NPC_POST_MAN* actor, GAME_PLAY* play) {
     {
         xyz_t* pos_p = &actor->npc_class.actor_class.world.position;
         s16 angle = search_position_angleY(pos_p, &exit_pos[idx]);
-        chase_angle(&actor->npc_class.actor_class.world.angle.y, angle, DEG2SHORT_ANGLE2(5.625f));
+        chase_angle(&actor->npc_class.actor_class.world.angle.y, angle,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f)));
         actor->npc_class.actor_class.shape_info.rotation.y = actor->npc_class.actor_class.world.angle.y;
     }
 

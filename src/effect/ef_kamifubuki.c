@@ -3,6 +3,7 @@
 #include "m_rcp.h"
 #include "sys_matrix.h"
 #include "m_debug.h"
+#include "graph.h"
 
 static void eKamifubuki_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, s16 arg0, s16 arg1);
 static void eKamifubuki_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg);
@@ -57,19 +58,28 @@ static void eKamifubuki_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eKamifubuki_mv(eEC_Effect_c* effect, GAME* game) {
-    effect->position.x += effect->velocity.x;
-    effect->position.y += effect->velocity.y;
-    effect->position.z += effect->velocity.z;
-    effect->velocity.y += -0.1f;
-    xyz_t_mult_v(&effect->velocity, sqrtf(0.9f));
-    effect->scale.x += effect->acceleration.x;
-    effect->scale.y += effect->acceleration.y;
-    effect->scale.z += effect->acceleration.z;
-    effect->acceleration.y += -0.1f;
-    xyz_t_mult_v(&effect->acceleration, sqrtf(0.9f));
-    effect->velocity.x += RANDOM_F(0.15f) * sin_s(effect->effect_specific[0]);
-    effect->acceleration.x += RANDOM_F(0.15f) * sin_s(effect->effect_specific[0]);
-    effect->effect_specific[0] += effect->effect_specific[1];
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 decay = powf(sqrtf(0.9f), dt);
+
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+    effect->velocity.y += -0.1f * dt;
+    effect->velocity.x *= decay;
+    effect->velocity.y *= decay;
+    effect->velocity.z *= decay;
+    /* effect->scale and effect->acceleration are repurposed as second particle's
+     * position/velocity (field-overloaded). */
+    effect->scale.x += effect->acceleration.x * dt;
+    effect->scale.y += effect->acceleration.y * dt;
+    effect->scale.z += effect->acceleration.z * dt;
+    effect->acceleration.y += -0.1f * dt;
+    effect->acceleration.x *= decay;
+    effect->acceleration.y *= decay;
+    effect->acceleration.z *= decay;
+    effect->velocity.x += RANDOM_F(0.15f) * sin_s(effect->effect_specific[0]) * dt;
+    effect->acceleration.x += RANDOM_F(0.15f) * sin_s(effect->effect_specific[0]) * dt;
+    effect->effect_specific[0] += (s16)(effect->effect_specific[1] * dt);
 }
 extern Gfx ef_kamihubuki01_00_model[];
 static void eKamifubuki_one_draw(eEC_Effect_c* effect, xyz_t* pos, GAME* game) {
@@ -85,7 +95,7 @@ static void eKamifubuki_one_draw(eEC_Effect_c* effect, xyz_t* pos, GAME* game) {
 
 static void eKamifubuki_dw(eEC_Effect_c* effect, GAME* game) {
     int i;
-    int v = (u8)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 10, 0.f, 255.f);
+    int v = (u8)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 10.0f, 0.f, 255.f);
     static rgb8_t rgb_tbl[4][2] = { { { 100, 20, 20 }, { 155, 30, 30 } },
                                     { { 20, 100, 20 }, { 30, 155, 30 } },
                                     { { 20, 20, 100 }, { 30, 30, 155 } },

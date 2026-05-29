@@ -114,8 +114,10 @@ static void aPOL_think_main_proc(NPC_ACTOR* nactorx, GAME_PLAY* play) {
             }
         }
 
-        chase_f(&actor->npc_class.actor_class.world.position.x, actor->npc_class.actor_class.home.position.x, 0.05f);
-        chase_f(&actor->npc_class.actor_class.world.position.z, actor->npc_class.actor_class.home.position.z, 0.05f);
+        chase_f(&actor->npc_class.actor_class.world.position.x, actor->npc_class.actor_class.home.position.x,
+                aNPC_dt_float_step(0.05f));
+        chase_f(&actor->npc_class.actor_class.world.position.z, actor->npc_class.actor_class.home.position.z,
+                aNPC_dt_float_step(0.05f));
         nactorx->condition_info.demo_flg = 0;
 
         if (nactorx->action.idx == act_idx) {

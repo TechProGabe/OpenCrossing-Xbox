@@ -3,7 +3,7 @@ static int aCOU_actor_draw_before(GAME* game, cKF_SkeletonInfo_R_c* keyframe, in
     STRUCTURE_ACTOR* actor = (STRUCTURE_ACTOR*)arg;
 
     if (joint_idx == 2 && (int)actor->arg0_f != 0) {
-        Matrix_RotateZ((s16)actor->arg1_f << 12, MTX_MULT);
+        Matrix_RotateZ((s16)(actor->arg1_f * 4096.0f), MTX_MULT);
     }
 
     return TRUE;
@@ -78,8 +78,13 @@ static void aCOU_actor_draw(ACTOR* actorx, GAME* game) {
     }
 
     if (actor->arg0 != actor->arg1) {
+        f32 dt = (f32)game->graph->dt_num_60fps_frames;
+
         if (actor->arg1_f < 8.0f) {
-            actor->arg1_f = actor->arg1_f + 1.0f;
+            actor->arg1_f += dt;
+            if (actor->arg1_f > 8.0f) {
+                actor->arg1_f = 8.0f;
+            }
         } else {
             actor->arg1 = actor->arg0;
             actor->arg2 = 0;

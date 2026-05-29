@@ -148,7 +148,7 @@ static int Player_actor_MessageControl_Demo_get_golden_item(ACTOR* actorx, int e
     mMsg_Window_c* msg_p = mMsg_Get_base_window_p();
 
     if (*timer_p < 42.0f) {
-        (*timer_p) += 1.0f;
+        (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
         return FALSE;
     }
 

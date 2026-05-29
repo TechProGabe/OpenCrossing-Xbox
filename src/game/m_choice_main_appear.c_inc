@@ -4,7 +4,7 @@ static int mChoice_Main_Appear_SetScale(mChoice_c* choice, GAME* game) {
     if (choice->timer < 10.2f) {
         f32 scale;
 
-        choice->timer += 1.0f;
+        choice->timer += (f32)game->graph->dt_num_60fps_frames;
         scale = get_percent_forAccelBrake(choice->timer, 0.0f, 10.2f, 0.0f, 0.0f);
         choice->scale = scale;
         choice->center_x = choice->center_x_begin + scale * (choice->center_x_target - choice->center_x_begin);

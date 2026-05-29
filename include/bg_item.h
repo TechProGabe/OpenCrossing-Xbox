@@ -150,10 +150,10 @@ struct drop_s {
     f32 _7C;
     s16 wait_counter;
     f32 total_distance_y;
-    u16 _88;
-    s16 _8A;
+    f32 _88;
+    f32 _8A;
     ACTOR* actorx_p;
-    s16 _90;
+    f32 _90;
     s16 layer;
     xyz_t last_position;
     f32 last_velocity_xz;
@@ -218,7 +218,7 @@ typedef struct fade_s {
     mActor_name_t fg_item;
     u8 alpha;
     u8 mode;
-    u8 _10;
+    f32 _10;
 } bg_item_fade_c;
 
 typedef int (*bIT_TALK_DISPLAY_LIMIT_CHECK_PROC)(int);

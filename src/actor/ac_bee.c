@@ -72,12 +72,13 @@ static void aBEE_calc_scale(BEE_ACTOR* bee, f32 frac, f32 max_step) {
 
 static void aBEE_anime_proc(BEE_ACTOR* bee) {
     cKF_SkeletonInfo_R_c* kf_p = &bee->keyframe;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
 
     kf_p->frame_control.current_frame = bee->start_frame;
     cKF_SkeletonInfo_R_play(kf_p);
     kf_p->frame_control.speed = 0.0f;
-    bee->fly_angle[0] += 500;
-    bee->fly_angle[1] -= 500;
+    bee->fly_angle[0] += (s16)(500.0f * dt);
+    bee->fly_angle[1] -= (s16)(500.0f * dt);
 }
 
 static void aBEE_fly_move_common(BEE_ACTOR* bee, GAME* game) {
@@ -114,7 +115,7 @@ static void aBEE_fly_move_common(BEE_ACTOR* bee, GAME* game) {
     bee->speed += fabsf((f32)((DEG2SHORT_ANGLE2(180.0f) - abs_speed_angle) / DEG2SHORT_ANGLE2(30.0f)));
     add_calc(&bee->actor_class.speed, bee->speed, CALC_EASE(0.3f), 0.15f, 0.0f);
 
-    bee->bobbing_counter += 0x900;
+    bee->bobbing_counter += (s16)(0x900 * game->graph->dt_num_60fps_frames);
     if (player != NULL) {
         bee->pos_y = player->world.position.y + 50.0f;
     }
@@ -191,7 +192,10 @@ static void aBEE_fly(ACTOR* actorx, GAME* game) {
             }
 
             if (bee->catch_delay_frames > 0) {
-                bee->catch_delay_frames--;
+                bee->catch_delay_frames -= (f32)game->graph->dt_num_60fps_frames;
+                if (bee->catch_delay_frames < 0.0f) {
+                    bee->catch_delay_frames = 0.0f;
+                }
             } else {
                 f32 swing_timer;
 
@@ -228,8 +232,8 @@ static void aBEE_caught(ACTOR* actorx, GAME* game) {
             return;
         }
     } else {
-        bee->disappear_timer++;
-        if (bee->disappear_timer > 1) {
+        bee->disappear_timer += (f32)game->graph->dt_num_60fps_frames;
+        if (bee->disappear_timer > 1.0f) {
             aBEE_setupAction(bee, aBEE_ACT_DISAPPEAR, game);
             return;
         }
@@ -304,11 +308,11 @@ static void aBEE_appear_init(BEE_ACTOR* bee, GAME* game) {
 }
 
 static void aBEE_fly_init(BEE_ACTOR* bee, GAME* game) {
-    bee->catch_delay_frames = 60;
+    bee->catch_delay_frames = 60.0f;
 }
 
 static void aBEE_caught_init(BEE_ACTOR* bee, GAME* game) {
-    bee->disappear_timer = 0;
+    bee->disappear_timer = 0.0f;
 }
 
 static void aBEE_disappear_init(BEE_ACTOR* bee, GAME* game) {

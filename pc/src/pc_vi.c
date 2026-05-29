@@ -11,10 +11,20 @@ static u32 retrace_count = 0;
 u32 pc_frame_counter = 0;
 static Uint64 frame_start_time = 0;
 static Uint64 perf_freq = 0;
+
+// 16667us = 60.0 Hz (NTSC).
+u32 g_frame_limiter = 60; // 60Hz
 static void (*vi_pre_callback)(u32) = NULL;
 static void (*vi_post_callback)(u32) = NULL;
 
-void VIInit(void) { }
+void VIInit(void) {
+    if (g_frame_limiter > 0) {
+        printf("[VI] frame limit=%dus (%lu Hz)\n",
+               (u32)((1.0 / (double)g_frame_limiter) * 1000000), (unsigned long)g_frame_limiter);
+    } else {
+        printf("[VI] frame limit=unlimited\n");
+    }
+}
 
 void VIConfigure(void* rm) { (void)rm; }
 
@@ -42,21 +52,33 @@ void VIWaitForRetrace(void) {
     Uint64 t_after_swap = SDL_GetPerformanceCounter();
 
     Uint64 t_before_pace = SDL_GetPerformanceCounter();
-    if (!g_pc_no_framelimit) {
-        /* Timer-based pacing: sleep until 16ms per frame (~60 FPS).
-         * Audio production runs on a dedicated thread and is no longer
-         * tied to game frame timing. */
-        if (frame_start_time) {
-            Uint64 now = SDL_GetPerformanceCounter();
-            Uint64 elapsed_us = (now - frame_start_time) * 1000000 / perf_freq;
-            /* 16667us = 60.0 Hz (NTSC). Spin for sub-ms precision. */
-            while (elapsed_us < 16667) {
-                Uint64 remain_us = 16667 - elapsed_us;
-                if (remain_us > 2000) {
-                    SDL_Delay(1);
+    {
+        extern int g_pc_nes_active;
+        int pace_frame = g_pc_nes_active || g_frame_limiter > 0;
+        int pace_us = 0;
+
+        if (g_pc_nes_active) {
+            pace_us = 16667;
+        } else if (g_frame_limiter > 0) {
+            pace_us = (int)((1.0 / (double)g_frame_limiter) * 1000000);
+        }
+
+        if (pace_frame) {
+            /* Timer-based pacing: sleep until 16ms per frame (~60 FPS).
+             * Audio production runs on a dedicated thread and is no longer
+             * tied to game frame timing. */
+            if (frame_start_time) {
+                Uint64 now = SDL_GetPerformanceCounter();
+                Uint64 elapsed_us = (now - frame_start_time) * 1000000 / perf_freq;
+                /* Spin for sub-ms precision. */
+                while (elapsed_us < (Uint64)pace_us) {
+                    Uint64 remain_us = (Uint64)pace_us - elapsed_us;
+                    if (remain_us > 2000) {
+                        SDL_Delay(1);
+                    }
+                    now = SDL_GetPerformanceCounter();
+                    elapsed_us = (now - frame_start_time) * 1000000 / perf_freq;
                 }
-                now = SDL_GetPerformanceCounter();
-                elapsed_us = (now - frame_start_time) * 1000000 / perf_freq;
             }
         }
     }
@@ -68,8 +90,8 @@ void VIWaitForRetrace(void) {
         double pace_ms = (double)(t_after_pace - t_before_pace) * 1000.0 / (double)perf_freq;
         double work_ms = (double)(vi_enter - frame_start_time) * 1000.0 / (double)perf_freq;
         int audio_fill = pc_audio_get_buffer_fill();
-        printf("[STUTTER] frame %u: total=%.1fms work=%.1fms swap=%.1fms pace=%.1fms audio_fill=%d\n",
-               pc_frame_counter, frame_ms, work_ms - swap_ms - pace_ms, swap_ms, pace_ms, audio_fill);
+        printf("[STUTTER] frame %lu: total=%.1fms work=%.1fms swap=%.1fms pace=%.1fms audio_fill=%d\n",
+               (unsigned long)pc_frame_counter, frame_ms, work_ms - swap_ms - pace_ms, swap_ms, pace_ms, audio_fill);
     }
 
     {

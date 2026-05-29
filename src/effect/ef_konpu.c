@@ -96,12 +96,20 @@ static void eKONP_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eKONP_mv(eEC_Effect_c* effect, GAME* game) {
-    effect->effect_specific[2] += DEG2SHORT_ANGLE2(11.25f)-1;
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    effect->effect_specific[2] += (s16)((DEG2SHORT_ANGLE2(11.25f) - 1) * dt);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
     if (effect->arg0 != 0) {
-        xyz_t_mult_v(&effect->velocity, sqrtf(0.8f));
+        f32 decay = powf(sqrtf(0.8f), dt);
+        effect->velocity.x *= decay;
+        effect->velocity.y *= decay;
+        effect->velocity.z *= decay;
     }
 }
 
@@ -126,15 +134,15 @@ static rgba_t eKONP_env_color_data[5] = {
 static void eKONP_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
     s16 idx = effect->effect_specific[0];
-    s16 counter = 72 - effect->timer;
+    f32 t = 72.0f - effect->lifetime;
     s16 angle = effect->effect_specific[2];
     s16 color_idx = effect->effect_specific[3];
     f32 sin_x = sin_s(angle);
     f32 sin_y = sin_s(DIFF_SHORT_ANGLE(angle, DEG2SHORT_ANGLE2(-180.0f)));
-    f32 scale = eEC_CLIP->calc_adjust_proc(counter, 0, 18, 0.00156f, 0.0078f);
-    f32 max_stretch = eEC_CLIP->calc_adjust_proc(counter, 0, 30, 1.3499999f, 0.85f);
-    f32 min_stretch = eEC_CLIP->calc_adjust_proc(counter, 0, 30, 0.050000012f, 0.54999995f);
-    u8 a = (int)eEC_CLIP->calc_adjust_proc(counter, 60, 72, 255.0f, 0.0f);
+    f32 scale = eEL_CalcAdjust_F(t, 0.0f, 18.0f, 0.00156f, 0.0078f);
+    f32 max_stretch = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 1.3499999f, 0.85f);
+    f32 min_stretch = eEL_CalcAdjust_F(t, 0.0f, 30.0f, 0.050000012f, 0.54999995f);
+    u8 a = (int)eEL_CalcAdjust_F(t, 60.0f, 72.0f, 255.0f, 0.0f);
 
     effect->scale.x = scale * (min_stretch + ((sin_x + 1.0f) * 0.5f * (max_stretch - min_stretch)));
     effect->scale.y = scale * (min_stretch + ((sin_y + 1.0f) * 0.5f * (max_stretch - min_stretch)));

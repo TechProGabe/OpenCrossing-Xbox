@@ -21,34 +21,53 @@ static int aGYO_anime_ptn[] = {
     aGYO_ANIME_PAT_TYPE_NONE,
 };
 
-static int aGYO_anime_frame(aGYO_CTRL_ACTOR* ctrl) {
-    static int aGYO_frame_ptn1[] = { 1, 1, 0, 0, 2, 2, 0, 0 };
-    static int aGYO_frame_ptn2[] = { 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0 };
+static int aGYO_frame_ptn_fast[] = { 1, 1, 0, 0, 2, 2, 0, 0 };
+static int aGYO_frame_ptn_slow[] = { 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0 };
 
+static int aGYO_current_anime_frame(aGYO_CTRL_ACTOR* ctrl) {
+    int idx = ctrl->anim_frame;
+
+    switch (aGYO_anime_ptn[ctrl->gyo_type]) {
+        case aGYO_ANIME_PAT_TYPE_FAST:
+            if (idx < 0 || idx >= ARRAY_COUNT(aGYO_frame_ptn_fast)) {
+                idx = 0;
+            }
+            return aGYO_frame_ptn_fast[idx];
+        case aGYO_ANIME_PAT_TYPE_SLOW:
+            if (idx < 0 || idx >= ARRAY_COUNT(aGYO_frame_ptn_slow)) {
+                idx = 0;
+            }
+            return aGYO_frame_ptn_slow[idx];
+        default:
+            return 0;
+    }
+}
+
+static int aGYO_anime_frame(aGYO_CTRL_ACTOR* ctrl) {
     int idx = ctrl->anim_frame;
     int ret;
 
     idx++;
     switch (aGYO_anime_ptn[ctrl->gyo_type]) {
         case aGYO_ANIME_PAT_TYPE_FAST:
-            if (idx >= ARRAY_COUNT(aGYO_frame_ptn1)) {
+            if (idx >= ARRAY_COUNT(aGYO_frame_ptn_fast)) {
                 idx = 0;
                 if ((ctrl->gyo_flags & 0x200) != 0) {
                     ctrl->swork2--;
                 }
             }
 
-            ret = aGYO_frame_ptn1[idx];
+            ret = aGYO_frame_ptn_fast[idx];
             break;
         case aGYO_ANIME_PAT_TYPE_SLOW:
-            if (idx >= ARRAY_COUNT(aGYO_frame_ptn2)) {
+            if (idx >= ARRAY_COUNT(aGYO_frame_ptn_slow)) {
                 idx = 0;
                 if ((ctrl->gyo_flags & 0x200) != 0) {
                     ctrl->swork2--;
                 }
             }
 
-            ret = aGYO_frame_ptn2[idx];
+            ret = aGYO_frame_ptn_slow[idx];
             break;
         default:
             idx = 0;
@@ -60,6 +79,32 @@ static int aGYO_anime_frame(aGYO_CTRL_ACTOR* ctrl) {
     return ret;
 }
 
+static int aGYO_draw_ticks(aGYO_CTRL_ACTOR* ctrl, GAME* game) {
+    int ticks;
+
+    ctrl->draw_accum += (f32)game->graph->dt_num_60fps_frames;
+    ticks = (int)ctrl->draw_accum;
+    if (ticks > 0) {
+        ctrl->draw_accum -= (f32)ticks;
+        if (ticks > 4) {
+            ticks = 4;
+        }
+    }
+
+    return ticks;
+}
+
+static int aGYO_anime_frame_ticks(aGYO_CTRL_ACTOR* ctrl, int ticks) {
+    int frame = aGYO_current_anime_frame(ctrl);
+    int tick;
+
+    for (tick = 0; tick < ticks; tick++) {
+        frame = aGYO_anime_frame(ctrl);
+    }
+
+    return frame;
+}
+
 static void aGYO_actor_draw_fish(GRAPH* graph, aGYO_CTRL_ACTOR* ctrl, GAME* game) {
     static f32 aGYO_hosei_y[] = {
         0.0f, 0.0f, 2.2f, 2.2f, 2.2f, 0.0f, 1.5f, 2.2f, 0.0f, 2.2f, 2.2f, 2.2f, 1.5f, 0.0f, 0.0f,
@@ -69,6 +114,7 @@ static void aGYO_actor_draw_fish(GRAPH* graph, aGYO_CTRL_ACTOR* ctrl, GAME* game
 
     GAME_PLAY* play = (GAME_PLAY*)game;
     int frame;
+    int ticks = aGYO_draw_ticks(ctrl, game);
 
     Matrix_translate(((ACTOR*)ctrl)->world.position.x, ((ACTOR*)ctrl)->world.position.y - aGYO_hosei_y[ctrl->gyo_type],
                      ((ACTOR*)ctrl)->world.position.z, MTX_LOAD);
@@ -76,39 +122,42 @@ static void aGYO_actor_draw_fish(GRAPH* graph, aGYO_CTRL_ACTOR* ctrl, GAME* game
 
     if (ctrl->gyo_type < (aGYO_TYPE_WHALE + 1) && (ctrl->gyo_flags & 0x200) != 0) {
         int cnt;
+        int tick;
 
-        if (ctrl->pattern_subcounter == 0) {
-            cnt = 0;
-        } else {
-            cnt = --ctrl->pattern_subcounter;
-        }
-
-        if (cnt != 0) {
-            if (aGYO_anime_ptn[ctrl->gyo_type] == aGYO_ANIME_PAT_TYPE_FAST) {
-                ctrl->move_counter += 0xE38;
-            } else {
-                ctrl->move_counter += 0xAAA;
-            }
-        } else {
-            if (ctrl->pattern_counter == 0) {
+        for (tick = 0; tick < ticks; tick++) {
+            if (ctrl->pattern_subcounter == 0) {
                 cnt = 0;
             } else {
-                cnt = --ctrl->pattern_counter;
+                cnt = --ctrl->pattern_subcounter;
             }
 
-            if (cnt == 0) {
-                ctrl->pattern_counter = (s16)RANDOM(15);
-
+            if (cnt != 0) {
                 if (aGYO_anime_ptn[ctrl->gyo_type] == aGYO_ANIME_PAT_TYPE_FAST) {
-                    ctrl->pattern_subcounter = 9;
+                    ctrl->move_counter += 0xE38;
                 } else {
-                    ctrl->pattern_subcounter = 12;
+                    ctrl->move_counter += 0xAAA;
+                }
+            } else {
+                if (ctrl->pattern_counter == 0) {
+                    cnt = 0;
+                } else {
+                    cnt = --ctrl->pattern_counter;
                 }
 
-                if (RANDOM_F(2.0f) < 1.0f) {
-                    ctrl->move_counter = DEG2SHORT_ANGLE2(0.0f);
-                } else {
-                    ctrl->move_counter = DEG2SHORT_ANGLE2(180.0f);
+                if (cnt == 0) {
+                    ctrl->pattern_counter = (s16)RANDOM(15);
+
+                    if (aGYO_anime_ptn[ctrl->gyo_type] == aGYO_ANIME_PAT_TYPE_FAST) {
+                        ctrl->pattern_subcounter = 9;
+                    } else {
+                        ctrl->pattern_subcounter = 12;
+                    }
+
+                    if (RANDOM_F(2.0f) < 1.0f) {
+                        ctrl->move_counter = DEG2SHORT_ANGLE2(0.0f);
+                    } else {
+                        ctrl->move_counter = DEG2SHORT_ANGLE2(180.0f);
+                    }
                 }
             }
         }
@@ -121,21 +170,24 @@ static void aGYO_actor_draw_fish(GRAPH* graph, aGYO_CTRL_ACTOR* ctrl, GAME* game
 
     if ((ctrl->gyo_flags & 0x200) != 0 && ctrl->swork2 <= 0) {
         int cnt;
+        int tick;
 
-        if (ctrl->swork3 == 0) {
-            cnt = 0;
-        } else {
-            cnt = --ctrl->swork3;
-        }
+        for (tick = 0; tick < ticks; tick++) {
+            if (ctrl->swork3 == 0) {
+                cnt = 0;
+            } else {
+                cnt = --ctrl->swork3;
+            }
 
-        if (cnt == 0) {
-            ctrl->swork2 = RANDOM(3) + 1;
-            ctrl->swork3 = RANDOM2(10) + 15;
+            if (cnt == 0) {
+                ctrl->swork2 = RANDOM(3) + 1;
+                ctrl->swork3 = RANDOM2(10) + 15;
+            }
         }
 
         frame = 0;
     } else {
-        frame = aGYO_anime_frame(ctrl);
+        frame = aGYO_anime_frame_ticks(ctrl, ticks);
     }
 
     OPEN_POLY_OPA_DISP(graph);

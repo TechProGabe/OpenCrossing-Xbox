@@ -159,17 +159,17 @@ static void aBTD_start_call_end_wait(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play
 }
 
 static void aBTD_song_bgm_start_wait(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {
-    boat_demo->song_bgm_timer--;
+    boat_demo->song_bgm_timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-    if (boat_demo->song_bgm_timer <= 0) {
+    if (boat_demo->song_bgm_timer <= 0.0f) {
         aBTD_setupAction(boat_demo, play, aBTD_ACTION_SING_SENDO_START_WAIT);
     }
 }
 
 static void aBTD_sing_sendo_start_wait(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {
-    boat_demo->song_bgm_timer--;
+    boat_demo->song_bgm_timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-    if (boat_demo->song_bgm_timer <= 0) {
+    if (boat_demo->song_bgm_timer <= 0.0f) {
         aBTD_setupAction(boat_demo, play, aBTD_ACTION_SING_SENDO_MSG_SET_WAIT);
     }
 }
@@ -208,9 +208,9 @@ static void aBTD_move_boat_end_wait(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play)
 
 static void aBTD_touch_wharf_end_wait(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {
     if (boat_demo->touching_wharf == FALSE) {
-        boat_demo->touch_wharf_timer--;
+        boat_demo->touch_wharf_timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-        if (boat_demo->touch_wharf_timer <= 0) {
+        if (boat_demo->touch_wharf_timer <= 0.0f) {
             sAdo_OngenTrgStart(0x165, &boat_demo->boat_actor->actor_class.world.position);
             boat_demo->touching_wharf = TRUE;
         }
@@ -246,7 +246,7 @@ static void aBTD_start_call_end_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY*
 }
 
 static void aBTD_song_bgm_start_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {
-    boat_demo->song_bgm_timer = 0;
+    boat_demo->song_bgm_timer = 0.0f;
 }
 
 static void aBTD_sing_sendo_start_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {
@@ -287,7 +287,7 @@ static void aBTD_sing_sendo_start_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLA
     boat_demo->sing_msg_no = sing_1st_part_msg_base_no[player_pattern] + kappn_song;
     boat_demo->sing_dialog_ofs = RANDOM(10);
     boat_demo->sing_2nd_part = RANDOM(10);
-    boat_demo->song_bgm_timer = FRAMERATE_TIMER(930);
+    boat_demo->song_bgm_timer = (f32)FRAMERATE_TIMER(930);
 }
 
 static void aBTD_sendo_dialogue_start_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {
@@ -326,7 +326,7 @@ static void aBTD_move_boat_end_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* 
 
 static void aBTD_touch_wharf_end_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {
     boat_demo->touching_wharf = FALSE;
-    boat_demo->touch_wharf_timer = FRAMERATE_TIMER(190);
+    boat_demo->touch_wharf_timer = (f32)FRAMERATE_TIMER(190);
 }
 
 static void aBTD_pl_ride_off_start_wait_init(BOAT_DEMO_ACTOR* boat_demo, GAME_PLAY* play) {

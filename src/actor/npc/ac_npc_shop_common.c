@@ -1242,8 +1242,8 @@ static int aNSC_message_ctrl_sub(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* 
             aNSC_calc_talk_start_tim(shop_common);
 
             if (actorx->player_distance_xz < 85.0f || shop_common->talk_start_tim == 0) {
-                if (chase_angle(&actorx->shape_info.rotation.y, shop_common->player_angle, DEG2SHORT_ANGLE2(11.25f)) ==
-                    TRUE) {
+                if (chase_angle(&actorx->shape_info.rotation.y, shop_common->player_angle,
+                                aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
                     (*force_talk_start_proc[day_type])(shop_common, play);
                     shop_common->talk_start_tim = -1;
                     aNMD_selectIdx = (aNMD_selectIdx + 1) & 1;
@@ -1256,8 +1256,8 @@ static int aNSC_message_ctrl_sub(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* 
         }
     } else if (mDemo_Check(mDemo_TYPE_TALK, actorx) == TRUE) {
         if (!mDemo_Check_ListenAble()) {
-            if (chase_angle(&actorx->shape_info.rotation.y, shop_common->player_angle, DEG2SHORT_ANGLE2(11.25f)) ==
-                TRUE) {
+            if (chase_angle(&actorx->shape_info.rotation.y, shop_common->player_angle,
+                            aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
                 (*norm_talk_start_proc[day_type])(shop_common, play);
                 aNSC_Set_ListenAble(shop_common);
                 ret = TRUE;
@@ -1329,7 +1329,8 @@ static int aNSC_message_ctrl(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* play
                     if (shop_common->npc_class.actor_class.player_distance_xz < 80.0f ||
                         shop_common->talk_start_tim == 0) {
                         if (chase_angle(&shop_common->npc_class.actor_class.shape_info.rotation.y,
-                                        shop_common->player_angle, DEG2SHORT_ANGLE(11.25f)) == TRUE) {
+                                        shop_common->player_angle,
+                                        aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f))) == TRUE) {
                             mActor_name_t item = shop_common->sell_item;
                             if (item != EMPTY_NO) {
                                 action = aNSC_ACTION_SELL_CHECK_BEFORE;
@@ -1363,7 +1364,7 @@ static int aNSC_message_ctrl(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* play
                     if (!mDemo_Check_ListenAble()) {
                         action = aNSC_ACTION_SELL_CHECK_BEFORE;
                         if (chase_angle(&actorx->shape_info.rotation.y, shop_common->player_angle,
-                                        DEG2SHORT_ANGLE(11.25f)) == TRUE) {
+                                        aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f))) == TRUE) {
                             if (CLIP(aprilfool_control_clip) != NULL &&
                                 CLIP(aprilfool_control_clip)->talk_chk_proc(SP_NPC_SHOP_MASTER) == FALSE) {
                                 action = aNSC_ACTION_REQUEST_Q_END_WAIT;
@@ -2813,7 +2814,7 @@ static void aNSC_turn(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* play) {
     if (aNSC_message_ctrl(shop_common, play) != TRUE) {
         if (GET_PLAYER_ACTOR(play)) {
             s16 player_angle = shop_common->player_angle;
-            chase_angle(&actorx->shape_info.rotation.y, player_angle, DEG2SHORT_ANGLE(11.25f));
+            chase_angle(&actorx->shape_info.rotation.y, player_angle, aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f)));
             actorx->world.angle.y = actorx->shape_info.rotation.y;
             if (ABS(player_angle - actorx->shape_info.rotation.y) <= DEG2SHORT_ANGLE(90.0f)) {
                 aNSC_setupAction(shop_common, play, aNSC_ACTION_WAIT);
@@ -2832,7 +2833,8 @@ static void aNSC_goodbye_wait(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* pla
     if (mDemo_Check(mDemo_TYPE_SPEAK, (ACTOR*)shop_common) == TRUE) {
         if (mDemo_Check_ListenAble() == FALSE) {
             s16 player_angle = shop_common->player_angle;
-            if (chase_angle(&actorx->shape_info.rotation.y, player_angle, DEG2SHORT_ANGLE(11.25f)) == TRUE) {
+            if (chase_angle(&actorx->shape_info.rotation.y, player_angle,
+                            aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f))) == TRUE) {
 #ifdef aNSC_MAMEDANUKI
                 mBGMForce_room_nonstop_start();
 #endif
@@ -2849,7 +2851,7 @@ static void aNSC_goodbye_wait(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* pla
 
 static void aNSC_goodbye_wait2(NPC_SHOP_COMMON_ACTOR* shop_common, GAME_PLAY* play) {
     chase_angle(&shop_common->npc_class.actor_class.shape_info.rotation.y, shop_common->player_angle,
-                DEG2SHORT_ANGLE2(11.25f));
+                aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
 }
 
 #endif

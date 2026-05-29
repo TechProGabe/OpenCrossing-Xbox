@@ -90,11 +90,15 @@ typedef struct _MUSEUM_INSECT_ACTOR {
     MUSEUM_INSECT_PRIVATE_DATA privInsects[aINS_INSECT_TYPE_NUM]; // offset: 0x174
     MUSEUM_INSECT_PRIVATE_DATA _1894[6];                          // offset: 0x1894
     MUSEUM_INSECT_PRIVATE_DATA _1CA0[15];                         // offset: 0x1CA0
+    MUSEUM_INSECT_PRIVATE_DATA prevPrivInsects[aINS_INSECT_TYPE_NUM];
+    MUSEUM_INSECT_PRIVATE_DATA prev_1894[6];
+    MUSEUM_INSECT_PRIVATE_DATA prev_1CA0[15];
     MUSEUM_INSECT_SKELETON _24B8[4];                              // offset: 0x24B8
     int _2F78;                                                    // offset: 0x2F78
     int _2F7C;                                                    // offset: 0x2F7C
     INSECT_DISPLAY_MSG_INFO _2F80[7];                             // offset: 0x2F82
     s16 _2F9C[5];                                                 // offset: 0x2F9C
+    f32 logic_accum;
 } MUSEUM_INSECT_ACTOR;
 
 // bss

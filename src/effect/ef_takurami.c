@@ -84,20 +84,21 @@ static void eTM_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
         effect->offset.x += -15.0f;
     }
     effect->offset.z = 15.0f;
+    effect->effect_specific[4] = 0; /* phase counter */
 }
 
 static void eTM_mv(eEC_Effect_c* effect, GAME* game) {
     int prio;
     s16 angle;
     u16 item_name;
+    f32 t = 54.0f - effect->lifetime;
 
-    s16 timer = 54 - effect->timer;
-
-    if (timer == 0) {
+    if (effect->effect_specific[4] == 0) {
         sAdo_OngenTrgStart(0x117, &effect->position);
+        effect->effect_specific[4] = 1;
     }
 
-    if (timer == 10) {
+    if (effect->effect_specific[4] == 1 && t >= 10.0f) {
         angle = effect->effect_specific[1];
         prio = effect->effect_specific[2];
         item_name = effect->effect_specific[3];
@@ -105,17 +106,17 @@ static void eTM_mv(eEC_Effect_c* effect, GAME* game) {
             eEC_CLIP->effect_make_proc(eEC_EFFECT_TAKURAMI_KIRA, effect->acceleration, prio, angle, game, item_name, 0,
                                        0);
         }
+        effect->effect_specific[4] = 2;
     }
 }
 
 static void eTM_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 54 - effect->timer;
+    f32 t = 54.0f - effect->lifetime;
     s16 idx = effect->effect_specific[0];
     u8 alpha;
 
-    effect->scale.x = eEC_CLIP->calc_adjust_proc(timer, 0, 8, 0.0f, 0.017f);
-
-    alpha = (int)eEC_CLIP->calc_adjust_proc(timer, 46, 54, 200.0f, 0.0f);
+    effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 8.0f, 0.0f, 0.017f);
+    alpha = (int)eEL_CalcAdjust_F(t, 46.0f, 54.0f, 200.0f, 0.0f);
 
     OPEN_DISP(game->graph);
 

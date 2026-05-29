@@ -141,8 +141,8 @@ static void aNPC_search_eye_target_sub(NPC_ACTOR* nactorx, xyz_t* target_eye, xy
         }
     }
 
-    chase_angle(&nactorx->head.angle_x, angleX, nactorx->head.angle_add_x);
-    chase_angle(&nactorx->head.angle_y, angleY, nactorx->head.angle_add_y);
+    chase_angle(&nactorx->head.angle_x, angleX, aNPC_dt_angle_step(nactorx->head.angle_add_x));
+    chase_angle(&nactorx->head.angle_y, angleY, aNPC_dt_angle_step(nactorx->head.angle_add_y));
 }
 
 static void aNPC_search_eye_target(NPC_ACTOR* nactorx, GAME_PLAY* play, s_xyz* world_angle, s_xyz* joint_angle) {
@@ -175,8 +175,8 @@ static void aNPC_search_eye_target(NPC_ACTOR* nactorx, GAME_PLAY* play, s_xyz* w
             }
 
             default: {
-                chase_angle(&nactorx->head.angle_x, joint_angle->y, nactorx->head.angle_add_x);
-                chase_angle(&nactorx->head.angle_y, joint_angle->x, nactorx->head.angle_add_y);
+                chase_angle(&nactorx->head.angle_x, joint_angle->y, aNPC_dt_angle_step(nactorx->head.angle_add_x));
+                chase_angle(&nactorx->head.angle_y, joint_angle->x, aNPC_dt_angle_step(nactorx->head.angle_add_y));
                 break;
             }
         }

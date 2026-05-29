@@ -143,8 +143,8 @@ void mfish_zarigani_jump_process_init(MUSEUM_FISH_PRIVATE_DATA* actor, GAME* gam
 
 void mfish_zarigani_jump_process(MUSEUM_FISH_PRIVATE_DATA* actor, GAME* gamex) {
     actor->_5D0.y -= 0.015f + GETREG(TAKREG, 0x1f) * 0.001f;
-    actor->_5D0.y *= 0.99f;
-    actor->_5F0 *= 0.95f;
+    actor->_5D0.y *= DTCONV_GAME(0.99f, gamex);
+    actor->_5F0 *= DTCONV_GAME(0.95f, gamex);
     add_calc2(&actor->_5E8, actor->_5F0, 0.25f, 0.05f);
     actor->position.x += actor->_5E8 * sin_s(actor->_60C.y);
     actor->position.y += actor->_5D0.y * MAX(sin_s(actor->_60C.x), 0.1f);

@@ -178,7 +178,8 @@ static void aNSPM_search_player(NPC_SUPER_MASTER_ACTOR* super_master, GAME_PLAY*
         if (ABS(angle) > DEG2SHORT_ANGLE(90.0f)) {
             aNSC_setupAction(super_master, play, 66);
         } else {
-            chase_angle(&actorx->shape_info.rotation.y, super_master->player_angle, DEG2SHORT_ANGLE(11.25f));
+            chase_angle(&actorx->shape_info.rotation.y, super_master->player_angle,
+                        aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f)));
             actorx->world.angle.y = actorx->shape_info.rotation.y;
         }
     }
@@ -201,7 +202,8 @@ static void aNSPM_search_player2(NPC_SUPER_MASTER_ACTOR* super_master, GAME_PLAY
         f32 dz = posZ[super_master->next_zone] - super_master->npc_class.actor_class.world.position.z;
 
         s16 angle = atans_table(dz, dx);
-        chase_angle(&super_master->npc_class.actor_class.shape_info.rotation.y, angle, DEG2SHORT_ANGLE(11.25f));
+        chase_angle(&super_master->npc_class.actor_class.shape_info.rotation.y, angle,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE(11.25f)));
 
         super_master->npc_class.actor_class.world.angle.y = super_master->npc_class.actor_class.shape_info.rotation.y;
 

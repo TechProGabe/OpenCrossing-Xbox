@@ -169,6 +169,8 @@ static void aMR_SetBubu(PLAYER_ACTOR* player, MY_ROOM_ACTOR* my_room, GAME* game
 
     my_room->pull_timer = 0;
     my_room->push_timer = 0;
+    my_room->pull_timer_accum = 0.0f;
+    my_room->push_timer_accum = 0.0f;
 
     if (bubu_p != NULL) {
         *bubu_p = TRUE;
@@ -435,6 +437,7 @@ static void aMR_PlacePullFurniture(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* c
                             aMR_SetPullMoveAnime(ftr_actor, game, my_room, contact_info);
                             aMR_SetMoveSE(ftr_actor);
                             my_room->pull_timer = 0;
+                            my_room->pull_timer_accum = 0.0f;
                             mMkRm_ReportChangePlayerRoom();
                             my_room->keep_pull_flag = TRUE;
 
@@ -773,7 +776,7 @@ static void aMR_SitDownFurniture(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* con
             contact_info->contact_side == aMR_CONTACT_DIR_FRONT && my_room->state == 0 &&
             aMR_3DStickNuetral() == FALSE && angle < DEG2SHORT_ANGLE2(15.0f) && angle_f < 15.0f &&
             gamePT->mcon.move_pR > 0.6f) {
-            my_room->sit_timer++;
+            my_room->sit_timer += (f32)game->graph->dt_num_60fps_frames;
         } else {
             my_room->sit_timer = 0;
         }
@@ -1061,7 +1064,7 @@ static void aMR_JudgeGoToBed(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* contact
             aMR_3DStickNuetral() == FALSE && angle < DEG2SHORT_ANGLE(35.0f) && angle_f < 35.0f &&
             gamePT->mcon.move_pR > 0.6f) {
             if (aMR_CheckBedUnderfoot(contact_info, player) == FALSE) {
-                my_room->bed_timer++;
+                my_room->bed_timer += (f32)game->graph->dt_num_60fps_frames;
             } else {
                 my_room->bed_timer = 0;
             }
@@ -1136,6 +1139,7 @@ static void aMR_SetOpenFtrDemoData(MY_ROOM_ACTOR* my_room, FTR_ACTOR* ftr_actor,
     my_room->demo_flag = TRUE;
     my_room->demo_ftrID = contact_info->ftrID;
     my_room->pull_timer = 0;
+    my_room->pull_timer_accum = 0.0f;
 }
 
 static void aMR_SetMDFtrDemoData(MY_ROOM_ACTOR* my_room, FTR_ACTOR* ftr_actor, aMR_contact_info_c* contact_info) {
@@ -1145,6 +1149,7 @@ static void aMR_SetMDFtrDemoData(MY_ROOM_ACTOR* my_room, FTR_ACTOR* ftr_actor, a
     my_room->demo_flag = TRUE;
     my_room->demo_ftrID = contact_info->ftrID;
     my_room->pull_timer = 0;
+    my_room->pull_timer_accum = 0.0f;
 }
 
 static int aMR_JudgeDemoStart(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* contact_info, GAME* game,
@@ -1190,6 +1195,7 @@ static int aMR_JudgeDemoStart(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* contac
             } else {
                 my_room->state = 6;
                 my_room->pull_timer = 0;
+                my_room->pull_timer_accum = 0.0f;
             }
         }
     }

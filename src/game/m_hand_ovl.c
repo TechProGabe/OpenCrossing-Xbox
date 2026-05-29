@@ -62,9 +62,10 @@ static void mHD_hand_shape_move(Submenu* submenu) {
 
 static void mHD_calc_hand_offset(Submenu* submenu) {
     mHD_Ovl_c* hand_ovl = submenu->overlay->hand_ovl;
+    f32 dt = gamePT->graph->dt_num_60fps_frames;
 
-    chase_f(&hand_ovl->info.ofs[0], mHD_hand_offsetX_table[hand_ovl->info.act], 0.5f);
-    chase_f(&hand_ovl->info.ofs[1], mHD_hand_offsetY_table[hand_ovl->info.act], 0.5f);
+    chase_f(&hand_ovl->info.ofs[0], mHD_hand_offsetX_table[hand_ovl->info.act], 0.5f * dt);
+    chase_f(&hand_ovl->info.ofs[1], mHD_hand_offsetY_table[hand_ovl->info.act], 0.5f * dt);
 }
 
 static void mHD_hand_pos_get(Submenu* submenu, f32* pos, int table_type, int table_idx, mHD_Ovl_c* hand_ovl) {

@@ -1,5 +1,6 @@
 #include "ef_effect_control.h"
 
+#include "graph.h"
 #include "m_common_data.h"
 #include "m_rcp.h"
 #include "sys_matrix.h"
@@ -40,13 +41,13 @@ static void eFlash_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eFlash_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 elapsed_time = 5 - effect->timer;
+    f32 t = 5.0f - effect->lifetime;
     f32 scale;
 
-    if (elapsed_time <= 4) {
-        scale = (*eEC_CLIP->calc_adjust_proc)(elapsed_time, 0, 2, effect->acceleration.x * 0.005f, 0.01f);
+    if (t <= 4.0f) {
+        scale = eEL_CalcAdjust_F(t, 0.0f, 2.0f, effect->acceleration.x * 0.005f, 0.01f);
     } else {
-        scale = (*eEC_CLIP->calc_adjust_proc)(elapsed_time, 3, 4, effect->acceleration.x * 0.01f, 0.0f);
+        scale = eEL_CalcAdjust_F(t, 3.0f, 4.0f, effect->acceleration.x * 0.01f, 0.0f);
     }
 
     effect->scale.x = scale;
@@ -99,10 +100,13 @@ static void eFlashC_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_na
 static void eFlashC_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->timer = 240;
     effect->effect_specific[0] = 0;
+    effect->effect_specific[1] = 0;
 }
 
 static void eFlashC_mv(eEC_Effect_c* effect, GAME* game) {
-    if ((effect->timer & 7) == 0) {
+    effect->effect_specific[1] += (s16)((f32)game->graph->dt_num_60fps_frames * 100.0f);
+    if (effect->effect_specific[1] >= 800) {
+        effect->effect_specific[1] -= 800;
         int size;
 
         switch (Save_Get(scene_no)) {

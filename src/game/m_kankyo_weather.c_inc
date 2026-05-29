@@ -150,7 +150,7 @@ typedef struct wind_power_range_s {
 } mEnv_wind_power_range_c;
 
 typedef struct wind_info_s {
-  int wind_change_timer; /* timer until wind direction & base power changes */
+  f32 wind_change_timer; /* timer until wind direction & base power changes */
   
   f32 target_wind_angle;
   f32 wind_angle;
@@ -164,8 +164,8 @@ typedef struct wind_info_s {
   f32 wind_power_step;
 
   int wind_state;
-  int gust_timer;
-  s16 wind_power_timer;
+  f32 gust_timer;
+  f32 wind_power_timer;
 
   f32 gust_wind_power; /* power during gusts */
   f32 last_wind_power; /* saved base power for returning from gusts */
@@ -396,7 +396,7 @@ extern void mEnv_WindMove() {
     }
     else {
       if (mEnv_wind_info.gust_timer > 0) {
-        mEnv_wind_info.gust_timer--;
+        mEnv_wind_info.gust_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
       }
 
       if (mEnv_wind_info.wind_change_timer <= 0) {
@@ -412,7 +412,7 @@ extern void mEnv_WindMove() {
       mEnv_wind_info.wind_state = mEnv_WIND_STATE_REDUCING;
     }
     else {
-      mEnv_wind_info.wind_power_timer--;
+      mEnv_wind_info.wind_power_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
     }
   }
   else if (mEnv_wind_info.wind_state == mEnv_WIND_STATE_SLOW) {
@@ -422,7 +422,7 @@ extern void mEnv_WindMove() {
       mEnv_wind_info.wind_state = mEnv_WIND_STATE_REDUCING;
     }
     else {
-      mEnv_wind_info.wind_power_timer--;
+      mEnv_wind_info.wind_power_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
     }
   }
   else {
@@ -437,7 +437,7 @@ extern void mEnv_WindMove() {
   }
 
   if (mEnv_wind_info.wind_change_timer > 0) {
-    mEnv_wind_info.wind_change_timer--;
+    mEnv_wind_info.wind_change_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
   }
 }
 

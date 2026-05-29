@@ -31,7 +31,7 @@ static void aTTB_calc_scale(TOOL_TUMBLER_ACTOR* tumbler_actor, int goal_idx) {
 
     f32 scale = tumbler_actor->tools_class.actor_class.scale.x;
 
-    chase_f(&scale, aim[goal_idx], 0.05f);
+    chase_f(&scale, aim[goal_idx], 0.05f * (f32)gamePT->graph->dt_num_60fps_frames);
     tumbler_actor->tools_class.actor_class.scale.x = scale;
     tumbler_actor->tools_class.actor_class.scale.y = scale;
     tumbler_actor->tools_class.actor_class.scale.z = scale;

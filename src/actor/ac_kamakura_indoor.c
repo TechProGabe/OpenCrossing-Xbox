@@ -100,6 +100,7 @@ static void aKI_DrawKamakuraIndoorBG(KAMAKURA_INDOOR_ACTOR* k_indoor, GAME* game
     Gfx* gfx0 = aKI_MakePrimEnvColorXluDisp(k_indoor->candle_fire[0].color.r, k_indoor->candle_fire[0].color.g, k_indoor->candle_fire[0].color.b, k_indoor->candle_fire[0].color.a, 128, 255, 50, 0, 255, game);
     Gfx* gfx1 = aKI_MakePrimEnvColorXluDisp(k_indoor->candle_fire[1].color.r, k_indoor->candle_fire[1].color.g, k_indoor->candle_fire[1].color.b, k_indoor->candle_fire[1].color.a, 128, 255, 50, 0, 255, game);
     Gfx* scroll_gfx;
+    int frame = (int)k_indoor->anim_frame;
 
     if (gfx0 == NULL || gfx1 == NULL) {
         return;
@@ -120,8 +121,8 @@ static void aKI_DrawKamakuraIndoorBG(KAMAKURA_INDOOR_ACTOR* k_indoor, GAME* game
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_1_TXT_SEG, gfx0);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_3_TXT_SEG, k_indoor->candle_fire[1].tex_p);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_5_TXT_SEG, gfx1);
-    gSPSegment(NEXT_POLY_OPA_DISP, ANIME_4_TXT_SEG, rom_kamakura_evw_anime_4_tex_table[(game->frame_counter / 6) & 1]);
-    scroll_gfx = two_tex_scroll_dolphin(game->graph, 0, -game->frame_counter, 0, 32, 16, 1, -game->frame_counter * -1, -(-game->frame_counter * 2), 32, 16);
+    gSPSegment(NEXT_POLY_OPA_DISP, ANIME_4_TXT_SEG, rom_kamakura_evw_anime_4_tex_table[(frame / 6) & 1]);
+    scroll_gfx = two_tex_scroll_dolphin(game->graph, 0, -frame, 0, 32, 16, 1, -frame * -1, -(-frame * 2), 32, 16);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_6_TXT_SEG, scroll_gfx);
     gSPDisplayList(NEXT_POLY_OPA_DISP, rom_kamakura_model);
     gSPDisplayList(NEXT_POLY_XLU_DISP, rom_kamakura_modelT);
@@ -314,18 +315,27 @@ static void Kamakura_Indoor_Actor_move(ACTOR* actorx, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
     aKI_candle_ring_c* ring_p = k_indoor->candle_ring;
     aKI_candle_fire_c* fire_p = k_indoor->candle_fire;
-    u32 counter = game->frame_counter;
+    u32 counter;
     static u32 candle_ring_late_frame[] = { 0, 7 };
     static u32 candle_fire_late_frame[] = { 0, 6 };
     int i;
     s16 timer;
 
     sAdo_OngenPos((u32)actorx, NA_SE_KOKORO_TOGURU, &k_indoor->mochi.pos);
-    if ((play->game_frame & 7) == 0) {
-        xyz_t soba_yuge_pos = k_indoor->mochi.pos;
+    k_indoor->anim_frame += (f32)game->graph->dt_num_60fps_frames;
+    while (k_indoor->anim_frame >= 1024.0f) {
+        k_indoor->anim_frame -= 1024.0f;
+    }
+    counter = (u32)k_indoor->anim_frame;
 
-        soba_yuge_pos.y += 42.0f;
-        eEC_CLIP->effect_make_proc(eEC_EFFECT_SOBA_YUGE, soba_yuge_pos, 1, 0, game, RSV_NO, 14, 1);
+    {
+        static float dt_accum = 0.0f;
+        if (graph_dt_period_elapsed(game, &dt_accum, 8.0f)) {
+            xyz_t soba_yuge_pos = k_indoor->mochi.pos;
+
+            soba_yuge_pos.y += 42.0f;
+            eEC_CLIP->effect_make_proc(eEC_EFFECT_SOBA_YUGE, soba_yuge_pos, 1, 0, game, RSV_NO, 14, 1);
+        }
     }
 
     for (i = 0; i < aKI_CANDLE_NUM; i++) {

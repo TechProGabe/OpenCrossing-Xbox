@@ -99,6 +99,7 @@ static void aSHR_actor_ct(ACTOR* actorx, GAME* game) {
   aSHR_set_bgOffset(actorx, 1);
   shrine->structure_class.arg2 = mEv_check_status(mEv_EVENT_NEW_YEARS_DAY, mEv_STATUS_ACTIVE);
   shrine->structure_class.arg1 = aSHR_getLeaftype(winter);
+  shrine->texture_frame = 0.0f;
   actorx->world.position.x = actorx->world.position.x + 20.0f;
   actorx->world.position.z = actorx->world.position.z - 19.0f;
   actorx->talk_distance = 100.0f;

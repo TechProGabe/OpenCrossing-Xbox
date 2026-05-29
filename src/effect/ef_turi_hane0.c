@@ -71,8 +71,11 @@ static void eTH0_mv(eEC_Effect_c* effect, GAME* game) {
 
 static void eTH0_dw(eEC_Effect_c* effect, GAME* game) {
     xyz_t scale = effect->scale;
-    s16 counter = (s16)(16 - effect->timer) >> 1;
-    counter = CLAMP(counter, 0, 8);
+    f32 k = (16.0f - effect->lifetime) * 0.5f;
+    s16 counter;
+    if (k < 0.0f) k = 0.0f;
+    if (k > 7.0f) k = 7.0f;
+    counter = (s16)k;
 
     OPEN_DISP(game->graph);
 

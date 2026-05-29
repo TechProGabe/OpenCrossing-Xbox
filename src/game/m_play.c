@@ -1,5 +1,6 @@
 #include "m_play.h"
 
+#include "evw_anime.h"
 #include "m_common_data.h"
 #include "libultra/libultra.h"
 #include "m_fbdemo_wipe1.h"
@@ -47,13 +48,22 @@
 #define Game_play_IS_PAUSED(play) (ZURUMODE2_ENABLED() ? (!Pause_proc(&(play)->pause, &(play)->game.pads[PAD1])) : FALSE)
 
 static fbdemo_c fbdemo;
-static u16 S_back_title_timer = 0;
-static u16 S_se_endcheck_timeout = 0;
+static f32 S_back_title_timer = 0.0f;
+static f32 S_se_endcheck_timeout = 0.0f;
 static u8 gxbuf[0x140] ATTRIBUTE_ALIGN(32);
 static u8 prbuf[(2*SCREEN_WIDTH) * (2*SCREEN_HEIGHT) * sizeof(u32)] ATTRIBUTE_ALIGN(32); // 0x12C000
 
 static void Game_play_fbdemo_wipe_init(GAME_PLAY* play);
 static void Gameplay_Scene_Read(GAME_PLAY* play, s16 scene_no);
+
+static void Game_play_dec_dt_timer(f32* timer, GAME_PLAY* play) {
+    if (*timer > 0.0f) {
+        *timer -= (f32)play->game.graph->dt_num_60fps_frames;
+        if (*timer < 0.0f) {
+            *timer = 0.0f;
+        }
+    }
+}
 
 static void Game_play_Reset_destiny() {
     lbRTC_time_c* rtc_time = Common_GetPointer(time.rtc_time);
@@ -182,8 +192,8 @@ static void Game_play_fbdemo_wipe_init(GAME_PLAY* play) {
 
     play->fb_wipe_mode = WIPE_MODE_MOVE;
 
-    S_back_title_timer = 120;
-    S_se_endcheck_timeout = 120;
+    S_back_title_timer = 120.0f;
+    S_se_endcheck_timeout = 120.0f;
 }
 
 static void Game_play_fbdemo_fade_in_move_end(GAME_PLAY* play) {
@@ -217,11 +227,9 @@ static void Game_play_fbdemo_wipe_move(GAME_PLAY* play) {
 
     if (wipe->wipe_procs.isfinished_proc(&wipe->wipe_data) != 0) {
         if ((play->fb_fade_type != FADE_TYPE_IN) && (play->fb_fade_type != FADE_TYPE_EVENT)) {
-            if (S_se_endcheck_timeout != 0) {
-                S_se_endcheck_timeout--;
-            }
+            Game_play_dec_dt_timer(&S_se_endcheck_timeout, play);
 
-            if ((sAdo_SeFadeoutCheck() == 0) && (S_se_endcheck_timeout != 0)) {
+            if ((sAdo_SeFadeoutCheck() == 0) && (S_se_endcheck_timeout > 0.0f)) {
                 isDone = FALSE;
             } else {
                 sAdo_Set_ongenpos_refuse_fg(1);
@@ -238,11 +246,9 @@ static void Game_play_fbdemo_wipe_move(GAME_PLAY* play) {
                     break;
 
                 case FADE_TYPE_OUT_START_EMU:
-                    if (S_back_title_timer != 0) {
-                        S_back_title_timer--;
-                    }
+                    Game_play_dec_dt_timer(&S_back_title_timer, play);
 
-                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer == 0)) {
+                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer <= 0.0f)) {
                         Game_play_fbdemo_fade_out_start_emu_move_end(play);
                     } else {
                         wipet = TRUE;
@@ -251,16 +257,14 @@ static void Game_play_fbdemo_wipe_move(GAME_PLAY* play) {
 
                 case FADE_TYPE_OUT_RETURN_TITLE:
                 case FADE_TYPE_OUT_GAME_END:
-                    if (S_back_title_timer == 120) {
+                    if (S_back_title_timer >= 120.0f) {
                         mBGMPsComp_make_ps_wipe(360);
                     }
                 case FADE_TYPE_OUT_GAME_END_TRAIN:
                 case FADE_TYPE_SELECT_END:
-                    if (S_back_title_timer != 0) {
-                        S_back_title_timer--;
-                    }
+                    Game_play_dec_dt_timer(&S_back_title_timer, play);
 
-                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer == 0)) {
+                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer <= 0.0f)) {
                         Game_play_fbdemo_fade_out_game_end_move_end(play);
                     } else {
                         wipet = TRUE;
@@ -268,11 +272,9 @@ static void Game_play_fbdemo_wipe_move(GAME_PLAY* play) {
                     break;
 
                 case FADE_TYPE_SELECT:
-                    if (S_back_title_timer != 0) {
-                        S_back_title_timer--;
-                    }
+                    Game_play_dec_dt_timer(&S_back_title_timer, play);
 
-                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer == 0)) {
+                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer <= 0.0f)) {
                         if ((Common_Get(clip.animal_logo_clip) != NULL) &&
                             (Common_Get(clip.animal_logo_clip->data_init_proc) != NULL)) {
                             Common_Get(clip.animal_logo_clip->data_init_proc)(play);
@@ -284,11 +286,9 @@ static void Game_play_fbdemo_wipe_move(GAME_PLAY* play) {
                     break;
 
                 case FADE_TYPE_DEMO:
-                    if (S_back_title_timer != 0) {
-                        S_back_title_timer--;
-                    }
+                    Game_play_dec_dt_timer(&S_back_title_timer, play);
 
-                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer == 0)) {
+                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer <= 0.0f)) {
                         Game_play_change_scene_move_end(play);
                     } else {
                         wipet = TRUE;
@@ -301,11 +301,9 @@ static void Game_play_fbdemo_wipe_move(GAME_PLAY* play) {
                     break;
 
                 default:
-                    if (S_back_title_timer != 0) {
-                        S_back_title_timer--;
-                    }
+                    Game_play_dec_dt_timer(&S_back_title_timer, play);
 
-                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer == 0)) {
+                    if ((sAdo_BgmFadeoutCheck() == 1) || (S_back_title_timer <= 0.0f)) {
                         Game_play_change_scene_move_end(play);
                     } else {
                         wipet = TRUE;
@@ -587,6 +585,7 @@ static void Game_play_move(GAME* game) {
     }
 
     if (play->submenu.process_status == mSM_PROCESS_WAIT) {
+        evw_anime_add_scroll_phase(&play->game);
         game->doing_point = 0;
         game->doing_point_specific = 0x92;
         game->doing_point = 1;

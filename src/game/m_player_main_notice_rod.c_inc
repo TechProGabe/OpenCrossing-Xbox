@@ -204,7 +204,7 @@ static int Player_actor_MessageControl_Notice_rod(ACTOR* actor, GAME* game, int 
     int choice;
 
     if (main_notice->timer < 42.0f) {
-        main_notice->timer += 1.0f;
+        main_notice->timer += (f32)gamePT->graph->dt_num_60fps_frames;
         return -1;
     }
 

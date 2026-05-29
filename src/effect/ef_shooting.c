@@ -5,6 +5,8 @@
 #include "m_rcp.h"
 #include "sys_matrix.h"
 
+#define EFFECT_LIFETIME 320
+
 extern Gfx ef_nagare01_modelT[];
 
 static void eShooting_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, s16 arg0, s16 arg1);
@@ -29,18 +31,22 @@ static void eShooting_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_
 }
 
 static void eShooting_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
-    effect->timer = 320;
+    effect->timer = EFFECT_LIFETIME;
 
     effect->effect_specific[0] = RANDOM_F(30.0f) + 70.0f;
     effect->effect_specific[1] = 0;
+    effect->effect_specific[2] = 0; /* phase flag for one-shot kira spawn */
 }
 
 static void eShooting_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 320 - effect->timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    s16 trigger = (s16)(GETREG(MYKREG, 6) + 76);
 
-    effect->effect_specific[1] += 256;
+    effect->effect_specific[1] += (s16)(256 * dt);
 
-    if (timer == (GETREG(MYKREG, 6) + 76)) {
+    if (effect->effect_specific[2] < 1 && t >= (f32)trigger) {
+        effect->effect_specific[2] = 1;
         eEC_CLIP->effect_make_proc(eEC_EFFECT_SHOOTING_KIRA, effect->position, effect->prio, effect->arg1, game,
                                    (u16)effect->item_name, effect->effect_specific[0], 0);
     }
@@ -53,8 +59,9 @@ static Gfx* eShooting_GetTwoTileGfx(int x, int y, GAME* game) {
 static void eShooting_dw(eEC_Effect_c* effect, GAME* game) {
     GRAPH* graph;
     f32 scale_z = effect->effect_specific[0] * 0.01f;
-    s16 timer = 320 - effect->timer;
-    Gfx* two_tile = eShooting_GetTwoTileGfx(0, -((timer - 120) * 6), game);
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    s16 ti = (s16)t;
+    Gfx* two_tile = eShooting_GetTwoTileGfx(0, -((ti - 120) * 6), game);
 
     graph = game->graph;
     OPEN_DISP(graph);

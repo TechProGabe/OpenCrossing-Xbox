@@ -1117,10 +1117,15 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
     *cursor_timer = 0.0f;
   }
   else if ((msg_p->status_flags & mMsg_STATUS_FLAG_FAST_TEXT) && (msg_p->status_flags & mMsg_STATUS_FLAG_CURSOL_JUST) == 0) {
-    *cursor_timer = 0.0f;
+    /* Fast text: drain at 2x rate so 2.0f-set timer empties in 1 60Hz-frame, giving 60 chars/sec at any host refresh */
+    (*cursor_timer) -= 2.0f * (f32)gamePT->graph->dt_num_60fps_frames;
+
+    if (*cursor_timer <= 0.0f) {
+      *cursor_timer = 0.0f;
+    }
   }
   else {
-    (*cursor_timer) -= 1.0f;
+    (*cursor_timer) -= (f32)gamePT->graph->dt_num_60fps_frames;
 
     if (*cursor_timer <= 0.0f) {
       *cursor_timer = 0.0f;
@@ -1129,7 +1134,10 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
 
   if (choice_hidden) {
     if (msg_p->hide_choice_window_timer > 0) {
-      msg_p->hide_choice_window_timer--;
+      static float hide_choice_accum = 0.0f;
+      int ticks = graph_dt_60hz_ticks(gamePT, &hide_choice_accum);
+      msg_p->hide_choice_window_timer =
+        ticks >= msg_p->hide_choice_window_timer ? 0 : msg_p->hide_choice_window_timer - ticks;
     }
   }
   else {
@@ -1174,20 +1182,18 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
 
         if ((msg_p->status_flags & mMsg_STATUS_FLAG_FAST_TEXT) != 0 && (msg_p->status_flags & mMsg_STATUS_FLAG_CURSOL_JUST) == 0) {
           mMsg_sound_MessageSpeedClear(1);
-          msg_p->status_flags &= ~mMsg_STATUS_FLAG_NOT_PAUSE_FRAME;
         }
         else {
           mMsg_sound_MessageSpeedClear(2);
         }
 
-        /* Only move on to the next character every other frame unless forced */
-        if ((msg_p->status_flags & mMsg_STATUS_FLAG_NOT_PAUSE_FRAME) == 0) {
-          idx += mMsg_Set_SizeCode(msg_p, idx);
-        }
-
+        idx += mMsg_Set_SizeCode(msg_p, idx);
         msg_p->end_text_cursor_idx = idx;
         processed = TRUE;
-        msg_p->status_flags ^= mMsg_STATUS_FLAG_NOT_PAUSE_FRAME;
+        /* 30Hz character cadence; += retains negative overshoot so the next
+         * fire happens at the correct fractional frame instead of being
+         * rounded up to the next whole frame at high refresh. */
+        *cursor_timer += 2.0f;
 
         if  (msg_p->cancel_flag == FALSE) {
          utter = mMsg_sound_CodeVoice(msg_p, cur_idx);

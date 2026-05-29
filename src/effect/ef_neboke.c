@@ -26,29 +26,38 @@ static void eNebo_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name
 static void eNebo_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->timer = 112;
     effect->effect_specific[0] = *(s16*)ct_arg;
+    effect->effect_specific[1] = 0; /* phase counter for NORMAL state */
+    effect->effect_specific[2] = 0; /* phase counter for CONTINUOUS state */
 }
 
 static void eNebo_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer;
+    f32 t;
 
     eEC_CLIP->set_continious_env_proc(effect, 112, 120);
 
     if (effect->state == eEC_STATE_NORMAL) {
-        timer = 112 - effect->timer;
-        if (timer == 16) {
+        t = 112.0f - effect->lifetime;
+        if (effect->effect_specific[1] < 1 && t >= 16.0f) {
             eEC_CLIP->effect_make_proc(eEC_EFFECT_NEBOKE_AKUBI, effect->position, effect->prio,
                                        effect->effect_specific[0], game, (u16)effect->item_name, 0, 0);
-        } else if (timer == 44) {
+            effect->effect_specific[1] = 1;
+        }
+        if (effect->effect_specific[1] < 2 && t >= 44.0f) {
             eEC_CLIP->effect_make_proc(eEC_EFFECT_NEBOKE_AKUBI, effect->position, effect->prio,
                                        effect->effect_specific[0], game, (u16)effect->item_name, 1, 0);
+            effect->effect_specific[1] = 2;
         }
     } else if (effect->state == eEC_STATE_CONTINUOUS) {
-        timer = 120 - effect->timer;
-        switch (timer) {
-            case 46:
-            case 74:
-                eEC_CLIP->effect_make_proc(eEC_EFFECT_NEBOKE_AWA, effect->position, effect->prio,
-                                           effect->effect_specific[0], game, (u16)effect->item_name, 1, 0);
+        t = 120.0f - effect->lifetime;
+        if (effect->effect_specific[2] < 1 && t >= 46.0f) {
+            eEC_CLIP->effect_make_proc(eEC_EFFECT_NEBOKE_AWA, effect->position, effect->prio,
+                                       effect->effect_specific[0], game, (u16)effect->item_name, 1, 0);
+            effect->effect_specific[2] = 1;
+        }
+        if (effect->effect_specific[2] < 2 && t >= 74.0f) {
+            eEC_CLIP->effect_make_proc(eEC_EFFECT_NEBOKE_AWA, effect->position, effect->prio,
+                                       effect->effect_specific[0], game, (u16)effect->item_name, 1, 0);
+            effect->effect_specific[2] = 2;
         }
     }
 }

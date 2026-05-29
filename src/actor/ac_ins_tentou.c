@@ -255,7 +255,7 @@ static void aITT_calc_direction_angl(ACTOR* actorx) {
         }
     }
 
-    chase_angle(&actorx->shape_info.rotation.y, actorx->world.angle.y, 0x800);
+    chase_angle(&actorx->shape_info.rotation.y, actorx->world.angle.y, aINS_dt_angle_step((GAME*)gamePT, 0x800));
 }
 
 /**
@@ -267,7 +267,7 @@ static void aITT_avoid(ACTOR* actorx, GAME* game) {
     
     aITT_anime_proc(insect);
     gravity = actorx->gravity;
-    gravity *= 1.1f;
+    gravity *= DTCONV_GAME(1.1f, game);
     if (gravity > 12.0f) {
         gravity = 12.0f;
     }
@@ -325,7 +325,7 @@ static void aITT_move(ACTOR* actorx, GAME* game) {
             int collision;
             s16 step;
 
-            insect->timer--;
+            insect->timer -= (f32)game->graph->dt_num_60fps_frames;
             dx = actorx->world.position.x - actorx->home.position.x;
             dz = actorx->world.position.z - actorx->home.position.z;
             collision = 0;
@@ -364,13 +364,16 @@ static void aITT_move(ACTOR* actorx, GAME* game) {
                 step = 0x180;
             }
 
-            chase_angle(&actorx->world.angle.y, aITT_TARGET_ANGLE(insect), step);
+            chase_angle(&actorx->world.angle.y, aITT_TARGET_ANGLE(insect), aINS_dt_angle_step(game, step));
             actorx->shape_info.rotation.y = actorx->world.angle.y;
 
             if (aITT_TURN_DELAY(insect) == 0) {
                 insect->speed_step = 0.1f;
             } else {
-                aITT_TURN_DELAY(insect)--;
+                aITT_TURN_DELAY(insect) -= (int)((f32)game->graph->dt_num_60fps_frames);
+                if (aITT_TURN_DELAY(insect) < 0) {
+                    aITT_TURN_DELAY(insect) = 0;
+                }
             }
         }
     }
@@ -386,7 +389,7 @@ static void aITT_wait(ACTOR* actorx, GAME* game) {
         if (insect->timer <= 0) {
             aITT_setupAction(insect, aITT_ACT_MOVE, game);
         } else {
-            insect->timer--;
+            insect->timer -= (f32)game->graph->dt_num_60fps_frames;
         }
     }
 }
@@ -432,9 +435,7 @@ static void aITT_avoid_maimai_init(aINS_INSECT_ACTOR* insect, GAME* game) {
  * Initializes movement state parameters.
  */
 static void aITT_move_init(aINS_INSECT_ACTOR* insect, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-
-    insect->timer = ((90 + (int)(play->game_frame % 60)) * 2.0f);
+    insect->timer = (90.0f + RANDOM_F(60.0f)) * 2.0f;
     aITT_TURN_DELAY(insect) = 0;
     insect->target_speed = 0.4f;
     insect->speed_step = 0.1f;

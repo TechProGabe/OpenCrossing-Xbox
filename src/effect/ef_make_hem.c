@@ -6,6 +6,8 @@
 #include "m_rcp.h"
 
 #define eHM_TIMER 2000
+#define eMHK_TIMER 500
+#define eMHL_TIMER 195
 
 static void eMH_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, s16 arg0, s16 arg1) {
     (*eEC_CLIP->make_effect_proc)(eEC_EFFECT_MAKE_HEM, pos, NULL, game, NULL, item_name, prio, arg0, arg1);
@@ -16,6 +18,7 @@ static void eMH_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->scale.x = 0.0f;
     effect->scale.y = 0.0f;
     effect->scale.z = 0.0f;
+    effect->effect_specific[1] = 0; /* phase counter (0=initial, 1=spawned kira, 2=cleanup) */
 
     if (effect->arg0 == 1) {
         effect->position.y += 30.0f;
@@ -43,7 +46,8 @@ static void eMH_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
 static void eMH_mv(eEC_Effect_c* effect, GAME* game) {
     f32 default_col = 255.0f;
-    s16 elapsed_time = eHM_TIMER - effect->timer;
+    f32 t = (f32)eHM_TIMER - effect->lifetime;
+    s16 elapsed_time = (s16)t;
     f32 light_intensity;
     u8 col;
     int i;
@@ -60,14 +64,15 @@ static void eMH_mv(eEC_Effect_c* effect, GAME* game) {
         light_intensity = 1.0f;
         effect->effect_specific[0] = (int)default_col;
 
-        if (elapsed_time == 150) {
+        /* Frame-exact one-shot at t==150: spawn 16 twinkle effects. */
+        if (effect->effect_specific[1] < 1 && t >= 150.0f) {
+            effect->effect_specific[1] = 1;
             if (Common_Get(hem_visible) == FALSE) {
                 Common_Set(hem_visible, TRUE);
             } else {
                 Common_Set(hem_visible, FALSE);
             }
 
-            /* Spawn 16 twinkle effects at random points around the central effect */
             for (i = 0; i < 16; i++) {
                 xyz_t pos = effect->position;
                 s16 rnd_angle = RANDOM_F(66536.0f); // lol nice typo here.. should be 65536.0f
@@ -91,8 +96,11 @@ static void eMH_mv(eEC_Effect_c* effect, GAME* game) {
 
         effect->effect_specific[0] = (int)(255.0f * (*eEC_CLIP->calc_adjust_proc)(elapsed_time, 151, 195, 1.0f, 0.0f));
 
-        if (elapsed_time == 196) {
+        /* Frame-exact one-shot at t==196: kill effect and release point light. */
+        if (effect->effect_specific[1] < 2 && t >= 196.0f) {
+            effect->effect_specific[1] = 2;
             effect->timer = 0;
+            effect->lifetime = 0.0f;
 
             if (effect->arg0 == 0) {
                 int* const point_light_num = &eMH_special_point_light_num;
@@ -167,7 +175,7 @@ static void eMHK_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name,
 static void eMHK_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     static xyz_t xyz0 = { 0.0f, 0.0f, 0.0f };
 
-    effect->timer = 500.0f;
+    effect->timer = eMHK_TIMER;
 
     effect->acceleration = xyz0;
     effect->velocity = xyz0;
@@ -175,33 +183,43 @@ static void eMHK_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
     effect->velocity.y = -(RANDOM_F(0.1f) + 0.2f);
     effect->effect_specific[0] = RANDOM(32);
+    effect->effect_specific[1] = -1; /* last cycle index seen, for one-shot bg check */
 }
 
 static void eMHK_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 elapsed_time = (effect->timer + effect->effect_specific[0]) & 15;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    /* Cycle index uses lifetime so cadence is dt-correct. Original did (timer+ofs)&15. */
+    s16 cycle_t = (s16)(effect->lifetime + effect->effect_specific[0]) & 15;
+    s16 prev_cycle = effect->effect_specific[1];
     f32 scale;
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
     /* Shrink then scale */
-    if (elapsed_time <= 7) {
-        scale = (*eEC_CLIP->calc_adjust_proc)(elapsed_time, 0, 7, 0.0f, 0.0064999999f);
+    if (cycle_t <= 7) {
+        scale = (*eEC_CLIP->calc_adjust_proc)(cycle_t, 0, 7, 0.0f, 0.0064999999f);
     } else {
-        scale = (*eEC_CLIP->calc_adjust_proc)(elapsed_time, 8, 15, 0.0064999999f, 0.0f);
+        scale = (*eEC_CLIP->calc_adjust_proc)(cycle_t, 8, 15, 0.0064999999f, 0.0f);
     }
 
     effect->scale.x = scale;
     effect->scale.y = scale;
     effect->scale.z = scale;
 
-    if (elapsed_time == 0) {
+    if ((cycle_t == 0 && prev_cycle != 0) || (prev_cycle >= 0 && cycle_t < prev_cycle)) {
         f32 bg_y = mCoBG_GetBgY_OnlyCenter_FromWpos2(effect->position, 0.0f);
 
         if (effect->position.y < bg_y) {
             effect->timer = 0;
+            effect->lifetime = 0.0f;
         }
     }
+    effect->effect_specific[1] = cycle_t;
 }
 
 extern Gfx ef_takurami01_normal_render_mode[];
@@ -230,18 +248,19 @@ static void eMHL_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name,
 }
 
 static void eMHL_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
-    effect->timer = 195;
+    effect->timer = eMHL_TIMER;
     effect->effect_specific[0] = 0;
     effect->position.y = mCoBG_GetBgY_OnlyCenter_FromWpos2(effect->position, 0.0f);
 }
 
 static void eMHL_mv(eEC_Effect_c* effect, GAME* game) {
-    (*eEC_CLIP->set_continious_env_proc)(effect, 195, 195);
+    f32 t = (f32)eMHL_TIMER - effect->lifetime;
+    s16 elapsed_time = (s16)t;
+
+    (*eEC_CLIP->set_continious_env_proc)(effect, eMHL_TIMER, eMHL_TIMER);
 
     switch (effect->state) {
         case eEC_STATE_NORMAL: {
-            s16 elapsed_time = 195 - effect->timer;
-
             if (elapsed_time < 120) {
                 effect->effect_specific[0] = (int)(*eEC_CLIP->calc_adjust_proc)(elapsed_time, 0, 119, 170.0f, 0.0f);
             } else if (elapsed_time < 150) {
@@ -253,8 +272,6 @@ static void eMHL_mv(eEC_Effect_c* effect, GAME* game) {
         }
 
         case eEC_STATE_FINISHED: {
-            s16 elapsed_time = 195 - effect->timer;
-
             if (elapsed_time < 120) {
                 effect->effect_specific[0] = (int)(*eEC_CLIP->calc_adjust_proc)(elapsed_time, 0, 119, 50.0f, 0.0f);
             } else if (elapsed_time < 150) {

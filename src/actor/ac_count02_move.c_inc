@@ -47,7 +47,7 @@ static void aCOU_wait(STRUCTURE_ACTOR* actor, GAME_PLAY* play) {
     int digit_bits = 0b1111; // bitfield for each digit in the display
     int i;
 
-    if ((int)actor->arg1_f == 0) {
+    if (actor->arg1_f <= 0.0f) {
         aCOU_setNowTime(actor);
     } else {
         return;

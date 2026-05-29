@@ -358,7 +358,8 @@ static void aSPR_actor_move(ACTOR* actor, GAME* game) {
     super->struct_class.keyframe_saved_keyframe = super->struct_class.keyframe.frame_control.current_frame;
 
     (*super->struct_class.action_proc)((STRUCTURE_ACTOR*)super, play);
-    chase_f(&super->struct_class.arg0_f, aSPR_ctrl_light(super), 0.019532442f); // approx sqrt(0.000385f)
+    chase_f(&super->struct_class.arg0_f, aSPR_ctrl_light(super),
+            0.019532442f * (f32)game->graph->dt_num_60fps_frames); // approx sqrt(0.000385f)
 }
 
 static void aSPR_actor_init(ACTOR* actor, GAME* game) {

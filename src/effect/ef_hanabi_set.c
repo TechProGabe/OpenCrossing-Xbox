@@ -131,36 +131,37 @@ static void eHanabiSet_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
         effect->effect_specific[1] = FALSE;
         effect->effect_specific[0] = f;
     }
+    effect->effect_specific[2] = 0; /* next-frame-to-fire index */
 }
 
 static void eHanabiSet_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 alive_frames = EFFECT_LIFETIME - effect->timer;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
     int idx = effect->effect_specific[0];
     eHanabiSet_set* set = eHanabiSet_set_table[idx];
-    eHanabiSet_sqdt* frame_effect = set->frame_effects;
-    int i;
     int count = set->count;
+    int next = effect->effect_specific[2];
     eHanabiSet_SearchNicePos(&effect->position, game);
-    for (i = 0; i < count; frame_effect++, i++) {
-        if (frame_effect->frame == alive_frames) {
-            xyz_t effect_position = effect->position;
-            int effect_id = frame_effect->effect_id;
-            int bx, bz;
-            s16 arg = 0;
-            if (effect->effect_specific[1] == 1) {
-                arg = 1;
-            }
-            effect_position.x += RANDOM_F(250.f) - 125.f;
-            effect_position.z += RANDOM_F(250.f) - 125.f;
-            mFI_Wpos2BlockNum(&bx, &bz, effect_position);
-            if (!eEC_CLIP->check_lookat_block_proc(effect->position) ||
-                mFI_CheckBlockKind_OR(bx, bz, mRF_BLOCKKIND_SLOPE | mRF_BLOCKKIND_CLIFF)) {
-                effect_id = eEC_EFFECT_HANABI_DUMMY;
-            }
-            eEC_CLIP->effect_make_proc(effect_id, effect_position, effect->prio, 0, game,
-                                       (mActor_name_t)effect->item_name, arg, 0);
+    while (next < count && set->frame_effects[next].frame <= t) {
+        eHanabiSet_sqdt* frame_effect = &set->frame_effects[next];
+        xyz_t effect_position = effect->position;
+        int effect_id = frame_effect->effect_id;
+        int bx, bz;
+        s16 arg = 0;
+        if (effect->effect_specific[1] == 1) {
+            arg = 1;
         }
+        effect_position.x += RANDOM_F(250.f) - 125.f;
+        effect_position.z += RANDOM_F(250.f) - 125.f;
+        mFI_Wpos2BlockNum(&bx, &bz, effect_position);
+        if (!eEC_CLIP->check_lookat_block_proc(effect->position) ||
+            mFI_CheckBlockKind_OR(bx, bz, mRF_BLOCKKIND_SLOPE | mRF_BLOCKKIND_CLIFF)) {
+            effect_id = eEC_EFFECT_HANABI_DUMMY;
+        }
+        eEC_CLIP->effect_make_proc(effect_id, effect_position, effect->prio, 0, game,
+                                   (mActor_name_t)effect->item_name, arg, 0);
+        next++;
     }
+    effect->effect_specific[2] = next;
 }
 
 static void eHanabiSet_dw(eEC_Effect_c* effect, GAME* game) {

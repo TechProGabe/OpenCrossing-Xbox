@@ -44,8 +44,13 @@ static void eYukihane_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eYukihane_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 }
 
 extern u8 ef_yukihane01_0_inta_ia8[];
@@ -61,8 +66,11 @@ static u8* eYukihane_pattern_table[] = {
 extern Gfx ef_yukihane01_00_modelT[];
 
 static void eYukihane_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 elapsed_time = (s16)(16 - effect->timer) >> 1;
-    s16 frame = elapsed_time < 0 ? 0 : (elapsed_time <= 7 ? elapsed_time : 7);
+    f32 k = (16.0f - effect->lifetime) * 0.5f;
+    s16 frame;
+    if (k < 0.0f) k = 0.0f;
+    if (k > 7.0f) k = 7.0f;
+    frame = (s16)k;
     f32 scale;
 
     OPEN_DISP(game->graph);

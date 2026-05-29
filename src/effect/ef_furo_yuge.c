@@ -103,36 +103,55 @@ static void eFuro_Yuge_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eFuro_Yuge_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
-    effect->velocity.y *= GETREG(TAKREG, 0x39) * 0.001f + 0.9f;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 decay = powf(GETREG(TAKREG, 0x39) * 0.001f + 0.9f, dt);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
+    effect->velocity.y *= decay;
 }
 
 static void eFuro_Yuge_dw(eEC_Effect_c* effect, GAME* game) {
     int opacity;
-    s16 frames_alive = EFFECT_LIFETIME - effect->timer;
-    s16 half_timer = CLAMP(frames_alive >> 1, 0, EFFECT_LIFETIME / 2);
-    int texIdx1 = eFuro_Yuge_2tile_texture_idx[half_timer][0];
-    int texIdx2 = eFuro_Yuge_2tile_texture_idx[half_timer][1];
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    f32 k = t * 0.5f;
+    int i, j;
+    f32 frac;
+    int max_idx = (EFFECT_LIFETIME / 2) - 1;
+    int texIdx1, texIdx2;
+    u8 prim_f;
+
+    if (k < 0.0f) k = 0.0f;
+    if (k > (f32)max_idx) k = (f32)max_idx;
+    i = (int)k;
+    if (i > max_idx) i = max_idx;
+    j = (i < max_idx) ? i + 1 : i;
+    frac = k - (f32)i;
+    texIdx1 = eFuro_Yuge_2tile_texture_idx[i][0];
+    texIdx2 = eFuro_Yuge_2tile_texture_idx[i][1];
+    prim_f = (u8)(eFuro_Yuge_prim_f[i] + (eFuro_Yuge_prim_f[j] - eFuro_Yuge_prim_f[i]) * frac);
 
     effect->scale.x =
-        eEC_CLIP->calc_adjust_proc(frames_alive, 0, EFFECT_LIFETIME, GETREG(TAKREG, 0x37) * 0.0001f + 0.0015f,
-                                   GETREG(TAKREG, 0x38) * 0.0001f + 0.009f);
+        eEL_CalcAdjust_F(t, 0.0f, (f32)EFFECT_LIFETIME, GETREG(TAKREG, 0x37) * 0.0001f + 0.0015f,
+                         GETREG(TAKREG, 0x38) * 0.0001f + 0.009f);
     effect->scale.y = effect->scale.z = effect->scale.x;
 
-    if (frames_alive < EFFECT_STAGE1) {
-        opacity = eEC_CLIP->calc_adjust_proc(frames_alive, 0, EFFECT_STAGE1, GETREG(TAKREG, 0x35) + 50.f,
-                                             GETREG(TAKREG, 0x36) + 80.f);
+    if (t < (f32)EFFECT_STAGE1) {
+        opacity = (int)eEL_CalcAdjust_F(t, 0.0f, (f32)EFFECT_STAGE1, GETREG(TAKREG, 0x35) + 50.f,
+                                        GETREG(TAKREG, 0x36) + 80.f);
     } else {
-        opacity =
-            eEC_CLIP->calc_adjust_proc(frames_alive, EFFECT_STAGE1, EFFECT_LIFETIME, GETREG(TAKREG, 0x36) + 80.f, 0.0f);
+        opacity = (int)eEL_CalcAdjust_F(t, (f32)EFFECT_STAGE1, (f32)EFFECT_LIFETIME,
+                                        GETREG(TAKREG, 0x36) + 80.f, 0.0f);
     }
 
     OPEN_DISP(game->graph);
     eEC_CLIP->auto_matrix_xlu_proc(game, &effect->position, &effect->scale);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_1_TXT_SEG, eFuro_Yuge_texture_table[texIdx1]);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_2_TXT_SEG, eFuro_Yuge_texture_table[texIdx2]);
-    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, eFuro_Yuge_prim_f[half_timer], 255, 255, 255, opacity);
+    gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, 255, 255, 255, opacity);
     gSPDisplayList(NEXT_POLY_XLU_DISP, ef_dust01_modelT);
     CLOSE_DISP(game->graph);
 }

@@ -142,11 +142,38 @@ static void trademark_goto_demo_scene(GAME_TRADEMARK* trademark) {
         Common_Set(door_data, *demo_door_data);
         Common_Set(door_data.next_scene_id, demo_door_data->next_scene_id + 1); // go to next demo scene
         mTM_demotime_set(demo_no);                                              // set demo date, time, and weather
-        /* These mutate Save_t data (player/animal data for the demo).
-         * On GC the real save lives on the memory card and gets reloaded.
-         * On PC, common_data_reinit reloads from the GCI file on disk. */
-        mPr_RandomSetPlayerData_title_demo();
-        set_npc_4_title_demo(trademark);
+#ifdef TARGET_PC
+        /* On PC, save data lives only in memory. The title demo functions
+         * mPr_RandomSetPlayerData_title_demo and set_npc_4_title_demo both
+         * mutate Save_t data (player private data and animal data respectively).
+         * On GC this doesn't matter because the real save lives on the memory card
+         * and gets reloaded. On PC we must save and restore the data. */
+        {
+            extern int pc_save_loaded;
+            static Private_c pc_saved_private[PLAYER_NUM];
+            static Animal_c pc_saved_animals[ANIMAL_NUM_MAX];
+            static u8 pc_saved_door_original[PLAYER_NUM];
+            if (pc_save_loaded) {
+                for (i = 0; i < PLAYER_NUM; i++) {
+                    pc_saved_private[i] = Save_Get(private_data[i]);
+                    pc_saved_door_original[i] = Save_Get(homes[i]).door_original;
+                }
+                memcpy(pc_saved_animals, Save_Get(animals), sizeof(pc_saved_animals));
+            }
+            mPr_RandomSetPlayerData_title_demo();
+            set_npc_4_title_demo(trademark);
+            if (pc_save_loaded) {
+                for (i = 0; i < PLAYER_NUM; i++) {
+                    Save_Get(private_data[i]) = pc_saved_private[i];
+                    Save_Get(homes[i]).door_original = pc_saved_door_original[i];
+                }
+                memcpy(Save_Get(animals), pc_saved_animals, sizeof(pc_saved_animals));
+            }
+        }
+#else
+        mPr_RandomSetPlayerData_title_demo();                                   // randomize player data
+        set_npc_4_title_demo(trademark);                                        // set animals in the demo
+#endif
         Common_Set(transition.wipe_type, WIPE_TYPE_FADE_BLACK);
     }
 
@@ -157,11 +184,13 @@ static void trademark_goto_demo_scene(GAME_TRADEMARK* trademark) {
 }
 
 static void nintendo_logo_move(GAME_TRADEMARK* trademark) {
+    const double dt_frames = trademark->game.graph->dt_num_60fps_frames;
     int timer;
-    int alpha2;
+    float alpha2;
+
     if (trademark->stage == 2) {
         alpha2 = trademark->alpha2;
-        alpha2 += 0x880;
+        alpha2 += 0x880 * dt_frames;
         if (alpha2 >= 0xFF00) {
             trademark->stage = 4;
             alpha2 = 0xFF00;
@@ -169,13 +198,8 @@ static void nintendo_logo_move(GAME_TRADEMARK* trademark) {
 
         trademark->alpha2 = alpha2;
     } else if (trademark->stage == 4) {
-        if (trademark->logo_timer == 0) {
-            timer = 0;
-        } else {
-            timer = --trademark->logo_timer;
-        }
-
-        if (timer == 0) {
+        trademark->logo_timer -= dt_frames;
+        if (trademark->logo_timer <= 0) {
             trademark->stage = 3;
         }
     }
@@ -189,7 +213,7 @@ static void nintendo_logo_draw(GAME_TRADEMARK* trademark) {
     OPEN_DISP(g);
     nintendo_logo_move(trademark);
     gfx = NOW_POLY_OPA_DISP;
-    a = trademark->alpha2 >> 8;
+    a = (int)trademark->alpha2 >> 8;
     make_dl_nintendo_logo(&gfx, a);
     SET_POLY_OPA_DISP(gfx);
     CLOSE_DISP(g);
@@ -217,6 +241,7 @@ static void trademark_cancel(GAME_TRADEMARK* trademark) {
 
 static void trademark_move(GAME_TRADEMARK* trademark) {
     static u8 s_titlebgm[mTD_TITLE_DEMO_NUM] = { 83, 84, 85, 86, 87 }; // TODO: convert to enum/definitions
+    const double dt_frames = trademark->game.graph->dt_num_60fps_frames;
 
     if (trademark->stage == 0) {
         int titledemo_no = mTD_get_titledemo_no();
@@ -226,21 +251,15 @@ static void trademark_move(GAME_TRADEMARK* trademark) {
     }
 
     if (trademark->stage == 1) {
-        int move_timer;
-        if (trademark->move_timer == 0) {
-            move_timer = 0;
-        } else {
-            move_timer = --trademark->move_timer;
-        }
-
-        if (move_timer == 0) {
+        trademark->move_timer -= dt_frames;
+        if (trademark->move_timer <= 0) {
             trademark->stage = 2;
         }
     }
 
     if (trademark->stage == 3 || trademark->cancel) {
         if (trademark->alpha < 0xFF00) {
-            trademark->alpha += 0x880;
+            trademark->alpha += 0x880 * dt_frames;
         }
 
         if (trademark->check != TRUE) {
@@ -268,7 +287,7 @@ static void trademark_draw(GAME_TRADEMARK* trademark) {
         }
 
         gfx = NOW_POLY_XLU_DISP;
-        fade_black_draw(&gfx, trademark->alpha >> 8);
+        fade_black_draw(&gfx, (int)trademark->alpha >> 8);
         SET_POLY_XLU_DISP(gfx);
     }
 

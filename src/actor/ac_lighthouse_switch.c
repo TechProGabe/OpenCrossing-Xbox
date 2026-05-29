@@ -74,7 +74,7 @@ static void aLS_RequestPoleToMove(ACTOR* actorx, GAME* game) {
     aLS_pole_c* pole = &actor->ls_pole;
     cKF_SkeletonInfo_R_c* kf_p = &pole->keyframe;
 
-    pole->timer = 0;
+    pole->timer = 0.0f;
     pole->state = 1;
     pole->speed = 0.0f;
     sAdo_SysLevStart(0xC9);
@@ -115,7 +115,7 @@ static void aLS_PoleCt(aLS_pole_c* pole, GAME* game, int on) {
     static xyz_t pos = { 0.0f, 0.0f, 0.0f };
     cKF_SkeletonInfo_R_c* kf_p = &pole->keyframe;
 
-    pole->timer = 0;
+    pole->timer = 0.0f;
     pole->pos = pos;
     pole->state = 0;
     pole->speed = 0.0f;
@@ -126,7 +126,7 @@ static void aLS_PoleCt(aLS_pole_c* pole, GAME* game, int on) {
     if (on == TRUE) {
         pole->state = 1;
         pole->speed = 0.5f;
-        pole->timer = 48;
+        pole->timer = 48.0f;
         sAdo_SysLevStart(0xC9);
     }
 
@@ -285,11 +285,12 @@ static void Lighthouse_Switch_Actor_draw(ACTOR* actorx, GAME* game) {
 
 static void aLS_GetNowPoleAnimeSpeed(aLS_pole_c* pole, GAME* game, ACTOR* actorx) {
     LIGHTHOUSE_SWITCH_ACTOR* actor = (LIGHTHOUSE_SWITCH_ACTOR*)actorx;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (pole->state == 0) {
         switch (pole->keyframe_state) {
             case 0:
-                pole->speed -= 0.001f;
+                pole->speed -= 0.001f * dt;
                 if (pole->speed < GETREG(CRV, 83) * 0.01f + 0.1f) {
                     pole->keyframe_state = 1;
                 }
@@ -301,28 +302,29 @@ static void aLS_GetNowPoleAnimeSpeed(aLS_pole_c* pole, GAME* game, ACTOR* actorx
                     pole->keyframe.frame_control.start_frame = 100.0f;
                     pole->keyframe.frame_control.end_frame = 1.0f;
                     pole->speed = (GETREG(CRV, 83) * 0.01f + 0.1f) * 1.7f;
-                    pole->off_timer = 49;
+                    pole->off_timer = 49.0f;
                 }
                 break;
             default:
                 add_calc(&pole->speed, 0.0f, 0.4f, 1.0f, 0.001f);
-                if (pole->off_timer > 1) {
-                    pole->off_timer--;
-                } else if (pole->off_timer == 1) {
-                    aLS_RequestSwitchOFF(actorx, game);
-                    pole->off_timer = 0;
-                } else {
-                    pole->off_timer = 0;
+                if (pole->off_timer > 0.0f) {
+                    pole->off_timer -= dt;
+                    if (pole->off_timer <= 0.0f) {
+                        aLS_RequestSwitchOFF(actorx, game);
+                        pole->off_timer = 0.0f;
+                    }
                 }
                 break;
         }
     } else {
-        if (pole->timer < 48) {
-            s16 frame = pole->timer % 30;
-            s16 type = pole->timer / 30;
+        if (pole->timer < 48.0f) {
+            f32 prev_timer = pole->timer;
+            f32 next_timer = prev_timer + dt;
+            int start_frame = prev_timer <= 0.0f;
+            int second_kick_frame = prev_timer < 30.0f && next_timer >= 30.0f;
 
-            if (frame == 0) {
-                if (type == 0) {
+            if (start_frame || second_kick_frame) {
+                if (start_frame) {
                     pole->speed = (GETREG(CRV, 80) * 0.01f + 1.0f) * 0.065f;
                 } else {
                     pole->speed = (GETREG(CRV, 82) *  0.01f + 0.85f) * 0.065f;
@@ -331,9 +333,9 @@ static void aLS_GetNowPoleAnimeSpeed(aLS_pole_c* pole, GAME* game, ACTOR* actorx
                 add_calc(&pole->speed, 0.0f, (GETREG(CRV, 81) * 0.001f) + 0.09f, ((GETREG(CRV, 81) * 0.001f) + 0.09f) * 0.065f, 0.00001f);
             }
 
-            pole->timer++;
+            pole->timer = MIN(next_timer, 48.0f);
         } else {
-            pole->speed += 0.0035f;
+            pole->speed += 0.0035f * dt;
         }
     }
 

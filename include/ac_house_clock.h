@@ -41,6 +41,7 @@ typedef struct house_clock_actor_s HOUSE_CLOCK_ACTOR;
 struct house_clock_actor_s {
     ACTOR actor_class;
     aHC_clock_c clock;
+    f32 phase_frame;
 };
 
 extern ACTOR_PROFILE House_Clock_Profile;

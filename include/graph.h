@@ -11,6 +11,10 @@
 extern "C" {
 #endif
 
+#define GRAPH_BASE_FRAME_RATE 60.0f
+#define SECONDS_TO_FRAMES(seconds) ((seconds) * GRAPH_BASE_FRAME_RATE)
+#define FRAMES_TO_SECONDS(frames) ((frames) * (1.0f / GRAPH_BASE_FRAME_RATE))
+
 typedef enum {
     GRAPH_DOING_ZERO = 0,
     GRAPH_DOING_CT,
@@ -86,11 +90,23 @@ typedef struct graph_s {
     /* 0x035C */ Gfx* last_dl;
     /* 0x0360 */ Gfx* Gfx_list10; /* new0 (highlight/reflections?) */
     /* 0x0364 */ Gfx* Gfx_list11; /* new1 (highlight/reflections?) */
+    /* 0x0368 */ double dt; // number of seconds that have passed since the last execution frame
+    /* 0x0370 */ double dt_num_60fps_frames; // the number of 60FPS frames that have passed since the last execution frame
+    /* 0x0378 */ double dt_total_60fps_frames;
 } GRAPH ATTRIBUTE_ALIGN(8);       // one of the missing structs is likely aligned to 8 bytes.
 
 extern void graph_proc(void* arg);
 extern void graph_ct(GRAPH* graph);
 extern void graph_dt(GRAPH* graph);
+
+/* 60Hz dt helpers for spawn cooldowns whose inner code uses frame-exact
+ * patterns (counter & N, decrement-by-1). Caller supplies a per-site
+ * static float accumulator. Both cap to avoid spiral after stalls. */
+struct game_s;
+int graph_dt_60hz_ticks(struct game_s* game, float* accum);
+int graph_dt_period_elapsed(struct game_s* game, float* accum, float period_frames);
+double graph_dt_frame_time(struct game_s* game);
+int graph_dt_frame_phase(struct game_s* game, int period_frames);
 
 #define GRAPH_SET_DOING_POINT(g, point) ((g)->doing_point = GRAPH_DOING_##point)
 

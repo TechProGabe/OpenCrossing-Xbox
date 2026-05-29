@@ -116,25 +116,32 @@ static void eBushHappa_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eBushHappa_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    float dt = (float)game->graph->dt_num_60fps_frames;
+
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
     if (effect->effect_specific[2] == 1) {
         f32 val = 2.0f * sin_s(effect->effect_specific[3]);
+        float decay = powf(sqrtf(0.95f), dt);
 
         effect->offset.x = val;
         effect->offset.y = 0.0f;
         effect->offset.z = -val;
 
-        effect->velocity.x *= sqrtf(0.95f);
-        effect->velocity.z *= sqrtf(0.95f);
+        effect->velocity.x *= decay;
+        effect->velocity.z *= decay;
 
-        effect->effect_specific[0] += 0x662;
-        effect->effect_specific[1] += 0x662;
-        effect->effect_specific[3] += 0xA00;
+        effect->effect_specific[0] += (s16)(0x662 * dt);
+        effect->effect_specific[1] += (s16)(0x662 * dt);
+        effect->effect_specific[3] += (s16)(0xA00 * dt);
     } else {
-        effect->effect_specific[0] += 0x280;
-        effect->effect_specific[1] += 0x280;
+        effect->effect_specific[0] += (s16)(0x280 * dt);
+        effect->effect_specific[1] += (s16)(0x280 * dt);
 
         if (effect->velocity.y <= 0.0f) {
             effect->effect_specific[2] = 1;

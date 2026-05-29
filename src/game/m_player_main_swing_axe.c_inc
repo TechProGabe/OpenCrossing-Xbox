@@ -32,7 +32,7 @@ static void Player_actor_setup_main_Swing_axe_common(mPlayer_request_swing_axe_c
     main_axe->axe_common.axe_damage_no = req_axe->axe_damage_no;
     main_axe->bee_flag = FALSE;
     main_axe->bee_angle_y = 0;
-    main_axe->bee_counter = 0;
+    main_axe->bee_counter = 0.0f;
 }
 
 static void Player_actor_setup_main_Swing_axe(ACTOR* actor, GAME* game) {
@@ -115,7 +115,7 @@ static mActor_name_t Player_actor_Get_TreeNoToStumpNo(ACTOR* actor, GAME* game, 
             if (!IS_ITEM_BEE_TREE(item)) {
                 Common_Get(clip).bg_item_clip->item_tree_fruit_drop_proc(item, ut_x, ut_z, &pos);
             } else if (mPlib_able_birth_bee() && flag == FALSE) {
-                main_axe->bee_counter = 5;
+                main_axe->bee_counter = 5.0f;
             }
 
             if (check <= 0) {
@@ -234,14 +234,17 @@ static void Player_actor_SearchAnimation_Swing_axe(ACTOR* actor, GAME* game, mPl
     }
 }
 
-static void Player_actor_Check_BirthBee_Swing_axe(ACTOR* actor, mPlayer_main_swing_axe_c* main_axe, int arg) {
-    if (arg == 0 && main_axe->bee_counter > 0) {
+static void Player_actor_Check_BirthBee_Swing_axe(ACTOR* actor, GAME* game, mPlayer_main_swing_axe_c* main_axe, int arg) {
+    if (arg == 0 && main_axe->bee_counter > 0.0f) {
         if (Player_actor_Check_BirthBee_common(actor, main_axe->axe_common.item, main_axe->tree_ut_x,
                                                main_axe->tree_ut_z, &main_axe->bee_angle_y)) {
-            main_axe->bee_counter = 0;
+            main_axe->bee_counter = 0.0f;
             main_axe->bee_flag = 1;
         } else {
-            main_axe->bee_counter--;
+            main_axe->bee_counter -= (f32)game->graph->dt_num_60fps_frames;
+            if (main_axe->bee_counter < 0.0f) {
+                main_axe->bee_counter = 0.0f;
+            }
         }
     }
 }
@@ -294,7 +297,7 @@ static void Player_actor_main_Swing_axe(ACTOR* actor, GAME* game) {
     Player_actor_Reinput_force_position_angle(actor, game);
     arg = Player_actor_CulcAnimation_Swing_axe(actor, &frame_calc, 0);
     Player_actor_SearchAnimation_Swing_axe(actor, game, main_axe, 0, frame_calc);
-    Player_actor_Check_BirthBee_Swing_axe(actor, main_axe, 0);
+    Player_actor_Check_BirthBee_Swing_axe(actor, game, main_axe, 0);
     Player_actor_recover_lean_angle(actor);
     Player_actor_set_tex_anime_pattern(actor);
     Player_actor_ObjCheck_Swing_axe(actor, game, 0);

@@ -50,25 +50,26 @@ extern void aIKA_actor_init(ACTOR* actorx, GAME* game) {
     aIKA_setupAction(insect, act, game);
 }
 
-static void aIKA_fuwafuwa(aINS_INSECT_ACTOR* insect) {
+static void aIKA_fuwafuwa(aINS_INSECT_ACTOR* insect, GAME* game) {
     s16 angle = aIKA_ANGLE(insect);
     f32 last_spd_angle = aIKA_TURN_SPEED(insect) * sin_s(angle);
     f32 now_spd_angle;
+    s16 angle_step = aINS_dt_angle_step(game, 0x180);
 
-    aIKA_ANGLE(insect) = (s16)(angle + 0x180);
-    if ((s16)(angle + 0x180) < 0 && angle >= 0) {
+    aIKA_ANGLE(insect) = (s16)(angle + angle_step);
+    if ((s16)(angle + angle_step) < 0 && angle >= 0) {
         aIKA_TURN_SPEED(insect) = 10.0f + RANDOM_F(10.0f);
     }
 
-    angle += 0x180;
+    angle += angle_step;
     now_spd_angle = aIKA_TURN_SPEED(insect) * sin_s(angle);
     chase_f(&aIKA_SPEED(insect), insect->tools_actor.actor_class.max_velocity_y,
-            insect->tools_actor.actor_class.gravity * 0.5f);
+            aINS_dt_step(game, insect->tools_actor.actor_class.gravity * 0.5f));
     insect->tools_actor.actor_class.position_speed.y = aIKA_SPEED(insect) + (now_spd_angle - last_spd_angle);
 }
 
-static void aIKA_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.2f;
+static void aIKA_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += aINS_dt_step(game, 0.2f);
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -100,7 +101,7 @@ static int aIKA_check_condition(aINS_INSECT_ACTOR* insect, GAME_PLAY* play) {
 static void aIKA_calc_angle_search_player(ACTOR* actorx, s16 step) {
     s16 angle = actorx->shape_info.rotation.y;
 
-    chase_angle(&angle, actorx->player_angle_y, step);
+    chase_angle(&angle, actorx->player_angle_y, aINS_dt_angle_step((GAME*)gamePT, step));
     actorx->shape_info.rotation.y = angle;
     actorx->world.angle.y = angle;
 }
@@ -108,7 +109,7 @@ static void aIKA_calc_angle_search_player(ACTOR* actorx, s16 step) {
 static void aIKA_avoid(ACTOR* actorx, GAME* game) {
     f32 grav = actorx->gravity;
 
-    grav *= 1.1f;
+    grav *= DTCONV_GAME(1.1f, game);
     if (grav > 12.0f) {
         grav = 12.0f;
     }
@@ -130,7 +131,7 @@ static void aIKA_fly(ACTOR* actorx, GAME* game) {
     } else if (player != NULL && aIKA_check_condition(insect, play) == TRUE) {
         aIKA_setupAction(insect, aIKA_ACTION_SEARCH, game);
     } else {
-        s16 angle = actorx->shape_info.rotation.y + 0x80;
+        s16 angle = actorx->shape_info.rotation.y + aINS_dt_angle_step(game, 0x80);
 
         actorx->shape_info.rotation.y = angle;
         actorx->world.angle.y = angle;
@@ -176,14 +177,14 @@ static void aIKA_attack_wait(ACTOR* actorx, GAME* game) {
         aIKA_setupAction(insect, aIKA_ACTION_SEARCH, game);
     } else {
         aIKA_calc_angle_search_player(actorx, 0x600);
-        aIKA_ATTACK_TIMER(insect)++;
+        insect->timer += (f32)game->graph->dt_num_60fps_frames;
 
-        if (aIKA_ATTACK_TIMER(insect) > aIKA_ATTACK_TIME) {
+        if (insect->timer > aIKA_ATTACK_TIME) {
             if (mPlib_Check_stung_mosquito(actorx)) {
                 aIKA_setupAction(insect, aIKA_ACTION_ATTACK, game);
             } else {
                 mPlib_request_main_stung_mosquito_type1(actorx);
-                aIKA_ATTACK_TIMER(insect) = aIKA_ATTACK_TIME;
+                insect->timer = aIKA_ATTACK_TIME;
             }
         }
     }
@@ -226,6 +227,7 @@ static void aIKA_fly_init(aINS_INSECT_ACTOR* insect, GAME* game) {
 
 static void aIKA_attack_wait_init(aINS_INSECT_ACTOR* insect, GAME* game) {
     aIKA_ATTACK_TIMER(insect) = 0;
+    insect->timer = 0.0f;
 }
 
 static void aIKA_attack_init(aINS_INSECT_ACTOR* insect, GAME* game) {
@@ -272,8 +274,8 @@ static void aIKA_actor_move(ACTOR* actorx, GAME* game) {
     u32 label;
 
     if (mPlib_get_player_actor_main_index(game) != mPlayer_INDEX_PUTAWAY_NET && insect->action != aIKA_ACTION_ATTACK) {
-        aIKA_anime_proc(insect);
-        aIKA_fuwafuwa(insect);
+        aIKA_anime_proc(insect, game);
+        aIKA_fuwafuwa(insect, game);
     } else {
         insect->_1E0 = 0;
     }

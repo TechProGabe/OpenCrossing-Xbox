@@ -231,9 +231,9 @@ static void aAL_logo_in(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
 
 static void aAL_back_fadein(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   if (aAL_chk_start_key2(actor, game) == FALSE) {
-    s16 opacity = actor->back_opacity;
-    opacity += aAL_BACK_FADEIN_RATE;
-    
+    float opacity = actor->back_opacity;
+    opacity += game->graph->dt_num_60fps_frames * aAL_BACK_FADEIN_RATE;
+
     if (opacity > aAL_BACK_FADEIN_MAX) {
       opacity = aAL_BACK_FADEIN_MAX;
       aAL_setupAction(actor, game, aAL_ACTION_START_KEY_CHK_START);
@@ -253,11 +253,11 @@ static void aAL_game_start_wait(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   GAME_PLAY* play = (GAME_PLAY*)game;
   f32 start_opacity;
   s16 t;
-  s16 new_opacity_timer;
+  float new_opacity_timer;
 
   new_opacity_timer = actor->start_opacity_timer;
-  new_opacity_timer += (s16)(32768.0f / (actor->start_opacity_timer > 0 ? 50.0f : 22.0f));
-  start_opacity = 127.5f * sin_s(new_opacity_timer) + 127.5f; // 127.5f + 127.5f * [0, 1] = [127.5f, 255.0f] (opacity)
+  new_opacity_timer += game->graph->dt_num_60fps_frames * (32768.0f / (actor->start_opacity_timer > 0 ? 50.0f : 22.0f));
+  start_opacity = 127.5f * sin_s((u16)new_opacity_timer) + 127.5f; // 127.5f + 127.5f * [0, 1] = [127.5f, 255.0f] (opacity)
 
   if (start_opacity > 255.0f) {
     start_opacity = 255.0f;
@@ -336,6 +336,7 @@ static void aAL_fade_out_start_wait_init(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
 #ifdef PC_ENHANCEMENTS
 static void aAL_pc_game_start_wait(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   GAME_PLAY* play = (GAME_PLAY*)game;
+  f32 dt = (f32)game->graph->dt_num_60fps_frames;
   u16 on_btn = gamePT->pads[PAD0].on.button;
   s8 stick_y = gamePT->pads[PAD0].now.stick_y;
 
@@ -348,8 +349,11 @@ static void aAL_pc_game_start_wait(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   }
 
   /* Debounce */
-  if (actor->pc_cursor_cooldown > 0) {
-    actor->pc_cursor_cooldown--;
+  if (actor->pc_cursor_cooldown > 0.0f) {
+    actor->pc_cursor_cooldown -= dt;
+    if (actor->pc_cursor_cooldown < 0.0f) {
+      actor->pc_cursor_cooldown = 0.0f;
+    }
   }
 
   if (actor->pc_options_open) {
@@ -357,37 +361,37 @@ static void aAL_pc_game_start_wait(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
 
     /* Drive the shared settings menu. It returns 0 when the user picks
      * Back from the main settings page, which we treat as "close". */
-    if (actor->pc_cursor_cooldown == 0) {
+    if (actor->pc_cursor_cooldown <= 0.0f) {
       if (on_btn & BUTTON_A || on_btn & BUTTON_START) {
         if (!pc_settings_menu_confirm()) actor->pc_options_open = 0;
-        actor->pc_cursor_cooldown = 10;
+        actor->pc_cursor_cooldown = 10.0f;
       } else if (on_btn & BUTTON_B) {
         if (!pc_settings_menu_cancel()) actor->pc_options_open = 0;
-        actor->pc_cursor_cooldown = 10;
+        actor->pc_cursor_cooldown = 10.0f;
       } else if (stick_y > 30 || (on_btn & BUTTON_DUP)) {
-        pc_settings_menu_nav_up();   actor->pc_cursor_cooldown = 8;
+        pc_settings_menu_nav_up();   actor->pc_cursor_cooldown = 8.0f;
       } else if (stick_y < -30 || (on_btn & BUTTON_DDOWN)) {
-        pc_settings_menu_nav_down(); actor->pc_cursor_cooldown = 8;
+        pc_settings_menu_nav_down(); actor->pc_cursor_cooldown = 8.0f;
       } else if (stick_x > 30 || (on_btn & BUTTON_DRIGHT)) {
-        pc_settings_menu_nav_right(); actor->pc_cursor_cooldown = 8;
+        pc_settings_menu_nav_right(); actor->pc_cursor_cooldown = 8.0f;
       } else if (stick_x < -30 || (on_btn & BUTTON_DLEFT)) {
-        pc_settings_menu_nav_left(); actor->pc_cursor_cooldown = 8;
+        pc_settings_menu_nav_left(); actor->pc_cursor_cooldown = 8.0f;
       }
     }
     return;
   }
 
   /* Main menu navigation (3 items: Start / Options / Quit) */
-  if (actor->pc_cursor_cooldown == 0) {
+  if (actor->pc_cursor_cooldown <= 0.0f) {
     if (stick_y > 30 || (on_btn & BUTTON_DUP)) {
       if (actor->pc_menu_sel > 0) {
         actor->pc_menu_sel--;
-        actor->pc_cursor_cooldown = 10;
+        actor->pc_cursor_cooldown = 10.0f;
       }
     } else if (stick_y < -30 || (on_btn & BUTTON_DDOWN)) {
       if (actor->pc_menu_sel < 2) {
         actor->pc_menu_sel++;
-        actor->pc_cursor_cooldown = 10;
+        actor->pc_cursor_cooldown = 10.0f;
       }
     }
   }
@@ -404,12 +408,12 @@ static void aAL_pc_game_start_wait(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
         break;
       case 1: /* Options */
         actor->pc_options_open = 1;
-        actor->pc_cursor_cooldown = 10;
+        actor->pc_cursor_cooldown = 10.0f;
         pc_settings_menu_enter();
         break;
       case 2: /* Quit Game */
         g_pc_running = 0;
-        actor->pc_cursor_cooldown = 10;
+        actor->pc_cursor_cooldown = 10.0f;
         break;
     }
   }
@@ -456,7 +460,7 @@ static void aAL_actor_move(ACTOR* actor, GAME* game) {
 
   lbRTC_Sampling();
   if (logo_actor->title_timer > 0) {
-    logo_actor->title_timer--;
+    logo_actor->title_timer -= game->graph->dt_num_60fps_frames;
   }
 
   (*logo_actor->action_proc)(logo_actor, game);
@@ -469,7 +473,7 @@ static void aAL_copyright_draw(ANIMAL_LOGO_ACTOR* actor, GRAPH* graph) {
 
   Gfx* gfx;
 
-  actor->copyright_opacity += aAL_COPYRIGHT_ALPHA_RATE;
+  actor->copyright_opacity += graph->dt_num_60fps_frames * aAL_COPYRIGHT_ALPHA_RATE;
   if (actor->copyright_opacity >= 255) {
     actor->copyright_opacity = 255;
   }
@@ -477,7 +481,7 @@ static void aAL_copyright_draw(ANIMAL_LOGO_ACTOR* actor, GRAPH* graph) {
   OPEN_DISP(graph);
 
   gfx = NOW_FONT_DISP;
-  gDPSetPrimColor(gfx++, 0, 255, 40, 40, 45, actor->copyright_opacity);
+  gDPSetPrimColor(gfx++, 0, 255, 40, 40, 45, (int)actor->copyright_opacity);
   gDPSetEnvColor(gfx++, 210, 210, 215, 0);
   gDPSetOtherMode(gfx++, G_AD_DISABLE | G_CD_DISABLE | G_CK_NONE | G_TC_FILT | G_TF_POINT | G_TT_NONE | G_TL_TILE | G_TD_CLAMP | G_TP_NONE | G_CYC_1CYCLE | G_PM_NPRIMITIVE, G_AC_THRESHOLD | G_ZS_PRIM | G_RM_CLD_SURF | G_RM_CLD_SURF2);
   gSPLoadGeometryMode(gfx++, 0);
@@ -558,7 +562,7 @@ static void aAL_copyright_draw(ANIMAL_LOGO_ACTOR* actor, GRAPH* graph) {
     };
     // clang-format on
 
-    actor->copyright_opacity += aAL_COPYRIGHT_ALPHA_RATE;
+    actor->copyright_opacity += graph->dt_num_60fps_frames * aAL_COPYRIGHT_ALPHA_RATE;
     if (actor->copyright_opacity >= 255) {
         actor->copyright_opacity = 255;
     }
@@ -570,7 +574,7 @@ static void aAL_copyright_draw(ANIMAL_LOGO_ACTOR* actor, GRAPH* graph) {
     Matrix_translate(32.0f, -1376.0f, 0.0f, MTX_MULT);
     Matrix_scale(0.16208267f, 0.16208267f, 0.16208267f, MTX_MULT);
     gSPMatrix(FONT_DISP++, _Matrix_to_Mtx_new(graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-    gDPSetPrimColor(FONT_DISP++, 0, 255, 255, 255, 255, actor->copyright_opacity);
+    gDPSetPrimColor(FONT_DISP++, 0, 255, 255, 255, 255, (int)actor->copyright_opacity);
     gSPDisplayList(FONT_DISP++, init_disp);
     gSPDisplayList(FONT_DISP++, logo_nin_copyT_model);
 
@@ -626,7 +630,7 @@ static void aAL_back_draw(GRAPH* graph, ANIMAL_LOGO_ACTOR* actor) {
 
   gfx = NOW_FONT_DISP;
   gSPMatrix(gfx++, _Matrix_to_Mtx_new(graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-  gDPSetPrimColor(gfx++, 0, 255, 80, 60, 0, actor->back_opacity);
+  gDPSetPrimColor(gfx++, 0, 255, 80, 60, 0, (int)actor->back_opacity);
   gSPDisplayList(gfx++, init_disp);
   gSPDisplayList(gfx++, logo_us_backA_model);
   gSPDisplayList(gfx++, logo_us_backB_model);
@@ -801,7 +805,11 @@ static void aAL_pc_menu_draw(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   /* Hide the title's main menu items while the Options overlay is open —
    * otherwise Start/Options/Quit bleed through the dimmed backdrop. */
   if (!actor->pc_options_open) {
-    /* Match the pause/settings menu's selection style. */
+    /* Match the pause/settings menu's selection style: scale the selected
+     * row up (no cursor glyph), and keep unselected rows a little more
+     * opaque than the old 160-alpha — they were hard to read against the
+     * bright title background. Each row's X is recomputed per-scale so the
+     * wider selected label stays centred. */
     for (int i = 0; i < 3; i++) {
       f32 sc = (sel == i) ? 1.15f : 1.0f;
       f32 w = (f32)mFont_GetStringWidth(labels[i], label_lens[i], TRUE) * sc;
@@ -845,12 +853,12 @@ static void aAL_actor_draw(ACTOR* actor, GAME* game) {
 #ifdef TARGET_PC
   { extern int g_pc_verbose; if (g_pc_verbose && (aAL_draw_log_counter % 60) == 0) {
     printf("[LOGO] draw: action=%d pad_connected=%d back_opacity=%d copyright_opacity=%d press_start_opacity=%.0f\n",
-           logo_actor->action, pad_connected, logo_actor->back_opacity, logo_actor->copyright_opacity, logo_actor->press_start_opacity);
+           logo_actor->action, pad_connected, (int)logo_actor->back_opacity, (int)logo_actor->copyright_opacity, logo_actor->press_start_opacity);
   }}
 #else
   if ((aAL_draw_log_counter % 60) == 0) {
     printf("[LOGO] draw: action=%d pad_connected=%d back_opacity=%d copyright_opacity=%d press_start_opacity=%.0f\n",
-           logo_actor->action, pad_connected, logo_actor->back_opacity, logo_actor->copyright_opacity, logo_actor->press_start_opacity);
+           logo_actor->action, pad_connected, (int)logo_actor->back_opacity, (int)logo_actor->copyright_opacity, logo_actor->press_start_opacity);
   }
 #endif
   aAL_draw_log_counter++;

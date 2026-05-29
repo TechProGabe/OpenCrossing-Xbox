@@ -95,41 +95,51 @@ static void eKPun_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eKPun_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 counter = 26 - effect->timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 26.0f - effect->lifetime;
 
-    if (counter < 4) {
-        effect->offset.y += 3.0f;
+    if (t < 4.0f) {
+        effect->offset.y += 3.0f * dt;
     }
 }
 
 static void eKPun_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 counter = 26 - effect->timer;
-    s16 idx = CLAMP(counter >> 1, 0, 12);
+    f32 t = 26.0f - effect->lifetime;
+    f32 k = t * 0.5f;
+    int i, j;
+    f32 frac;
     xyz_t* pos_p = &effect->position;
     xyz_t* scale_p = &effect->scale;
     xyz_t* offset_p = &effect->offset;
     GAME_PLAY* play = (GAME_PLAY*)game;
     int tex0;
     int tex1;
-    u8 prim_f;
-    u8 prim_gb;
-    u8 prim_a;
-    u8 env_gb;
+    u8 prim_f, prim_gb, prim_a, env_gb;
 
-    tex0 = eKPun_texture_anime_idx[idx].tex0;
-    tex1 = eKPun_texture_anime_idx[idx].tex1;
-    prim_f = eKPun_prim_f_table[idx];
-    prim_gb = (int)eEC_CLIP->calc_adjust_proc(counter, 0, 8, 200.0f, 255.0f);
-    prim_a = (int)eEC_CLIP->calc_adjust_proc(counter, 12, 26, 255.0f, 0.0f);
-    env_gb = (int)eEC_CLIP->calc_adjust_proc(counter, 0, 8, 0.0f, 255.0f);
+    if (k < 0.0f) k = 0.0f;
+    if (k > 12.0f) k = 12.0f;
+    i = (int)k;
+    if (i > 12) i = 12;
+    j = (i < 12) ? i + 1 : i;
+    frac = k - (f32)i;
+    tex0 = eKPun_texture_anime_idx[i].tex0;
+    tex1 = eKPun_texture_anime_idx[i].tex1;
+    prim_f = (u8)(eKPun_prim_f_table[i] + (eKPun_prim_f_table[j] - eKPun_prim_f_table[i]) * frac);
+    prim_gb = (int)eEL_CalcAdjust_F(t, 0.0f, 8.0f, 200.0f, 255.0f);
+    prim_a = (int)eEL_CalcAdjust_F(t, 12.0f, 26.0f, 255.0f, 0.0f);
+    env_gb = (int)eEL_CalcAdjust_F(t, 0.0f, 8.0f, 0.0f, 255.0f);
 
-    if (counter <= 8) {
+    if (t <= 8.0f) {
         static f32 scale_y_table[5] = { 0.0085f, 0.014450001530f, 0.0289000030f, 0.014450001530f, 0.0085f };
-        
-        effect->scale.y = scale_y_table[idx];
+        f32 ks = (k < 4.0f) ? k : 4.0f;
+        int si = (int)ks;
+        f32 sf = ks - (f32)si;
+        int sj = (si < 4) ? si + 1 : si;
+
+        effect->scale.y = scale_y_table[si] + (scale_y_table[sj] - scale_y_table[si]) * sf;
         effect->scale.x = 0.0085f;
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(counter, 10, 26, 0.0085f, 0.017f);
+        effect->scale.x = eEL_CalcAdjust_F(t, 10.0f, 26.0f, 0.0085f, 0.017f);
         effect->scale.y = effect->scale.x;
     }
 

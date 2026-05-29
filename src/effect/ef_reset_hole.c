@@ -1,5 +1,6 @@
 #include "ef_effect_control.h"
 
+#include "graph.h"
 #include "m_common_data.h"
 #include "m_debug.h"
 #include "m_rcp.h"
@@ -44,6 +45,9 @@ static void eReset_Hole_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     }
 
     effect->effect_specific[0] = *(s16*)ct_arg;
+    effect->effect_specific[1] = 0; /* emit toggle counter */
+    effect->effect_specific[2] = 0;
+    effect->effect_specific[3] = 0;
 }
 
 static void eReset_Hole_mv(eEC_Effect_c* effect, GAME* game) {
@@ -60,20 +64,26 @@ static void eReset_Hole_mv(eEC_Effect_c* effect, GAME* game) {
             scale = (GETREG(TAKREG, 0x32) * 0.01f + 0.93f) * 0.01f;
         }
         effect->scale.x = effect->scale.y = effect->scale.z =
-            eEC_CLIP->calc_adjust_proc(effect->timer, 0, 16, scale, 0.0f);
+            eEL_CalcAdjust_F(effect->lifetime, 0.0f, 16.0f, scale, 0.0f);
 
-        if ((effect->timer & 7) == 0) {
-            for (i = 0; i < 3; i++) {
-                static s16 angle_tbl[] = { DEG2SHORT_ANGLE(0.0f), DEG2SHORT_ANGLE(135.0f), DEG2SHORT_ANGLE(270.0f) };
-                xyz_t pos = effect->position;
+        {
+            effect->effect_specific[2] += (s16)((f32)game->graph->dt_num_60fps_frames * 100.0f);
+            if (effect->effect_specific[2] >= 800) {
+                effect->effect_specific[2] -= 800;
+                int rotate_180 = ((effect->effect_specific[1] & 1) == 0);
+                for (i = 0; i < 3; i++) {
+                    static s16 angle_tbl[] = { DEG2SHORT_ANGLE(0.0f), DEG2SHORT_ANGLE(135.0f), DEG2SHORT_ANGLE(270.0f) };
+                    xyz_t pos = effect->position;
 
-                angle = angle_tbl[i];
-                if ((effect->timer & 15) == 0) {
-                    angle += DEG2SHORT_ANGLE2(180.0f);
+                    angle = angle_tbl[i];
+                    if (rotate_180) {
+                        angle += DEG2SHORT_ANGLE2(180.0f);
+                    }
+
+                    eEC_CLIP->effect_make_proc(eEC_EFFECT_DIG_MUD, pos, effect->prio, angle, game, effect->item_name,
+                                               effect->arg0, DEG2SHORT_ANGLE(-179.965f));
                 }
-
-                eEC_CLIP->effect_make_proc(eEC_EFFECT_DIG_MUD, pos, effect->prio, angle, game, effect->item_name,
-                                           effect->arg0, DEG2SHORT_ANGLE(-179.965f));
+                effect->effect_specific[1]++;
             }
         }
     } else if (effect->state == eEC_STATE_FINISHED) {
@@ -83,20 +93,26 @@ static void eReset_Hole_mv(eEC_Effect_c* effect, GAME* game) {
             scale = (GETREG(TAKREG, 0x32) * 0.01f + 0.93f) * 0.01f;
         }
         effect->scale.x = effect->scale.y = effect->scale.z =
-            eEC_CLIP->calc_adjust_proc(effect->timer, 0, 24, 0.0f, scale);
+            eEL_CalcAdjust_F(effect->lifetime, 0.0f, 24.0f, 0.0f, scale);
 
-        if (((effect->timer & 7) == 0) && (effect->timer > 8)) {
-            for (i = 0; i < 3; i++) {
-                static s16 angle_tbl[] = { DEG2SHORT_ANGLE(0.0f), DEG2SHORT_ANGLE(135.0f), DEG2SHORT_ANGLE(270.0f) };
-                xyz_t pos = effect->position;
+        if (effect->lifetime > 8.0f) {
+            effect->effect_specific[3] += (s16)((f32)game->graph->dt_num_60fps_frames * 100.0f);
+            if (effect->effect_specific[3] >= 800) {
+                effect->effect_specific[3] -= 800;
+                int rotate_180 = ((effect->effect_specific[1] & 1) == 0);
+                for (i = 0; i < 3; i++) {
+                    static s16 angle_tbl[] = { DEG2SHORT_ANGLE(0.0f), DEG2SHORT_ANGLE(135.0f), DEG2SHORT_ANGLE(270.0f) };
+                    xyz_t pos = effect->position;
 
-                angle = angle_tbl[i];
-                if ((effect->timer & 15) == 0) {
-                    angle += DEG2SHORT_ANGLE2(180.0f);
+                    angle = angle_tbl[i];
+                    if (rotate_180) {
+                        angle += DEG2SHORT_ANGLE2(180.0f);
+                    }
+
+                    eEC_CLIP->effect_make_proc(eEC_EFFECT_DIG_MUD, pos, effect->prio, angle, game, effect->item_name,
+                                               effect->arg0, DEG2SHORT_ANGLE(-179.965f));
                 }
-
-                eEC_CLIP->effect_make_proc(eEC_EFFECT_DIG_MUD, pos, effect->prio, angle, game, effect->item_name,
-                                           effect->arg0, DEG2SHORT_ANGLE(-179.965f));
+                effect->effect_specific[1]++;
             }
         }
     } else {

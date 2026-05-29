@@ -50,8 +50,14 @@ static void eBushYuki_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 void eBushYuki_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    float dt = (float)game->graph->dt_num_60fps_frames;
+
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 }
 
 static void eBushYuki_dw(eEC_Effect_c* effect, GAME* game) {

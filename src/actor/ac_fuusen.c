@@ -40,7 +40,7 @@ static void aFSN_actor_ct(ACTOR* actorx, GAME* game) {
   static xyz_t Init_Size = { 0.01f, 0.01f, 0.01f };
   f32 balloon_ground_y = mCoBG_GetBalloonGroundY(&actorx->world.position);
 
-  fuusen->escape_timer = 2000;
+  fuusen->escape_timer = 2000.0f;
   cKF_SkeletonInfo_R_ct(keyframe_p, &cKF_bs_r_act_balloon, &cKF_ba_r_act_balloon, fuusen->work, fuusen->morph);
   cKF_SkeletonInfo_R_init_standard_repeat(keyframe_p, &cKF_ba_r_act_balloon, NULL);
   Shape_Info_init(actorx, 0.0f, &mAc_ActorShadowCircle, 10.0f, 10.0f);
@@ -79,7 +79,10 @@ static void aFSN_moving(ACTOR* actorx, GAME* game) {
   mActor_name_t* fg_item_p;
 
   if (fuusen->escape_timer > 0) {
-    fuusen->escape_timer--;
+    fuusen->escape_timer -= (f32)game->graph->dt_num_60fps_frames;
+    if (fuusen->escape_timer < 0.0f) {
+      fuusen->escape_timer = 0.0f;
+    }
   }
   else {
     /* Escape if flown to the edge of the map */
@@ -87,7 +90,7 @@ static void aFSN_moving(ACTOR* actorx, GAME* game) {
       (actorx->world.position.x <= 660.0f || actorx->world.position.x >= 3820.0f) ||
       (actorx->world.position.z <= 660.0f || actorx->world.position.z >= 4460.0f)
     ) {
-      fuusen->escape_timer = aFSN_ESCAPE_TIMER;
+      fuusen->escape_timer = (f32)aFSN_ESCAPE_TIMER;
       aFSN_setupAction(fuusen, game, aFSN_ACTION_ESCAPE);
       return;
     }
@@ -97,7 +100,7 @@ static void aFSN_moving(ACTOR* actorx, GAME* game) {
       (actorx->world.position.x <= 2440.0f && actorx->world.position.x >= 2040.0f) &&
       (actorx->world.position.z <=  960.0f && actorx->world.position.z >=  800.0f)
     ) {
-      fuusen->escape_timer = aFSN_ESCAPE_TIMER;
+      fuusen->escape_timer = (f32)aFSN_ESCAPE_TIMER;
       aFSN_setupAction(fuusen, game, aFSN_ACTION_ESCAPE);
       return;
     }
@@ -105,7 +108,7 @@ static void aFSN_moving(ACTOR* actorx, GAME* game) {
 
   fuusen->wind_power = mEnv_GetWindPowerF();
   actorx->speed = fuusen->wind_power * 0.5f + 1.0f;
-  fuusen->fuwafuwa_cycle += 250;
+  fuusen->fuwafuwa_cycle += (s16)(250.0f * game->graph->dt_num_60fps_frames);
   add_calc(
     &actorx->world.position.y,
     balloon_y + sin_s(fuusen->fuwafuwa_cycle) * 10.0f,
@@ -247,10 +250,10 @@ static void aFSN_moving(ACTOR* actorx, GAME* game) {
 static void aFSN_wood_stop(ACTOR* actorx, GAME* game) {
   FUUSEN_ACTOR* fuusen = (FUUSEN_ACTOR*)actorx;
 
-  fuusen->escape_timer--;
+  fuusen->escape_timer -= (f32)game->graph->dt_num_60fps_frames;
 
   if (fuusen->escape_timer <= aFSN_ESCAPE_TIMER) {
-    fuusen->escape_timer = aFSN_ESCAPE_TIMER;
+    fuusen->escape_timer = (f32)aFSN_ESCAPE_TIMER;
     aFSN_setupAction(fuusen, game, aFSN_ACTION_ESCAPE);
   }
   else {
@@ -371,7 +374,7 @@ static void aFSN_birth_init(FUUSEN_ACTOR* fuusen, GAME* game) {
   randomize_z = FALSE;
   fuusen->actor_class.world.position.y = balloon_y + 200.0f;
   fuusen->type_idx = play->game_frame % 5;
-  fuusen->timer = 10;
+  fuusen->timer = 10.0f;
 
   if (birth_pos_random_data[fuusen->wind_idx].x != 0.0f && birth_pos_random_data[fuusen->wind_idx].z != 0.0f) {
     randomize_z = play->game_frame & 1; // randomly choose between X & Z
@@ -414,7 +417,7 @@ static void aFSN_moving_init(FUUSEN_ACTOR* fuusen, GAME* game) {
 
 static void aFSN_wood_stop_init(FUUSEN_ACTOR* fuusen, GAME* game) {
   fuusen->actor_class.speed = 0.0f;
-  fuusen->escape_timer = 18000 + aFSN_ESCAPE_TIMER;
+  fuusen->escape_timer = 18000.0f + (f32)aFSN_ESCAPE_TIMER;
   sAdo_OngenTrgStart(0x402, &fuusen->actor_class.world.position);
 }
 
@@ -429,7 +432,7 @@ static void aFSN_escape_init(FUUSEN_ACTOR* fuusen, GAME* game) {
   actorx->gravity = 0.5f;
   fuusen->look_up_flag = FALSE;
 
-  if (fuusen->escape_timer == aFSN_ESCAPE_TIMER) {
+  if (fuusen->escape_timer <= (f32)aFSN_ESCAPE_TIMER) {
     fuusen->count = 1;
 
     /* If the balloon is within 1 acre of distance to the player when it flies away, the 'look up flag' is set */
@@ -465,11 +468,11 @@ static void aFSN_actor_move(ACTOR* actorx, GAME* game) {
   FUUSEN_ACTOR* fuusen = (FUUSEN_ACTOR*)actorx;
   cKF_SkeletonInfo_R_c* keyframe_p = &fuusen->keyframe;
 
-  if (fuusen->timer == 0) {
+  if (fuusen->timer <= 0.0f) {
     Actor_position_moveF(actorx);
   }
   else if (fuusen->timer > 0) {
-    fuusen->timer--;
+    fuusen->timer -= (f32)game->graph->dt_num_60fps_frames;
   }
 
   if (fuusen_DEBUG_mode_flag != FALSE && zurumode_flag != 0) {
@@ -558,7 +561,7 @@ static void aFSN_actor_draw(ACTOR* actorx, GAME* game) {
   ) {
     Matrix_push();
 
-    if (fuusen->action != aFSN_ACTION_ESCAPE || fuusen->escape_timer == aFSN_ESCAPE_TIMER || (fuusen->action == aFSN_ACTION_ESCAPE && fuusen->count == 0)) {
+    if (fuusen->action != aFSN_ACTION_ESCAPE || fuusen->escape_timer <= (f32)aFSN_ESCAPE_TIMER || (fuusen->action == aFSN_ACTION_ESCAPE && fuusen->count == 0)) {
       /* Draw present */
       Matrix_translate(actorx->world.position.x, actorx->world.position.y, actorx->world.position.z, MTX_LOAD);
       Matrix_scale(0.01f, 0.01f, 0.01f, MTX_MULT);

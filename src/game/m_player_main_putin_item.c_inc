@@ -82,7 +82,7 @@ static void Player_actor_SetItemScale_Putin_item(ACTOR* actorx) {
         f32 timer = *timer_p;
 
         if (*timer_p < 18.0f) {
-            (*timer_p) += 1.0f;
+            (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
             player->item_scale = 1.0f - get_percent_forAccelBrake(*timer_p, 0.0f, 18.0f, 0.0f, 0.0f);
         }
     }

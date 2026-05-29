@@ -107,13 +107,13 @@ static int aIBT_check_live_condition(aINS_INSECT_ACTOR* insect) {
     return cond;
 }
 
-static void aIBT_anime_proc(aINS_INSECT_ACTOR* insect) {
+static void aIBT_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
     switch (insect->type) {
         case aINS_INSECT_TYPE_BELL_CRICKET:
-            insect->_1E0 += 1.0f;
+            insect->_1E0 += aINS_dt_step(game, 1.0f);
             break;
         default:
-            insect->_1E0 += 0.3f;
+            insect->_1E0 += aINS_dt_step(game, 0.3f);
             break;
     }
 
@@ -295,13 +295,13 @@ static void aIBT_avoid(ACTOR* actor, GAME* game) {
     f32 timer;
     s16 angle;
 
-    aIBT_anime_proc(insect);
+    aIBT_anime_proc(insect, game);
     if (insect->tools_actor.actor_class.bg_collision_check.result.is_in_water) {
         aIBT_setupAction(insect, aIBT_ACTION_DROWN, &play->game);
     } else if ((aIBT_check_player_net(insect) == FALSE) &&
                (insect->tools_actor.actor_class.bg_collision_check.result.on_ground)) {
         if (insect->timer > 0) {
-            insect->timer--;
+            insect->timer -= (f32)game->graph->dt_num_60fps_frames;
             insect->tools_actor.actor_class.speed = 0.0f;
         } else {
             insect->timer = 8;
@@ -331,13 +331,13 @@ static void aIBT_avoid(ACTOR* actor, GAME* game) {
 static void aIBT_let_escape(ACTOR* actor, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actor;
 
-    aIBT_anime_proc(insect);
+    aIBT_anime_proc(insect, game);
     if (insect->tools_actor.actor_class.bg_collision_check.result.is_in_water) {
         aIBT_setupAction(insect, aIBT_ACTION_DROWN, game);
     } else {
         if (insect->tools_actor.actor_class.bg_collision_check.result.on_ground) {
             if (insect->timer > 0) {
-                insect->timer--;
+                insect->timer -= (f32)game->graph->dt_num_60fps_frames;
                 insect->tools_actor.actor_class.speed = 0.0f;
             } else {
                 insect->timer = 8;
@@ -398,12 +398,12 @@ static void aIBT_wait(ACTOR* actor, GAME* game) {
     static u8 batta_sound_data[] = {
         159,158,160,157,
     };
-    GAME_PLAY* play;
     aINS_INSECT_ACTOR* insect;
+    int jump_phase;
 
 
-    play = (GAME_PLAY*)game;
     insect = (aINS_INSECT_ACTOR*)actor;
+    jump_phase = aINS_dt_phase(game, &insect->_254, 200);
 
     
     if (actor->bg_collision_check.result.is_in_water) {
@@ -420,7 +420,7 @@ static void aIBT_wait(ACTOR* actor, GAME* game) {
             if ((actor->bg_collision_check.result.on_ground) &&
                 (insect->patience < 20.0f)) {
                 if (insect->type == aINS_INSECT_TYPE_BELL_CRICKET) {
-                    aIBT_anime_proc(insect);
+                    aIBT_anime_proc(insect, game);
                 }
                 if (insect->s32_work1 == 0) {
                     sAdo_OngenPos((u32)insect, batta_sound_data[idx], &actor->world.position);
@@ -428,7 +428,7 @@ static void aIBT_wait(ACTOR* actor, GAME* game) {
             }
         }
         if (insect->timer > 0) {
-            insect->timer--;
+            insect->timer -= (f32)game->graph->dt_num_60fps_frames;
 
         } else {
             int action;
@@ -437,10 +437,10 @@ static void aIBT_wait(ACTOR* actor, GAME* game) {
                 action = aIBT_ACTION_JUMP;
             } else {
                 if ((insect->type == aINS_INSECT_TYPE_LONG_LOCUST) || (insect->type == aINS_INSECT_TYPE_MIGRATORY_LOCUST)) {
-                    if ((int)(play->game_frame % 200) > 20) {
+                    if (jump_phase > 20) {
                         action = aIBT_ACTION_JUMP;
                     }
-                } else if ((int)(play->game_frame % 200) < 20) {
+                } else if (jump_phase < 20) {
                     action = aIBT_ACTION_JUMP;
                 }
             }
@@ -506,13 +506,11 @@ static void aIBT_chg_direction_init(aINS_INSECT_ACTOR* insect, GAME* game) {
 }
 
 static void aIBT_wait_init(aINS_INSECT_ACTOR* insect, GAME* game)  {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    
     if (aIBT_chk_active_range(NULL, insect) == FALSE) {
         insect->timer = 60;
     }
     else{
-        insect->timer = (2.0f * (120.0f + (play->game_frame % 240)));
+        insect->timer = 2.0f * (120.0f + RANDOM_F(240.0f));
     }
 }
 

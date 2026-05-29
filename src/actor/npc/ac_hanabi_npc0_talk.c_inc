@@ -80,7 +80,7 @@ static void aHN0_revise_moveRange(ACTOR* actorx) {
 
 static void aHN0_turn(HANABI_NPC0_ACTOR* actor) {
     if (chase_angle(&actor->npc_class.actor_class.shape_info.rotation.y, actor->npc_class.movement.mv_angl,
-                    DEG2SHORT_ANGLE2(11.25f)) == TRUE) {
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
         actor->next_action = aHN0_ACT_WALK;
         actor->npc_class.action.step = aNPC_ACTION_END_STEP;
     }
@@ -98,7 +98,8 @@ static void aHN0_walk(HANABI_NPC0_ACTOR* actor) {
         actor->npc_class.action.step = aNPC_ACTION_END_STEP;
     }
 
-    chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl, DEG2SHORT_ANGLE2(5.625f));
+    chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl,
+                aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f)));
     actorx->world.angle.y = actorx->shape_info.rotation.y;
 }
 

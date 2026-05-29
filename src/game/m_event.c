@@ -2558,7 +2558,7 @@ extern int mEv_spread_rumor(int type) {
 
 extern int mEv_get_rumor() {
     if (n_rumor != 0) {
-        return rumor_table[gamePT->frame_counter % n_rumor] | mEv_SET(mEv_TYPE_RUMOR, 0);
+        return rumor_table[graph_dt_frame_phase(gamePT, n_rumor)] | mEv_SET(mEv_TYPE_RUMOR, 0);
     }
 
     return 0;

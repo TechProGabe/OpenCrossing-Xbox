@@ -1,6 +1,7 @@
 #include "m_editEndChk_ovl.h"
 
 #include "audio.h"
+#include "m_common_data.h"
 #include "m_font.h"
 #include "sys_matrix.h"
 
@@ -44,6 +45,7 @@ static void mEE_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     mEE_Ovl_c* editEndChk_ovl = submenu->overlay->editEndChk_ovl;
     u32 trigger = submenu->overlay->menu_control.trigger;
     int max_answer_no = data->answer_num - 1;
+    f32 dt = gamePT->graph->dt_num_60fps_frames;
 
     if ((trigger & BUTTON_B)) {
         sAdo_SysTrgStart(0x1003);
@@ -69,7 +71,10 @@ static void mEE_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         }
     } else if (editEndChk_ovl->moving_in == TRUE) {
         if (editEndChk_ovl->scale < 1.0f) {
-            editEndChk_ovl->scale += 0.2f;
+            editEndChk_ovl->scale += 0.2f * dt;
+            if (editEndChk_ovl->scale > 1.0f) {
+                editEndChk_ovl->scale = 1.0f;
+            }
         } else {
             editEndChk_ovl->scale = 1.0f;
 
@@ -88,9 +93,17 @@ static void mEE_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
 
         editEndChk_ovl->question_alpha_step = 0;
         editEndChk_ovl->question_alpha = 0;
+        editEndChk_ovl->question_alpha_accum = 0.0f;
     } else {
-        int step = (editEndChk_ovl->question_alpha_step + 1) % 30;
+        int step;
 
+        editEndChk_ovl->question_alpha_accum += dt;
+        while (editEndChk_ovl->question_alpha_accum >= 1.0f) {
+            editEndChk_ovl->question_alpha_step = (editEndChk_ovl->question_alpha_step + 1) % 30;
+            editEndChk_ovl->question_alpha_accum -= 1.0f;
+        }
+
+        step = editEndChk_ovl->question_alpha_step;
         editEndChk_ovl->question_alpha_step = step;
         if (step < 15) {
             editEndChk_ovl->question_alpha = ((f32)step * 255.0f) / 15.0f;
@@ -266,6 +279,7 @@ extern void mEE_editEndChk_ovl_construct(Submenu* submenu) {
     ee_ovl_data.selected_answer = 0;
     ee_ovl_data.question_alpha_step = 0;
     ee_ovl_data.question_alpha = 0;
+    ee_ovl_data.question_alpha_accum = 0.0f;
 
     mEE_editEndChk_ovl_init(submenu);
     mEE_editEndChk_ovl_set_proc(submenu);

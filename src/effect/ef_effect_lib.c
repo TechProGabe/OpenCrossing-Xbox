@@ -45,11 +45,13 @@ static void eEL_SetContiniousEnv(eEC_Effect_c* effect, s16 unused, s16 timer) {
         if (effect->timer <= 1) {
             effect->state = eEC_STATE_CONTINUOUS;
             effect->timer = timer;
+            effect->lifetime = (f32)timer;
         }
     } else if (effect->state == eEC_STATE_CONTINUOUS) {
         if (effect->timer <= 1) {
             effect->state = eEC_STATE_CONTINUOUS;
             effect->timer = timer;
+            effect->lifetime = (f32)timer;
         }
     }
 }
@@ -69,6 +71,15 @@ static f32 eEL_CalcAdjust(s16 now, s16 start, s16 end, f32 start_val, f32 end_va
     }
 
     return start_val + (f32)(now - start) * ((end_val - start_val) / (f32)(end - start));
+}
+
+/* Float version: continuous interpolation using float `now`. Exported
+ * (non-static) so individual ef_*.c files can call it directly. */
+f32 eEL_CalcAdjust_F(f32 now, f32 start, f32 end, f32 start_val, f32 end_val) {
+    if (start == end) return start_val;
+    if (now <= start) return start_val;
+    if (now >= end)   return end_val;
+    return start_val + (now - start) * ((end_val - start_val) / (end - start));
 }
 
 static void eEL_AutoMatrixXlu(GAME* game, xyz_t* pos, xyz_t* scale) {

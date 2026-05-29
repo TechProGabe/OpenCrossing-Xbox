@@ -75,7 +75,7 @@ static void suisou_awa_BGCheck(eEC_Effect_c* effect) {
 }
 
 static void eSuisou_Awa_mv(eEC_Effect_c* effect, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     if (effect->position.y >= 115.0f) {
         if (effect->effect_specific[4] == 1) {
@@ -86,21 +86,28 @@ static void eSuisou_Awa_mv(eEC_Effect_c* effect, GAME* game) {
         add_calc(&effect->velocity.y, 0.0f, 1.0f - sqrtf(0.5f), 0.5f, 0.05f);
         add_calc(&effect->scale.x, 0.0f, 1.0f - sqrtf(0.5f), 0.001f, 0.00005f);
         effect->scale.y = effect->scale.z = effect->scale.x;
-        effect->timer--;
+        /* Legacy did extra timer-- here for 2x death drain at surface; mirror via lifetime. */
+        effect->lifetime -= dt;
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 76, 80, effect->offset.x, 0.0f);
+        effect->scale.x = eEC_CLIP->calc_adjust_proc((s16)effect->lifetime, 76, 80, effect->offset.x, 0.0f);
         effect->scale.y = effect->scale.z = effect->scale.x;
-        effect->velocity.y *= sqrtf(0.84f);
-        effect->effect_specific[0] += effect->effect_specific[1];
-        effect->effect_specific[2] += effect->effect_specific[3];
+        effect->velocity.y *= powf(sqrtf(0.84f), dt);
+        effect->effect_specific[0] += (s16)(effect->effect_specific[1] * dt);
+        effect->effect_specific[2] += (s16)(effect->effect_specific[3] * dt);
         if (effect->arg0 == 2) {
-            effect->acceleration.x = sin_s(play->game_frame * DEG2SHORT_ANGLE2(90.0f)) * 0.05f - 0.04f;
+            /* Drive sine via lifetime instead of game_frame so high-fps doesn't aliase. */
+            f32 t = 80.0f - effect->lifetime;
+            effect->acceleration.x = sin_s((s16)(t * DEG2SHORT_ANGLE2(90.0f))) * 0.05f - 0.04f;
         }
 
         add_calc0(&effect->velocity.x, 0.1f, 0.1f);
         add_calc0(&effect->velocity.z, 0.1f, 0.1f);
-        xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-        xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+        effect->velocity.x += effect->acceleration.x * dt;
+        effect->velocity.y += effect->acceleration.y * dt;
+        effect->velocity.z += effect->acceleration.z * dt;
+        effect->position.x += effect->velocity.x * dt;
+        effect->position.y += effect->velocity.y * dt;
+        effect->position.z += effect->velocity.z * dt;
         suisou_awa_BGCheck(effect);
         if (effect->position.y >= 115.0f) {
             effect->position.y = 115.0f;

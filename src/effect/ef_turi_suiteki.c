@@ -48,6 +48,7 @@ static void eTS_mv(eEC_Effect_c* effect, GAME* game) {
         if (height >= effect->velocity.y && height < effect->position.y + 10.0f) {
             eEC_CLIP->effect_make_proc(eEC_EFFECT_TURI_HAMON, effect->velocity, 1, 0, game, EMPTY_NO, 3, 0);
             effect->timer = 0;
+            effect->lifetime = 0.0f;
         }
     }
 }
@@ -56,7 +57,7 @@ extern Gfx ef_turi_suiteki01_00_modelT[];
 
 static void eTS_dw(eEC_Effect_c* effect, GAME* game) {
     xyz_t scale = effect->scale;
-    f32 remain = effect->effect_specific[0] - effect->timer;
+    f32 remain = (f32)effect->effect_specific[0] - effect->lifetime;
     f32 angle_f;
     int angle;
 

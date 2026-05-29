@@ -36,7 +36,7 @@ static void aTCR_calc_scale(ACTOR* actor, int idx){
     static f32 aim[] = {1.0f, 0.0f};
     f32 cracker_scale = actor->scale.x;
     
-    chase_f(&cracker_scale, aim[idx],0.05f);
+    chase_f(&cracker_scale, aim[idx], 0.05f * (f32)gamePT->graph->dt_num_60fps_frames);
 
     actor->scale.x = cracker_scale;
     actor->scale.y = cracker_scale;

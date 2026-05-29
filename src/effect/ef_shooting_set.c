@@ -75,9 +75,11 @@ static void eShootingSet_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
     effect->effect_specific[0] = 0;
     effect->effect_specific[1] = eShootingSet_GetFrame_MakeNextShooting();
+    effect->effect_specific[2] = 0;
 }
 
 static void eShootingSet_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     f32 temp;
     s16 rng, rnd_angle;
     int angle;
@@ -87,8 +89,9 @@ static void eShootingSet_mv(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->set_continious_env_proc(effect, 100, 100);
 
     if (mEv_CheckTitleDemo() != mEv_TITLEDEMO_STAFFROLL) {
-        if (effect->effect_specific[0] >= effect->effect_specific[1]) {
-            effect->effect_specific[0] = 0;
+        effect->effect_specific[2] += (s16)(dt * 10.0f);
+        if (effect->effect_specific[2] >= effect->effect_specific[1] * 10) {
+            effect->effect_specific[2] = 0;
             effect->effect_specific[1] = eShootingSet_GetFrame_MakeNextShooting();
 
             if (eEC_CLIP->check_lookat_block_proc(effect->position)) {
@@ -117,8 +120,6 @@ static void eShootingSet_mv(eEC_Effect_c* effect, GAME* game) {
                                            0, 0);
             }
         }
-
-        effect->effect_specific[0]++;
 
         if (eEC_CLIP->check_lookat_block_proc(effect->position)) {
             pos2 = effect->position;

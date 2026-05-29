@@ -44,13 +44,15 @@ static void eHanabiDummy_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 it
 static void eHanabiDummy_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->timer = eHanabiDummy_TIMER;
     eHanabiDummy_TYPE_ARG = RANDOM(eHanabiDummy_TYPE_NUM);
+    effect->effect_specific[1] = 0; /* phase: 0=none, 1=light fired, 2=sfx fired */
 }
 
 static void eHanabiDummy_mv(eEC_Effect_c* effect, GAME* game) {
     rgba_t light_color;
-    s16 frames_passed = eHanabiDummy_TIMER - effect->timer;
+    f32 t = (f32)eHanabiDummy_TIMER - effect->lifetime;
 
-    if (frames_passed == 10) {
+    if (effect->effect_specific[1] < 1 && t >= 10.0f) {
+        effect->effect_specific[1] = 1;
         static rgba_t dummy_light[eHanabiDummy_TYPE_NUM] = {
             { 50, 30, 20, 255 }, { 20, 60, 20, 255 }, { 40, 10, 60, 255 },
             { 40, 20, 20, 255 }, { 20, 40, 20, 255 }, { 60, 60, 30, 255 },
@@ -67,9 +69,10 @@ static void eHanabiDummy_mv(eEC_Effect_c* effect, GAME* game) {
         eEC_CLIP->regist_effect_light(light_color, 20, 50, TRUE);
     }
 
-    if (frames_passed == 72) {
+    if (effect->effect_specific[1] < 2 && t >= 72.0f) {
         xyz_t pos = effect->position;
         u16 sfx_no;
+        effect->effect_specific[1] = 2;
 
         pos.y += 200.0f;
 

@@ -124,6 +124,8 @@ static void eDT_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eDT_mv(eEC_Effect_c* effect, GAME* game) {
+    float dt = (float)game->graph->dt_num_60fps_frames;
+
     if (effect->arg1 == 4) {
         s16 counter = 18 - effect->timer;
 
@@ -131,13 +133,18 @@ static void eDT_mv(eEC_Effect_c* effect, GAME* game) {
         effect->scale.y = effect->scale.x;
         effect->scale.z = effect->scale.x;
     } else if (effect->arg1 == 0 || effect->arg1 == 9) {
-        effect->velocity.x *= sqrtf(0.85f);
-        effect->velocity.y *= sqrtf(0.85f);
-        effect->velocity.z *= sqrtf(0.85f);
+        float decay = powf(sqrtf(0.85f), dt);
+        effect->velocity.x *= decay;
+        effect->velocity.y *= decay;
+        effect->velocity.z *= decay;
     }
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 }
 
 typedef struct {
@@ -181,28 +188,31 @@ static u8 eDT_prim_f[18] = {
 extern Gfx ef_dust01_modelT[];
 
 static void eDT_dw(eEC_Effect_c* effect, GAME* game) {
-    s16 counter = (18 - effect->timer) >> 1;
-    xyz_t* pos = &effect->position;
-    xyz_t* scale = &effect->scale;
-    int tex0;
-    int tex1;
+    /* Continuous 30fps-table position via lifetime (real-time frames).
+     * Lerps prim_f and alpha for a smooth cross-fade. */
+    float k = (18.0f - effect->lifetime) * 0.5f;
+    if (k < 0.0f) k = 0.0f;
+    if (k > 9.0f) k = 9.0f;
+    int i = (int)k;
+    if (i > 9) i = 9;
+    int j = (i < 9) ? i + 1 : i;
+    float t = k - (float)i;
 
-    counter = CLAMP(counter, 0, 9);
+    int tex0 = eDT_2tile_texture_idx[i].tex0;
+    int tex1 = eDT_2tile_texture_idx[i].tex1;
+    u8 prim_f = (u8)(eDT_prim_f[i]   + (eDT_prim_f[j]   - eDT_prim_f[i])   * t);
+    u8 a      = (u8)(eDT_AlphaPtn[i] + (eDT_AlphaPtn[j] - eDT_AlphaPtn[i]) * t);
 
-    
-    tex0 = eDT_2tile_texture_idx[counter].tex0;
-    tex1 = eDT_2tile_texture_idx[counter].tex1;
-    
     OPEN_DISP(game->graph);
-    
+
     eEC_CLIP->auto_matrix_xlu_proc(game, &effect->position, &effect->scale);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_1_TXT_SEG, eDT_texture_table[tex0]);
     gSPSegment(NEXT_POLY_XLU_DISP, ANIME_2_TXT_SEG, eDT_texture_table[tex1]);
 
     if (effect->arg1 >= 0 && effect->arg1 < 10) {
-        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, eDT_prim_f[counter], eDT_prim_table[effect->arg1].r, eDT_prim_table[effect->arg1].g, eDT_prim_table[effect->arg1].b, eDT_AlphaPtn[counter]);
+        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, eDT_prim_table[effect->arg1].r, eDT_prim_table[effect->arg1].g, eDT_prim_table[effect->arg1].b, a);
     } else {
-        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, eDT_prim_f[counter], 255, 255, 255, eDT_AlphaPtn[counter]);
+        gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, prim_f, 255, 255, 255, a);
     }
 
     gSPDisplayList(NEXT_POLY_XLU_DISP, ef_dust01_modelT);

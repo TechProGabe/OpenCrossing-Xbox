@@ -1247,17 +1247,50 @@ static s16 mTG_get_item_name_wait_time(mTG_tag_c* tag) {
     return time;
 }
 
+static void mTG_set_item_name_wait_time(mTG_Ovl_c* tag_ovl, mTG_tag_c* tag) {
+    tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(tag);
+    tag_ovl->item_name_wait_accum = 0.0f;
+}
+
+static void mTG_clear_item_name_wait_time(mTG_Ovl_c* tag_ovl) {
+    tag_ovl->item_name_wait_time = 0;
+    tag_ovl->item_name_wait_accum = 0.0f;
+}
+
+static int mTG_countdown_item_name_wait_time(mTG_Ovl_c* tag_ovl) {
+    int was_waiting = tag_ovl->item_name_wait_time > 0;
+
+    if (tag_ovl->item_name_wait_time <= 0) {
+        tag_ovl->item_name_wait_accum = 0.0f;
+        return FALSE;
+    }
+
+    tag_ovl->item_name_wait_accum += gamePT->graph->dt_num_60fps_frames;
+    while (tag_ovl->item_name_wait_time > 0 && tag_ovl->item_name_wait_accum >= 1.0f) {
+        tag_ovl->item_name_wait_time--;
+        tag_ovl->item_name_wait_accum -= 1.0f;
+    }
+
+    if (tag_ovl->item_name_wait_time <= 0) {
+        tag_ovl->item_name_wait_time = 0;
+        tag_ovl->item_name_wait_accum = 0.0f;
+    }
+
+    return was_waiting;
+}
+
 static void mTG_return_tag_func(Submenu* submenu, mTG_Ovl_c* tag_ovl, mTG_tag_c* tag) {
     mTG_tag_c* now_tag = tag;
     int count = 0;
     int tag_num = tag_ovl->sel_tag_idx - tag_ovl->ret_tag_idx;
     int i;
+    f32 dt = gamePT->graph->dt_num_60fps_frames;
 
     for (i = tag_num; i != 0; i--) {
-        now_tag->scale -= 0.125f;
+        now_tag->scale -= 0.125f * dt;
         if (now_tag->scale <= 0.0f) {
             if (now_tag->type == mTG_TYPE_NONE) {
-                tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(now_tag);
+                mTG_set_item_name_wait_time(tag_ovl, now_tag);
             }
 
             now_tag->scale = 0.0f;
@@ -1965,7 +1998,7 @@ static void mTG_init_tag_data_item_win_sub_mail_item(Submenu* submenu, mTG_tag_c
         tag->arrow_dir = 2;
     }
 
-    submenu->overlay->tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(tag);
+    mTG_set_item_name_wait_time(submenu->overlay->tag_ovl, tag);
 }
 
 static void mTG_init_tag_data_set_base_pos(mTG_tag_c* tag) {
@@ -2032,7 +2065,7 @@ static void mTG_init_tag_data_catalog_win(Submenu* submenu, int idx) {
     mTG_set_tag_win_scale_p(tag, mTG_WIN_TYPE_ITEM, width * 0.875f, 0.0f);
     tag->body_ofs[0] *= -1.0f;
     tag->arrow_dir = 2;
-    submenu->overlay->tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(tag);
+    mTG_set_item_name_wait_time(submenu->overlay->tag_ovl, tag);
 }
 
 static void mTG_init_tag_data_cpmail_wc_win(Submenu* submenu, int folder_idx) {
@@ -2053,7 +2086,7 @@ static void mTG_init_tag_data_cpmail_wc_win(Submenu* submenu, int folder_idx) {
         tag->str2_type = mTG_QSTR_TYPE_NONE;
         tag->body_ofs[0] *= -1.0f;
         tag->arrow_dir = 2;
-        submenu->overlay->tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(tag);
+        mTG_set_item_name_wait_time(submenu->overlay->tag_ovl, tag);
     }
 }
 
@@ -2075,7 +2108,7 @@ static void mTG_init_tag_data_cporiginal_wc_win(Submenu* submenu) {
         tag->str2_type = mTG_QSTR_TYPE_NONE;
         tag->body_ofs[0] *= -1.0f;
         tag->arrow_dir = 2;
-        submenu->overlay->tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(tag);
+        mTG_set_item_name_wait_time(submenu->overlay->tag_ovl, tag);
     }
 }
 
@@ -2139,7 +2172,7 @@ static void mTG_init_tag_data_needlework_win(Submenu* submenu, int idx) {
                 break;
         }
 
-        submenu->overlay->tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(tag);
+        mTG_set_item_name_wait_time(submenu->overlay->tag_ovl, tag);
     }
 }
 
@@ -2892,7 +2925,7 @@ static void mTG_open_board_init(Submenu* submenu, mSM_MenuInfo_c* menu_info, int
 
     tag_ovl->sel_tag_idx = 0;
     tag_ovl->ret_tag_idx = 0;
-    tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(item_tag);
+    mTG_set_item_name_wait_time(tag_ovl, item_tag);
 
     mSM_open_submenu_new(submenu, mSM_OVL_BOARD, type, item_idx, mail);
 
@@ -5690,12 +5723,25 @@ static int mTG_cpack_change_mail_mark_main(Submenu* submenu, mIV_Ovl_c* inv_ovl,
     return TRUE;
 }
 
+static int mTG_mailbox_transfer_tick(mMB_Ovl_c* mailbox_ovl) {
+    mailbox_ovl->transfer_accum += gamePT->graph->dt_num_60fps_frames;
+    while (mailbox_ovl->transfer_accum >= 1.0f) {
+        mailbox_ovl->_03++;
+        mailbox_ovl->transfer_accum -= 1.0f;
+
+        if (mailbox_ovl->_03 % 3 == 0) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 static int mTG_trans_mail_mark(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_tag_c* tag) {
     mMB_Ovl_c* mailbox_ovl = submenu->overlay->mailbox_ovl;
     Mail_c* src;
 
-    mailbox_ovl->_03++;
-    if (mailbox_ovl->_03 % 3 == 0) {
+    if (mTG_mailbox_transfer_tick(mailbox_ovl)) {
         int dst_idx = mMl_chk_mail_free_space(Now_Private->mail, mPr_INVENTORY_MAIL_COUNT);
 
         if (dst_idx != -1) {
@@ -5733,8 +5779,7 @@ static int mTG_trans_mail(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_tag_c
     mMB_Ovl_c* mailbox_ovl = submenu->overlay->mailbox_ovl;
     Mail_c* src;
 
-    mailbox_ovl->_03++;
-    if (mailbox_ovl->_03 % 3 == 0) {
+    if (mTG_mailbox_transfer_tick(mailbox_ovl)) {
         int dst_idx = mMl_chk_mail_free_space(Now_Private->mail, mPr_INVENTORY_MAIL_COUNT);
 
         if (dst_idx != -1) {
@@ -6959,7 +7004,7 @@ static int mTG_select_tag_decide_haniwa(Submenu* submenu, mSM_MenuInfo_c* menu_i
 }
 
 static int mTG_select_tag_decide_collect(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_tag_c* tag) {
-    submenu->overlay->tag_ovl->item_name_wait_time = 0;
+    mTG_clear_item_name_wait_time(submenu->overlay->tag_ovl);
     return mTG_TYPE_NONE;
 }
 
@@ -7029,7 +7074,7 @@ static int mTG_select_tag_decide_catalog_wchange(Submenu* submenu, mSM_MenuInfo_
         catalog_menu->y_idx = 0;
         submenu->overlay->hand_ovl->nop_hand_func(submenu);
         sAdo_SysTrgStart(NA_SE_41C);
-        submenu->overlay->tag_ovl->item_name_wait_time = mTG_get_item_name_wait_time(tag);
+        mTG_set_item_name_wait_time(submenu->overlay->tag_ovl, tag);
     }
 
     return mTG_TYPE_NONE;
@@ -7557,7 +7602,7 @@ static void mTG_move_decide(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_tag
         }
 
         if (tag_type != mTG_TYPE_NONE) {
-            submenu->overlay->tag_ovl->item_name_wait_time = 0;
+            mTG_clear_item_name_wait_time(submenu->overlay->tag_ovl);
             mTG_chg_tag_func(submenu, tag->table, tag_type, 0, tag->base_pos[0], tag->base_pos[1]);
             sAdo_SysTrgStart(NA_SE_32);
         }
@@ -7803,8 +7848,15 @@ static void mTG_move_base_cporiginal(Submenu* submenu, mSM_MenuInfo_c* menu_info
 
 static void mTG_move_delete(Submenu* submenu, mTG_tag_c* tag) {
     mIV_Ovl_c* inv_ovl = submenu->overlay->inventory_ovl;
+    static f32 remove_accum = 0.0f;
+    int ticks = graph_dt_60hz_ticks(gamePT, &remove_accum);
 
-    inv_ovl->remove_timer--;
+    if (ticks > 0) {
+        inv_ovl->remove_timer -= ticks;
+        if (inv_ovl->remove_timer < 0) {
+            inv_ovl->remove_timer = 0;
+        }
+    }
     if (inv_ovl->remove_timer == 0) {
         int idx = mTG_get_table_idx(tag);
 
@@ -7933,6 +7985,8 @@ static void mTG_select_tag_base(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG
 
 static int mTG_normal_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_Ovl_c* tag_ovl, mTG_tag_c* tag,
                            mIV_Ovl_c* inv_ovl) {
+    f32 dt = gamePT->graph->dt_num_60fps_frames;
+
     if (menu_info->menu_type == mSM_OVL_INVENTORY && menu_info->data0 == mSM_IV_OPEN_EXCHANGE &&
         mTG_check_hand_condition(submenu)) {
         mTG_exchange_proc(submenu, menu_info);
@@ -7947,10 +8001,8 @@ static int mTG_normal_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_Ovl_
         if (inv_ovl != NULL && inv_ovl->remove_timer > 0) {
             mTG_move_delete(submenu, tag);
         } else {
-            if (tag_ovl->item_name_wait_time > 0) {
-                tag_ovl->item_name_wait_time--;
-            } else {
-                tag->scale += 0.125f;
+            if (!mTG_countdown_item_name_wait_time(tag_ovl)) {
+                tag->scale += 0.125f * dt;
                 if (tag->scale > 1.0f) {
                     tag->scale = 1.0f;
                 }
@@ -7976,7 +8028,7 @@ static int mTG_normal_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_Ovl_
         mTG_tag_c* main_tag = &tag_ovl->tags[0];
 
         if (tag_ovl->sel_tag_idx == 1 && main_tag->arrow_dir != 0 && main_tag->scale < 1.0f) {
-            main_tag->scale += 0.125f;
+            main_tag->scale += 0.125f * dt;
             if (main_tag->scale > 1.0f) {
                 main_tag->scale = 1.0f;
             }
@@ -7986,9 +8038,9 @@ static int mTG_normal_move(Submenu* submenu, mSM_MenuInfo_c* menu_info, mTG_Ovl_
         }
 
         if (tag_ovl->sel_tag_idx == 1 && main_tag->arrow_dir != 0) {
-            tag->scale += 0.185f;
+            tag->scale += 0.185f * dt;
         } else {
-            tag->scale += 0.125f;
+            tag->scale += 0.125f * dt;
         }
 
         if (tag->scale > 1.0f) {
@@ -8010,7 +8062,15 @@ static void mTG_move_func(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     }
 
     if (hand_ovl->info.wait_timer > 0 && inv_ovl != NULL) {
-        hand_ovl->info.wait_timer--;
+        static f32 wait_accum = 0.0f;
+        int ticks = graph_dt_60hz_ticks(gamePT, &wait_accum);
+
+        if (ticks > 0) {
+            hand_ovl->info.wait_timer -= ticks;
+            if (hand_ovl->info.wait_timer < 0) {
+                hand_ovl->info.wait_timer = 0;
+            }
+        }
         if (tag_ovl->sel_tag_idx > tag_ovl->ret_tag_idx) {
             mTG_return_tag_func(submenu, tag_ovl, tag);
         }

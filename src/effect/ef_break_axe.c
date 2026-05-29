@@ -2,8 +2,10 @@
 
 #include "m_common_data.h"
 #include "m_debug.h"
+#include "m_lib.h"
 #include "m_rcp.h"
 #include "sys_matrix.h"
+#include "graph.h"
 
 static void eBreak_Axe_init(xyz_t pos, int prio, s16 angle, GAME* game, u16 item_name, s16 arg0, s16 arg1);
 static void eBreak_Axe_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg);
@@ -116,6 +118,7 @@ static void eBreak_Axe_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
 static void eBreak_Axe_mv(eEC_Effect_c* effect, GAME* game) {
     u32 ut_attr = mCoBG_Wpos2Attribute(effect->position, NULL);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     effect->offset.x = effect->position.y;
     effect->offset.z = effect->offset.y;
@@ -127,13 +130,17 @@ static void eBreak_Axe_mv(eEC_Effect_c* effect, GAME* game) {
         effect->offset.y += 15.0f;
     }
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
-    effect->effect_specific[0] += effect->effect_specific[1];
-    effect->effect_specific[2] += effect->effect_specific[3];
+    effect->effect_specific[0] += (s16)(effect->effect_specific[1] * dt);
+    effect->effect_specific[2] += (s16)(effect->effect_specific[3] * dt);
 
-    if (effect->timer <= ((35 + GETREG(TAKREG, 60)) * 2 - 5)) {
+    if (effect->lifetime <= (f32)((35 + GETREG(TAKREG, 60)) * 2 - 5)) {
         if (effect->position.y < effect->offset.y && mCoBG_CheckWaterAttribute(ut_attr)) {
             xyz_t_mult_v(&effect->velocity, 0.8f);
             add_calc_short_angle2(&effect->effect_specific[1], 0, 1.0f - sqrtf(0.9f), 182, 9);
@@ -150,10 +157,12 @@ static void eBreak_Axe_mv(eEC_Effect_c* effect, GAME* game) {
                                                effect->item_name, 0, 0);
                 }
             } else {
+                f32 bounce = DTCONV_GAME(0.6f, game);
+
                 effect->position.y = effect->offset.y;
-                effect->velocity.x *= 0.6f;
-                effect->velocity.y *= -0.6f;
-                effect->velocity.z *= 0.6f;
+                effect->velocity.x *= bounce;
+                effect->velocity.y *= -bounce;
+                effect->velocity.z *= bounce;
 
                 effect->effect_specific[1] >>= 1;
                 effect->effect_specific[3] >>= 1;
@@ -176,7 +185,7 @@ extern Gfx ef_axe2_model[];
 extern Gfx ef_axe3_model[];
 
 static void eBreak_Axe_dw(eEC_Effect_c* effect, GAME* game) {
-    u8 a = (int)eEC_CLIP->calc_adjust_proc(effect->timer, 0, (15 + GETREG(TAKREG, 61)) * 2, 0.0f, 255.0f);
+    u8 a = (int)eEL_CalcAdjust_F(effect->lifetime, 0.0f, (f32)((15 + GETREG(TAKREG, 61)) * 2), 0.0f, 255.0f);
 
     _texture_z_light_fog_prim_xlu(game->graph);
 

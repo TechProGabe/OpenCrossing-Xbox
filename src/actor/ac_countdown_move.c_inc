@@ -58,9 +58,22 @@ static void aCOU_move(COUNT_ACTOR* actor) {
 }
 
 static void aCOU_happy_new_year(COUNT_ACTOR* actor) {
-    int action = actor->structure_class.action;
+    f32* accum = &actor->structure_class.arg3_f;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
+    int ticks;
+    int i;
 
-    actor->structure_class.action = action >= 59 ? 0 : action + 1;
+    *accum += dt;
+    ticks = (int)*accum;
+    if (ticks > 0) {
+        *accum -= (f32)ticks;
+    }
+
+    for (i = 0; i < ticks; i++) {
+        int action = actor->structure_class.action;
+
+        actor->structure_class.action = action >= 59 ? 0 : action + 1;
+    }
 }
 
 static void aCOU_setup_action(COUNT_ACTOR* actor, int action) {
@@ -81,6 +94,8 @@ static void aCOU_setup_action(COUNT_ACTOR* actor, int action) {
     actor->structure_class.action_proc = process[action];
     actor->structure_class.arg0 = action;
     actor->structure_class.action = 0;
+    actor->structure_class.arg2_f = 0.0f;
+    actor->structure_class.arg3_f = 0.0f;
 }
 
 static void aCOU_actor_move(ACTOR* actorx, GAME* game) {
@@ -105,7 +120,9 @@ static void aCOU_actor_move(ACTOR* actorx, GAME* game) {
     actor->structure_class.keyframe_saved_keyframe = actor->structure_class.keyframe.frame_control.current_frame;
     actor->structure_class.action_proc((STRUCTURE_ACTOR*)actor, play);
 
-    if ((++actor->structure_class.arg2) & 1) {
+    actor->structure_class.arg2_f += (f32)game->graph->dt_num_60fps_frames;
+    while (actor->structure_class.arg2_f >= 2.0f) {
+        actor->structure_class.arg2_f -= 2.0f;
         actor->structure_class.arg1--;
     }
 }

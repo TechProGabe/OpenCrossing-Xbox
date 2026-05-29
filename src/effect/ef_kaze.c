@@ -54,17 +54,21 @@ static void eKZ_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->scale.x = 0.063f;
     effect->scale.y = 0.021f;
     effect->scale.z = 0.021f;
+    effect->effect_specific[2] = 0; /* happa-spawned flag */
     sAdo_OngenTrgStart(NA_SE_KAZE, &effect->position);
 }
 
 static void eKZ_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->timer == 64 && eEC_CLIP != NULL) {
+    /* original spawned at timer == 64 (i.e., 36 frames after spawn). */
+    f32 t = 100.0f - effect->lifetime;
+    if (effect->effect_specific[2] == 0 && t >= 36.0f && eEC_CLIP != NULL) {
         xyz_t pos = effect->position;
 
         pos.y += -10.0f;
         pos.z += 10.0f;
 
         eEC_CLIP->effect_make_proc(eEC_EFFECT_KAZE_HAPPA, pos, effect->prio, effect->effect_specific[1], game, effect->item_name, 0, 0);
+        effect->effect_specific[2] = 1;
     }
 }
 
@@ -74,16 +78,16 @@ extern Gfx ef_kaze01_modelT2[];
 
 static void eKZ_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
-    s16 counter = 100 - effect->timer;
+    f32 t = 100.0f - effect->lifetime;
     u8 a;
     f32 scale;
 
-    if (counter <= 9) {
-        a = (int)eEC_CLIP->calc_adjust_proc(counter, 0, 18, 0.0f, 150.0f);
-    } else if (counter < 80) {
+    if (t <= 9.0f) {
+        a = (int)eEL_CalcAdjust_F(t, 0.0f, 18.0f, 0.0f, 150.0f);
+    } else if (t < 80.0f) {
         a = 150;
     } else {
-        a = (int)eEC_CLIP->calc_adjust_proc(counter, 80, 98, 150.0f, 0.0f);
+        a = (int)eEL_CalcAdjust_F(t, 80.0f, 98.0f, 150.0f, 0.0f);
     }
 
     OPEN_DISP(game->graph);

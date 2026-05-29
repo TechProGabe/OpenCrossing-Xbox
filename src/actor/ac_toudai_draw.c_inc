@@ -10,6 +10,16 @@ static int aTOU_actor_draw_before(GAME*,cKF_SkeletonInfo_R_c*, int idx, Gfx** gf
 extern Gfx obj_s_toudai_light_model[];
 extern Gfx obj_w_toudai_light_model[];
 
+static u8 aTOU_clamp_u8(f32 value) {
+    if (value <= 0.0f) {
+        return 0;
+    }
+    if (value >= 255.0f) {
+        return 255;
+    }
+    return (u8)value;
+}
+
 static int aTOU_actor_draw_after(GAME* game,cKF_SkeletonInfo_R_c* info, int idx, Gfx** gfxp,
 u8* dispbuf, void* actor, s_xyz* rotation, xyz_t* translation){
     static Gfx* mdl[] = {obj_s_toudai_light_model, obj_w_toudai_light_model};
@@ -35,15 +45,15 @@ u8* dispbuf, void* actor, s_xyz* rotation, xyz_t* translation){
             gfx = NOW_LIGHT_DISP; 
             gSPSegment(gfx++, 0x8, pal); 
 
-            prmcol.b = light->unk2C8;
-            prmcol.a = light->unk2CC;
+            prmcol.b = aTOU_clamp_u8(light->unk2C8);
+            prmcol.a = aTOU_clamp_u8(light->unk2CC);
 
-            if(prmcol.a > (u8)light->unk2D0){
-                prmcol.a = light->unk2D0; 
+            if(prmcol.a > aTOU_clamp_u8(light->unk2D0)){
+                prmcol.a = aTOU_clamp_u8(light->unk2D0); 
             }
  
-            gDPPipeSync(gfx++); 
-            gDPSetPrimColor(gfx++, 0, (s8)light->unk2D0, prmcol.r, prmcol.g, prmcol.b, prmcol.a);
+            gDPPipeSync(gfx++);
+            gDPSetPrimColor(gfx++, 0, aTOU_clamp_u8(light->unk2D0), prmcol.r, prmcol.g, prmcol.b, prmcol.a);
             gSPMatrix(gfx++, work, G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
             gSPDisplayList(gfx++, mdl[type]);
 

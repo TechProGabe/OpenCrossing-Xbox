@@ -121,8 +121,8 @@ typedef struct demo_door_data_s {
 typedef struct demo_emsg_data_s {
     int msg_no;
     rgba_t window_color;
-    int msg_delay_timer;
-    int scene_delay_timer;
+    f32 msg_delay_timer;
+    f32 scene_delay_timer;
     Door_data_c door_data;
     u8 _24[4]; // unused?
 } mDemo_emsg_data_c;

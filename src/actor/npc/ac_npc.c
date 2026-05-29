@@ -55,9 +55,9 @@ typedef struct npc_control_actor_s {
     /* 0x8F4 */ u8 _8F4[0x9B0 - 0x8F4]; // TODO
     /* 0x9B0 */ aNPC_talk_area_c talk_area;
     /* 0x9C8 */ ACTOR* door_exit_actor;
-    /* 0x9CC */ int door_exit_timer;
+    /* 0x9CC */ f32 door_exit_timer;
     /* 0x9D0 */ ACTOR* umbrella_open_actor;
-    /* 0x9D4 */ int umbrella_open_timer;
+    /* 0x9D4 */ f32 umbrella_open_timer;
 } NPC_CONTROL_ACTOR;
 
 static aNPC_Clip_c aNPC_clip;

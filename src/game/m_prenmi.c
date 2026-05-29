@@ -5,7 +5,7 @@
 #include "m_rcp.h"
 
 static void prenmi_move(GAME_PRENMI* prenmi) {    
-  if (ResetStatus == IRQ_RESET_DELAY || prenmi->timer == 0) {
+  if (ResetStatus == IRQ_RESET_DELAY || prenmi->timer <= 0.0f) {
     prenmi->game.disable_prenmi = FALSE;
     ResetStatus = IRQ_RESET_NORMAL;
     ResetTime = 0;
@@ -13,7 +13,7 @@ static void prenmi_move(GAME_PRENMI* prenmi) {
     GAME_GOTO_NEXT((GAME*)prenmi, second_game, SECOND);
   }
   else{
-    prenmi->timer--;
+    prenmi->timer -= (f32)prenmi->game.graph->dt_num_60fps_frames;
   }
 }
 

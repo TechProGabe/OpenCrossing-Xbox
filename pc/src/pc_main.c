@@ -8,6 +8,7 @@
 #include "pc_disc.h"
 #include "pc_typing.h"
 #include "pc_pause_menu.h"
+#include "m_kankyo.h"
 
 /* prefer discrete GPU on laptops */
 #ifdef _WIN32
@@ -18,11 +19,13 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 SDL_Window*   g_pc_window = NULL;
 SDL_GLContext  g_pc_gl_context = NULL;
 int           g_pc_running = 1;
-int           g_pc_no_framelimit = 0;
+int           g_pc_frame_limit_override = -1;
 int           g_pc_verbose = 0;
 int           g_pc_time_override = -1; /* -1=system clock, 0-23=override hour */
 int           g_pc_min_override = -1; /* -1=system clock, 0-59=override minute */
 int           g_pc_sec_override = -1; /* -1=system clock, 0-59=override second */
+int           g_pc_weather_override = -1;
+int           g_pc_weather_intensity_override = mEnv_WEATHER_INTENSITY_HEAVY;
 int           g_pc_window_w = PC_SCREEN_WIDTH;
 int           g_pc_window_h = PC_SCREEN_HEIGHT;
 int           g_pc_widescreen_stretch = 0;
@@ -228,7 +231,12 @@ int pc_platform_poll_events(void) {
                 }
                 break;
             case SDL_KEYDOWN:
+                /* ESC toggles the in-game pause menu. Once paused, all
+                 * keystrokes route to the menu first; only fall through
+                 * to game input if the menu didn't consume them. */
                 if (event.key.keysym.sym == SDLK_ESCAPE && !event.key.repeat) {
+                    /* If the menu is open, let it handle ESC (closes
+                     * sub-pages or unpauses). Otherwise toggle on. */
                     if (g_pc_paused) {
                         pc_pause_menu_handle_event(&event);
                     } else {
@@ -239,10 +247,6 @@ int pc_platform_poll_events(void) {
                 if (g_pc_paused) {
                     pc_pause_menu_handle_event(&event);
                     break; /* swallow all keys while paused */
-                }
-                if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat) {
-                    g_pc_no_framelimit ^= 1;
-                    printf("[PC] Frame limiter %s\n", g_pc_no_framelimit ? "OFF" : "ON");
                 }
                 pc_typing_handle_event(&event);
                 break;
@@ -259,18 +263,46 @@ int pc_platform_poll_events(void) {
 extern void ac_entry(void);
 extern int boot_main(int argc, const char** argv);
 
+static int pc_parse_rain_intensity(const char* text) {
+    if (strcmp(text, "light") == 0) {
+        return mEnv_WEATHER_INTENSITY_LIGHT;
+    }
+
+    if (strcmp(text, "normal") == 0) {
+        return mEnv_WEATHER_INTENSITY_NORMAL;
+    }
+
+    if (strcmp(text, "heavy") == 0) {
+        return mEnv_WEATHER_INTENSITY_HEAVY;
+    }
+
+    return -1;
+}
+
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("Usage: AnimalCrossing [options]\n");
             printf("  --verbose, -v       Enable diagnostic output\n");
-            printf("  --no-framelimit     Disable frame limiter\n");
+            printf("  --no-framelimit     Alias for --framelimit 0\n");
+            printf("  --framelimit N      Set the target frame rate (default 60, 0 = unlimited)\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
+            printf("  --rain [intensity]  Force rainy weather; intensity is light, normal, or heavy\n");
             printf("  --help, -h          Show this help message\n");
             return 0;
+        } else if (strcmp(argv[i], "--framelimit") == 0) {
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                int v = atoi(argv[i + 1]);
+                if (v > 0) {
+                    g_pc_frame_limit_override = v;
+                } else if (v == 0) {
+                    g_pc_frame_limit_override = 0;
+                }
+                i++;
+            }
         } else if (strcmp(argv[i], "--no-framelimit") == 0) {
-            g_pc_no_framelimit = 1;
+            g_pc_frame_limit_override = 0;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             g_pc_verbose = 1;
         } else if (strcmp(argv[i], "--model-viewer") == 0) {
@@ -286,6 +318,16 @@ int main(int argc, char* argv[]) {
             if (m >= 0 && m <= 59) g_pc_min_override = m;
             if (s >= 0 && s <= 59) g_pc_sec_override = s;
             i++;
+        } else if (strcmp(argv[i], "--rain") == 0) {
+            g_pc_weather_override = mEnv_WEATHER_RAIN;
+            g_pc_weather_intensity_override = mEnv_WEATHER_INTENSITY_HEAVY;
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                int intensity = pc_parse_rain_intensity(argv[i + 1]);
+                if (intensity >= 0) {
+                    g_pc_weather_intensity_override = intensity;
+                    i++;
+                }
+            }
         }
     }
 

@@ -68,7 +68,7 @@ struct groundhog_control_actor_s {
     int action;
     aGHC_ACTION_PROC action_proc;
     int event_state;
-    int timer;
+    f32 timer;
     aGHC_Clip_c clip;
     aGHC_event_area_c* event_area_p;
     int attention_mode;

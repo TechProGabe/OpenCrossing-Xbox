@@ -108,7 +108,8 @@ static void aEDSN_check_result_talk_proc(EV_DESIGNER_ACTOR* designer, GAME* game
     static int next_talk_proc_idx[] = { aEDSN_TALK_DEMO_START_WAIT, aEDSN_TALK_DEMO_START_WAIT, aEDSN_TALK_END_WAIT };
     mMsg_Window_c* msg_p = mMsg_Get_base_window_p();
 
-    chase_angle(&designer->npc_class.actor_class.shape_info.rotation.y, designer->npc_class.actor_class.player_angle_y, 0x800);
+    chase_angle(&designer->npc_class.actor_class.shape_info.rotation.y, designer->npc_class.actor_class.player_angle_y,
+                aNPC_dt_angle_step(0x800));
     if (mMsg_Check_MainNormalContinue(msg_p) == TRUE) {
         mEv_designer_c* ev_save_p = &Save_Get(event_save_data).special.event.designer;
         aEv_designer_c* tmp_save_p = designer->tmp_save_p;
@@ -148,7 +149,8 @@ static void aEDSN_demo_start_wait_talk_proc(EV_DESIGNER_ACTOR* designer, GAME* g
 }
 
 static void aEDSN_demo_end_wait_talk_proc(EV_DESIGNER_ACTOR* designer, GAME* game) {
-    chase_angle(&designer->npc_class.actor_class.shape_info.rotation.y, designer->npc_class.actor_class.player_angle_y, 0x800);
+    chase_angle(&designer->npc_class.actor_class.shape_info.rotation.y, designer->npc_class.actor_class.player_angle_y,
+                aNPC_dt_angle_step(0x800));
     if (aEDSN_check_present() == -1) {
         mMsg_Window_c* msg_p = mMsg_Get_base_window_p();
 
@@ -167,7 +169,8 @@ static void aEDSN_demo_end_wait_talk_proc(EV_DESIGNER_ACTOR* designer, GAME* gam
 }
 
 static void aEDSN_talk_end_wait_talk_proc(EV_DESIGNER_ACTOR* designer, GAME* game) {
-    chase_angle(&designer->npc_class.actor_class.shape_info.rotation.y, designer->npc_class.actor_class.player_angle_y, 0x800);
+    chase_angle(&designer->npc_class.actor_class.shape_info.rotation.y, designer->npc_class.actor_class.player_angle_y,
+                aNPC_dt_angle_step(0x800));
 }
 
 static void aEDSN_change_talk_proc(EV_DESIGNER_ACTOR* designer, int talk_proc_idx) {

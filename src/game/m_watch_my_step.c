@@ -30,7 +30,7 @@ typedef struct watch_my_step_s {
 
     f32 scale;
 
-    s16 timer;
+    f32 timer;
 
     mActor_name_t item_no;
 
@@ -43,7 +43,7 @@ static mWt_watch_my_step_c S_watch_my_step;
 
 typedef struct navigate_s {
     f32 opacity;
-    s16 timer;
+    f32 timer;
     u8 mode;
     u8 draw_type;
 } mWt_navigate_c;
@@ -53,7 +53,7 @@ static mWt_navigate_c S_navigate;
 typedef struct mybell_confirmation_s {
     f32 opacity;
     u32 all_money;
-    s16 coin_sfx_timer;
+    f32 coin_sfx_timer;
     u8 mode;
     u8 draw_type;
     u8 update_money;
@@ -87,7 +87,7 @@ extern void watch_my_step_move(GAME_PLAY* play) {
             case 0: {
                 if (window_item != EMPTY_NO && !can_show) {
                     S_watch_my_step.opacity = 0.0f;
-                    S_watch_my_step.timer = 2;
+                    S_watch_my_step.timer = 2.0f;
                     S_watch_my_step.mode++;
                 }
                 break;
@@ -95,8 +95,9 @@ extern void watch_my_step_move(GAME_PLAY* play) {
 
             case 1:
             case 2: {
-                if (S_watch_my_step.timer-- == 0) {
-                    S_watch_my_step.timer = 2;
+                S_watch_my_step.timer -= (f32)play->game.graph->dt_num_60fps_frames;
+                if (S_watch_my_step.timer <= 0.0f) {
+                    S_watch_my_step.timer = 2.0f;
                     S_watch_my_step.mode++;
                 }
                 break;
@@ -296,7 +297,7 @@ static void navigate_camera_move(GAME_PLAY* play) {
     switch (S_navigate.mode) {
         case 0: {
             if (mPlib_check_able_change_camera_normal_index() != 0 && play->fb_fade_type == FADE_TYPE_NONE) {
-                S_navigate.timer = 150;
+                S_navigate.timer = 150.0f;
                 S_navigate.mode++;
             }
             break;
@@ -304,9 +305,9 @@ static void navigate_camera_move(GAME_PLAY* play) {
 
         case 1: {
             add_calc(&S_navigate.opacity, 1.0f, 1.0f - sqrtf(0.8), 0.075f, 0.005f);
-            S_navigate.timer--;
+            S_navigate.timer -= (f32)play->game.graph->dt_num_60fps_frames;
 
-            if (S_navigate.timer == 0 || play->submenu.process_status != mSM_PROCESS_WAIT ||
+            if (S_navigate.timer <= 0.0f || play->submenu.process_status != mSM_PROCESS_WAIT ||
                 mMsg_Check_MainHide(mMsg_Get_base_window_p()) == FALSE) {
                 S_navigate.mode++;
             }
@@ -410,7 +411,7 @@ static void mWt_set_coin_se(int play_flag) {
         sAdo_SysLevStart(NA_SE_COIN);
         S_mybell_conf.update_money = TRUE;
         S_mybell_conf.play_finish_sfx = FALSE;
-        S_mybell_conf.coin_sfx_timer = 300;
+        S_mybell_conf.coin_sfx_timer = 300.0f;
     }
 
     S_se_play_flg = play_flag;
@@ -440,8 +441,9 @@ static void mWt_mybell_confirmation_move(GAME_PLAY* play) {
         S_mybell_conf.play_finish_sfx = FALSE;
     }
 
-    if (S_mybell_conf.coin_sfx_timer != 0) {
-        if (--S_mybell_conf.coin_sfx_timer <= 0) {
+    if (S_mybell_conf.coin_sfx_timer > 0.0f) {
+        S_mybell_conf.coin_sfx_timer -= (f32)play->game.graph->dt_num_60fps_frames;
+        if (S_mybell_conf.coin_sfx_timer <= 0.0f) {
             mWt_set_coin_se(FALSE);
         }
     }

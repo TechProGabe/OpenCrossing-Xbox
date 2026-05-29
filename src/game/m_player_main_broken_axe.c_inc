@@ -149,7 +149,7 @@ static void Player_actor_Broken_axe_demo_ct(ACTOR* actor) {
     mBGMPsComp_make_ps_demo(125, 0x168);
 }
 
-static int Player_actor_MessageControl_Broken_axe(ACTOR* actor) {
+static int Player_actor_MessageControl_Broken_axe(ACTOR* actor, GAME* game) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actor;
     mPlayer_main_broken_axe_c* main_axe = &player->main_data.broken_axe;
 
@@ -160,7 +160,7 @@ static int Player_actor_MessageControl_Broken_axe(ACTOR* actor) {
         case 0:
             _28p = &main_axe->_28;
             if (*_28p < 80.0f) {
-                *_28p += 1.0f;
+                *_28p += (f32)gamePT->graph->dt_num_60fps_frames;
             } else {
                 *_2Cp = 1;
             }
@@ -207,6 +207,6 @@ static void Player_actor_main_Broken_axe(ACTOR* actor, GAME* game) {
     Player_actor_ObjCheck_Broken_axe(actor, game);
     Player_actor_BGcheck_Broken_axe(actor);
     Player_actor_Item_main(actor, game);
-    cnt = Player_actor_MessageControl_Broken_axe(actor);
+    cnt = Player_actor_MessageControl_Broken_axe(actor, game);
     Player_actor_request_proc_index_fromBroken_axe(actor, game, cnt);
 }

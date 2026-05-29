@@ -95,8 +95,8 @@ static int aSHR_ctrl_light() {
 }
 
 static void aSHR_Present_move_wait_init(aSHR_Present_c*);
-static void aSHR_Present_move_wait(aSHR_Present_c*);
-static void aSHR_Present_move_walk(aSHR_Present_c*);
+static void aSHR_Present_move_wait(aSHR_Present_c*, GAME*);
+static void aSHR_Present_move_walk(aSHR_Present_c*, GAME*);
 
 static void aSHR_Present_ct(aSHR_Present_c* present) {
     bzero(present, sizeof(aSHR_Present_c));
@@ -104,7 +104,7 @@ static void aSHR_Present_ct(aSHR_Present_c* present) {
 }
 
 static void aSHR_Present_move(aSHR_Present_c* present, SHRINE_ACTOR* shrine, GAME_PLAY* play) {
-    (*present->move_proc)(present);
+    (*present->move_proc)(present, (GAME*)play);
 
     if (present->move_proc == aSHR_Present_move_walk && present->finish_flag == FALSE) {
         HANDOVERITEM_ACTOR* handOverItem =
@@ -128,17 +128,21 @@ static void aSHR_Present_move_wait_init(aSHR_Present_c* present) {
     present->move_proc = &aSHR_Present_move_wait;
 }
 
-static void aSHR_Present_move_wait(aSHR_Present_c* present) {
+static void aSHR_Present_move_wait(aSHR_Present_c* present, GAME* game) {
     /* Do nothing */
 }
 
 static const xyz_t aSHR_present_init_pos = { 2.0f, 40.0f, 10.0f }; // start
 static const xyz_t aSHR_present_aim_pos = { 2.0f, 40.0f, 33.0f };  // goal
 
-static void aSHR_Present_move_walk(aSHR_Present_c* present) {
+static void aSHR_Present_move_walk(aSHR_Present_c* present, GAME* game) {
     f32 move = get_percent_forAccelBrake(present->percent, 0.0f, 1.0f, 0.15f, 0.15f);
 
-    present->percent += 0.012f;
+    present->percent += 0.012f * (f32)game->graph->dt_num_60fps_frames;
+    if (present->percent > 1.0f) {
+        present->percent = 1.0f;
+    }
+
     Math3DInDivPos2(&aSHR_present_init_pos, &aSHR_present_aim_pos, &present->trans, move);
 
     if (move >= 1.0f) {
@@ -371,6 +375,11 @@ static void aSHR_actor_move(ACTOR* actorx, GAME* game) {
     SHRINE_ACTOR* shrine = (SHRINE_ACTOR*)actorx;
 
     (*(aSHR_PROC)shrine->structure_class.action_proc)(shrine, play);
+    shrine->texture_frame += (f32)game->graph->dt_num_60fps_frames;
+    if (shrine->texture_frame >= 8192.0f) {
+        shrine->texture_frame -= 8192.0f;
+    }
+
     aSHR_Present_move(&aSHR_present, shrine, play);
     sAdo_OngenPos((u32)actorx, 0x5A, &actorx->world.position);
 }

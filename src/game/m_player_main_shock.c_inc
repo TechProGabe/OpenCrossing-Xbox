@@ -143,7 +143,7 @@ static void Player_actor_request_proc_index_fromShock(ACTOR* actorx, GAME* game)
     f32* timer_p = &shock_p->timer;
 
     if (*timer_p < shock_p->end_time) {
-        (*timer_p) += 1.0f;
+        (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
         if (shock_p->bee_chase_bgm_flag && shock_p->axe_flag && shock_p->bgm_stop_flag == FALSE) {
             if (*timer_p >= 12.0f) {
                 mBGMPsComp_make_ps_quiet(0);

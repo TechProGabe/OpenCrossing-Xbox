@@ -295,7 +295,7 @@ static void Cottage_my_ctrl_light(STRUCTURE_ACTOR* cottage) {
 static void Cottage_npc_ctrl_light(STRUCTURE_ACTOR* cottage) {
     f32 target;
     target = Cottage_npc_light_aim(cottage);
-    chase_f(&cottage->arg0_f, target, 0.019532442f);
+    chase_f(&cottage->arg0_f, target, 0.019532442f * (f32)gamePT->graph->dt_num_60fps_frames);
 }
 
 static void Cottage_set_doorSE(STRUCTURE_ACTOR* cottage) {

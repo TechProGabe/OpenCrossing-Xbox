@@ -224,7 +224,7 @@ static void aMsm_actor_move(ACTOR* actor, GAME* game) {
     museum = (STRUCTURE_ACTOR*)actor;
 
     target = aMsm_ctrl_light() ? 1.0f : 0.0f;
-    chase_f(&museum->arg0_f, target, 0.019532442f);
+    chase_f(&museum->arg0_f, target, 0.019532442f * (f32)game->graph->dt_num_60fps_frames);
 
     if (museum == GET_PLAYER_ACTOR_NOW()->get_door_label_proc(gamePT)) {
         aMsm_rewrite_out_data(&museum->actor_class, play);

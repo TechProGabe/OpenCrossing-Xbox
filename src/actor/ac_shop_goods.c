@@ -143,9 +143,9 @@ static int Shop_Goods_Actor_drop_entry(SHOP_GOODS_ACTOR* shop_goods, mActor_name
             single_draw_p->angle.y = search_position_angleY(&single_draw_p->current_pos, &single_draw_p->target_pos);
             single_draw_p->flags = flags;
             single_draw_p->acceleration_y = -1.2f;
-            single_draw_p->counter = 1;
+            single_draw_p->counter = 1.0f;
             single_draw_p->_40 = 0;
-            single_draw_p->delay_timer = delay_timer;
+            single_draw_p->delay_timer = (f32)delay_timer;
 
             if ((flags & 1)) {
                 single_draw_p->scale = 0.0f;
@@ -194,15 +194,20 @@ static void Shop_Goods_Actor_drop_destruct(SHOP_GOODS_ACTOR* shop_goods) {
 static void Shop_Goods_Actor_drop_move(SHOP_GOODS_ACTOR* shop_goods) {
     int i;
     aSG_single_draw_c* single_draw_p = shop_goods->single_draw;
+    f32 dt = (f32)gamePT->graph->dt_num_60fps_frames;
 
     for (i = 0; i < aSG_SINGLE_DRAW_NUM; i++, single_draw_p++) {
-        if (single_draw_p->delay_timer > 0) {
-            single_draw_p->delay_timer--;
+        if (single_draw_p->delay_timer > 0.0f) {
+            single_draw_p->delay_timer -= dt;
+            if (single_draw_p->delay_timer < 0.0f) {
+                single_draw_p->delay_timer = 0.0f;
+            }
             continue;
         }
 
-        if (single_draw_p->counter != 0) {
-            f32 percent_xz = (f32)single_draw_p->counter * (1.0f / 30.0f);
+        if (single_draw_p->counter != 0.0f) {
+            f32 next_counter = single_draw_p->counter + dt;
+            f32 percent_xz = single_draw_p->counter * (1.0f / 30.0f);
 
             if (percent_xz > 1.0f) {
                 percent_xz = 1.0f;
@@ -210,18 +215,18 @@ static void Shop_Goods_Actor_drop_move(SHOP_GOODS_ACTOR* shop_goods) {
                 percent_xz = percent_xz;
             }
 
-            single_draw_p->velocity_y += single_draw_p->acceleration_y * 0.5f;
-            single_draw_p->current_pos.y += single_draw_p->velocity_y * 0.5f;
+            single_draw_p->velocity_y += single_draw_p->acceleration_y * 0.5f * dt;
+            single_draw_p->current_pos.y += single_draw_p->velocity_y * 0.5f * dt;
             single_draw_p->current_pos.x =
                 single_draw_p->start_pos.x + percent_xz * (single_draw_p->target_pos.x - single_draw_p->start_pos.x);
             single_draw_p->current_pos.z =
                 single_draw_p->start_pos.z + percent_xz * (single_draw_p->target_pos.z - single_draw_p->start_pos.z);
 
             if ((single_draw_p->flags & aSG_SCALE_FLAG)) {
-                single_draw_p->scale = 0.1f + (1.0f - SQ(1.0f - (f32)single_draw_p->counter / 28.0f)) * 0.9f;
+                single_draw_p->scale = 0.1f + (1.0f - SQ(1.0f - single_draw_p->counter / 28.0f)) * 0.9f;
             }
 
-            if (single_draw_p->counter == 27) {
+            if (single_draw_p->counter <= 27.0f && next_counter > 27.0f) {
                 if (single_draw_p->item == ITM_FOOD_APPLE || single_draw_p->item == ITM_FOOD_CHERRY ||
                     single_draw_p->item == ITM_FOOD_PEAR || single_draw_p->item == ITM_FOOD_PEACH ||
                     single_draw_p->item == ITM_FOOD_ORANGE) {
@@ -251,11 +256,11 @@ static void Shop_Goods_Actor_drop_move(SHOP_GOODS_ACTOR* shop_goods) {
                         mFI_SetFG2(single_draw_p->item, single_draw_p->target_pos);
                     }
 
-                    single_draw_p->counter = 0;
+                    single_draw_p->counter = 0.0f;
                     aMR_ThrowItem_FurnitureUnlock();
                 }
             } else {
-                single_draw_p->counter++;
+                single_draw_p->counter = next_counter;
             }
         }
     }
@@ -382,7 +387,7 @@ static void Shop_Goods_Actor_ct(ACTOR* actorx, GAME* game) {
     mode = shop_goods->mode;
 
     for (i = 0; i < aSG_SINGLE_DRAW_NUM; i++) {
-        shop_goods->single_draw[i].counter = 0;
+        shop_goods->single_draw[i].counter = 0.0f;
     }
 
     Glb_shop_goods_actor = shop_goods;

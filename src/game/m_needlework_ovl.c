@@ -345,7 +345,7 @@ extern void mNW_draw_sav_mark_before(GAME* game) {
     OPEN_POLY_OPA_DISP(game->graph);
 
     gSPDisplayList(POLY_OPA_DISP++, sav_mark_winT_before_model);
-    g = game->frame_counter % 40;
+    g = graph_dt_frame_phase(game, 40);
     if (g > 20) {
         g = 40 - g;
     }

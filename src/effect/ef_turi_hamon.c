@@ -89,6 +89,8 @@ static void eTH_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eTH_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+
     add_calc2(&effect->scale.x, effect->velocity.x, 1.0f - sqrtf(1.0f - effect->velocity.z), 0.005f);
 
     effect->effect_specific[0] =
@@ -97,8 +99,8 @@ static void eTH_mv(eEC_Effect_c* effect, GAME* game) {
     effect->scale.y = effect->scale.x;
     effect->scale.z = effect->scale.x;
 
-    effect->position.x += effect->velocity.y * sin_s(effect->effect_specific[2]);
-    effect->position.z += effect->velocity.y * cos_s(effect->effect_specific[2]);
+    effect->position.x += effect->velocity.y * sin_s(effect->effect_specific[2]) * dt;
+    effect->position.z += effect->velocity.y * cos_s(effect->effect_specific[2]) * dt;
 }
 
 static void eTH_dw(eEC_Effect_c* effect, GAME* game) {

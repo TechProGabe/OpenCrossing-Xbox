@@ -49,7 +49,7 @@ static void aNG2_set_camera(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
 
     guide2->camera_move_y = moveY;
     cur_angle = guide2->camera_tilt_cur_angle;
-    chase_angle(&cur_angle, guide2->camera_tilt_goal_angle, guide2->camera_tilt_add);
+    chase_angle(&cur_angle, guide2->camera_tilt_goal_angle, aNPC_dt_angle_step(guide2->camera_tilt_add));
     guide2->camera_tilt_cur_angle = cur_angle;
     sin = sin_s(cur_angle);
 
@@ -59,7 +59,8 @@ static void aNG2_set_camera(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
     eye.z = 400.0f;
 
     /* Move NPC head to current target */
-    chase_f(&guide2->npc_class.eye_y, obj_look_y_max[obj_look_type], obj_look_y_spd[obj_look_type] * 0.5f);
+    chase_f(&guide2->npc_class.eye_y, obj_look_y_max[obj_look_type],
+            aNPC_dt_float_step(obj_look_y_spd[obj_look_type] * 0.5f));
 
     /* Set ground pos */
     ground.x = guide2->npc_class.draw.shadow_pos.x;
@@ -72,7 +73,7 @@ static void aNG2_set_camera(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
         ground_y = mCoBG_GetBgY_OnlyCenter_FromWpos2(ground, 0.0f);
     }
 
-    chase_f(&guide2->obj_dist_ground, ground_y, 0.5f);
+    chase_f(&guide2->obj_dist_ground, ground_y, aNPC_dt_float_step(0.5f));
     ground.y = guide2->obj_dist_ground;
 
     /* Set camera center pos */
@@ -297,7 +298,8 @@ static void aNG2_calc_body_angl(NPC_GUIDE2_ACTOR* guide2, f32 pos_x, f32 pos_z) 
     f32 dZ = pos_z - guide2->npc_class.actor_class.world.position.z;
     s16 angl = atans_table(dZ, dX);
 
-    chase_angle(&guide2->npc_class.actor_class.shape_info.rotation.y, angl, DEG2SHORT_ANGLE2(11.25f));
+    chase_angle(&guide2->npc_class.actor_class.shape_info.rotation.y, angl,
+                aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
     guide2->npc_class.actor_class.world.angle.y = guide2->npc_class.actor_class.shape_info.rotation.y;
 }
 
@@ -338,7 +340,7 @@ static void aNG2_talk_start_wait(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
 
     if (mDemo_Check(mDemo_TYPE_SPEAK, actorx) == TRUE) {
         if (mDemo_Check_ListenAble() == FALSE &&
-            chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, 0x400) == TRUE) {
+            chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, aNPC_dt_angle_step(0x400)) == TRUE) {
             guide2->camera_eyes_flag = FALSE;
             aNG2_setupAction(guide2, play, aNG2_ACTION_WAIT_PERMISSION);
             mDemo_Set_ListenAble();
@@ -571,7 +573,7 @@ static void aNG2_keitai_talk(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
 
 static void aNG2_open_door(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
     chase_angle(&guide2->npc_class.actor_class.shape_info.rotation.y, DEG2SHORT_ANGLE2(-180.0f),
-                DEG2SHORT_ANGLE2(0.703125f));
+                aNPC_dt_angle_step(DEG2SHORT_ANGLE2(0.703125f)));
     if (cKF_FrameControl_passCheck_now(&guide2->npc_class.draw.main_animation.keyframe.frame_control, 22.0f) == TRUE) {
         TRAINDOOR_ACTOR* train_door = (TRAINDOOR_ACTOR*)guide2->train_door_actor;
 
@@ -606,7 +608,7 @@ static void aNG2_last_talk_start_wait(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play)
 
     if (mDemo_Check(mDemo_TYPE_SPEAK, actorx) == TRUE) {
         if (mDemo_Check_ListenAble() == FALSE &&
-            chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, 0x400) == TRUE) {
+            chase_angle(&actorx->shape_info.rotation.y, actorx->player_angle_y, aNPC_dt_angle_step(0x400)) == TRUE) {
             guide2->camera_eyes_flag = FALSE;
             aNG2_setupAction(guide2, play, aNG2_ACTION_SITDOWN2_START_WAIT);
             mDemo_Set_ListenAble();

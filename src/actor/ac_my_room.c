@@ -839,7 +839,9 @@ static void aMR_SetFirstScale(FTR_ACTOR* ftr_actor) {
     }
 
     ftr_actor->birth_anim_counter = 0;
+    ftr_actor->birth_anim_counter_f = 0.0f;
     ftr_actor->dust_timer = 0;
+    ftr_actor->dust_timer_f = 0.0f;
 }
 
 static void aMR_DeleteFurnitureBank(u16 ftr_no) {
@@ -1800,6 +1802,7 @@ static void My_Room_Actor_ct(ACTOR* actorx, GAME* game) {
     aMR_SecureFurnitureBank(my_room, game);
     aMR_InitHaniwaOnTable(actorx);
     my_room->state = 0;
+    my_room->clock_info.phase_frame = (f32)(play->game_frame % 120);
     aMR_InitFurnitureBankTable();
     aMR_MakeFurnitureActor(actorx, play, mCoBG_LAYER0);
     aMR_MakeFurnitureActor(actorx, play, mCoBG_LAYER1);

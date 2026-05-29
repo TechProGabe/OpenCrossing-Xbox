@@ -191,7 +191,7 @@ static void aEGPS_actor_move(ACTOR* actorx, GAME* game) {
   (*Common_Get(clip).npc_clip->move_proc)(actorx, game);
 
   if (mDemo_Check(mDemo_TYPE_TALK, actorx) == FALSE) {
-    chase_angle(&actorx->shape_info.rotation.y, 0, DEG2SHORT_ANGLE(5.625f));
+    chase_angle(&actorx->shape_info.rotation.y, 0, aNPC_dt_angle_step(DEG2SHORT_ANGLE(5.625f)));
     actorx->world.angle.y = actorx->shape_info.rotation.y;
   }
 }

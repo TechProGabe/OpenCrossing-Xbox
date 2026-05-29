@@ -134,12 +134,12 @@ static void aNPC_set_feel_info(NPC_ACTOR* nactorx, int feel, int timer) {
     Animal_c* animal = nactorx->npc_info.animal;
 
     if (animal != NULL) {
-        int feel_timer = nactorx->condition_info.feel_tim;
+        f32 feel_timer = nactorx->condition_info.feel_tim;
 
         if (feel != animal->mood) {
             animal->mood = feel;
             if (feel == mNpc_FEEL_NORMAL) {
-                feel_timer = 0;
+                feel_timer = 0.0f;
             } else {
                 feel_timer = timer * FRAMES_PER_MINUTE;
             }

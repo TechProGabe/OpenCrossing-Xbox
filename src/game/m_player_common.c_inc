@@ -900,7 +900,7 @@ static void Player_actor_set_eye_pattern(ACTOR* actorx, int idx) {
 static void Player_actor_set_eye_pattern_normal(ACTOR* actorx) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actorx;
     mPlayer_eye_pattern_c* eye_pattern_p = &player->eye_pattern_normal;
-    s16* timer_p = &eye_pattern_p->timer;
+    float* timer_p = &eye_pattern_p->timer;
     s16* pattern_p = &eye_pattern_p->pattern;
     int* blink_count_p = &player->blink_count;
     int idx;
@@ -910,7 +910,12 @@ static void Player_actor_set_eye_pattern_normal(ACTOR* actorx) {
     if (idx == 0) {
         idx = 0;
     } else {
-        idx = --(*timer_p);
+        *timer_p -= gamePT->graph->dt_num_60fps_frames;
+        if (*timer_p < 0) {
+            *timer_p = 0;
+        }
+
+        idx = (int)*timer_p;
     }
 
     if (idx == 0) {
@@ -923,7 +928,7 @@ static void Player_actor_set_eye_pattern_normal(ACTOR* actorx) {
         }
     }
 
-    *pattern_p = *timer_p;
+    *pattern_p = (int)*timer_p;
     if (*pattern_p >= 16) {
         *pattern_p = 0;
     }
@@ -2310,7 +2315,9 @@ static int Player_actor_Check_AnimationFrame_PerfectEquel(ACTOR* actorx, f32 fra
 }
 
 static int Player_actor_Check_AnimationFrame_Common(f32 cur_frame, f32 frame_speed, f32 end_frame, f32 target_frame) {
-    f32 last_frame = cur_frame - frame_speed;
+    /* dt-scale `frame_speed` to match cKF_FrameControl_play's actual advance,
+     * else at high fps the window catches the same target many frames. */
+    f32 last_frame = cur_frame - frame_speed * (f32)gamePT->graph->dt_num_60fps_frames;
 
     if (frame_speed > 0.0f) {
         if (last_frame < 1.0f) {
@@ -6371,14 +6378,15 @@ static void Player_actor_check_little_shake_tree(ACTOR* actorx, GAME* game) {
     }
 }
 
-static void Player_actor_check_shake_tree_timer(ACTOR* actorx) {
+static void Player_actor_check_shake_tree_timer(ACTOR* actorx, GAME* game) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actorx;
     f32* shake_timer_p = player->shake_tree_timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     int i;
 
     for (i = 0; i < 3; i++) {
         if (*shake_timer_p > 0.0f) {
-            *shake_timer_p -= 1.0f;
+            *shake_timer_p -= dt;
             if (*shake_timer_p < 0.0f) {
                 *shake_timer_p = 0.0f;
             }
@@ -6732,7 +6740,7 @@ static void Player_actor_set_ripple(ACTOR* actorx, GAME* game) {
     if (eEC_CLIP != NULL) {
         f32* ripple_timer_p = &player->ripple_timer;
 
-        *ripple_timer_p += 1.0f;
+        *ripple_timer_p += (float)game->graph->dt_num_60fps_frames;
         if (*ripple_timer_p >= 8.0f) {
             s16 attr = actorx->bg_collision_check.result.unit_attribute;
 
@@ -8081,13 +8089,13 @@ static void Player_actor_Check_player_sunburn_for_ct(ACTOR* actorx) {
     Player_actor_Set_player_sunburn_rankdown(actorx);
 }
 
-static void Player_actor_Check_player_change_color_for_main(ACTOR* actorx) {
+static void Player_actor_Check_player_change_color_for_main(ACTOR* actorx, GAME* game) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actorx;
 
     if (player->change_color_request) {
         player->change_color_request = FALSE;
         if (player->change_color_flag) {
-            player->change_color_timer += 1.0f;
+            player->change_color_timer += (f32)game->graph->dt_num_60fps_frames;
             if (player->change_color_timer >= 79.68f) {
                 player->change_color_timer = 0.0f;
             }
@@ -8377,7 +8385,7 @@ static int Player_actor_CheckAndRequest_main_radio_exercise_all(GAME* game, int 
         int cmd_idx;
         f32 timer;
 
-        player->radio_exercise_cmd_timer -= 1.0f;
+        player->radio_exercise_cmd_timer -= (f32)game->graph->dt_num_60fps_frames;
         if (player->radio_exercise_cmd_timer < 0.0f) {
             player->radio_exercise_cmd_timer = 0.0f;
         }

@@ -1,5 +1,6 @@
 #include "ef_effect_control.h"
 
+#include "graph.h"
 #include "m_common_data.h"
 #include "m_rcp.h"
 #include "sys_matrix.h"
@@ -43,21 +44,22 @@ static void eMotiyuge_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eMotiyuge_mv(eEC_Effect_c* effect, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-
-    if (effect->timer >= 24) {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 24, 30, 0.003f, 0.0006f);
-        effect->scale.y = eEC_CLIP->calc_adjust_proc(effect->timer, 24, 30, 0.009000001f, 0.0006f);
+    if (effect->lifetime >= 24.0f) {
+        effect->scale.x = eEL_CalcAdjust_F(effect->lifetime, 24.0f, 30.0f, 0.003f, 0.0006f);
+        effect->scale.y = eEL_CalcAdjust_F(effect->lifetime, 24.0f, 30.0f, 0.009000001f, 0.0006f);
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 24, 0.0045000003, 0.003f);
-        effect->scale.y = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 24, 0.0045000003f, 0.009000001f);
+        effect->scale.x = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 24.0f, 0.0045000003f, 0.003f);
+        effect->scale.y = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 24.0f, 0.0045000003f, 0.009000001f);
     }
 
-    if ((play->game_frame & 3) == 0) {
-        if (effect->effect_specific[1] >= 2) {
-            effect->effect_specific[1] = 0;
-        } else {
-            effect->effect_specific[1]++;
+    {
+        static float cycle_accum = 0.0f;
+        if (graph_dt_period_elapsed(game, &cycle_accum, 4.0f)) {
+            if (effect->effect_specific[1] >= 2) {
+                effect->effect_specific[1] = 0;
+            } else {
+                effect->effect_specific[1]++;
+            }
         }
     }
 }
@@ -67,7 +69,7 @@ extern Gfx ef_motiyuge01_00_modelT[];
 static void eMotiyuge_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
     u8* tex_p = eMotiyuge_yuge_texture_table[effect->effect_specific[1]];
-    u8 a = (int)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 16, 0.0f, 100.0f);
+    u8 a = (int)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 16.0f, 0.0f, 100.0f);
 
     OPEN_DISP(game->graph);
     

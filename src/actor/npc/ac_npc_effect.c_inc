@@ -33,11 +33,24 @@ static void aNPC_set_feel_effect(GAME* game, NPC_ACTOR* nactorx) {
     f32 feel_counter = nactorx->draw.feel_effect_counter;
     int set_num = feel_effect_p->set_num;
     u32* set_p = feel_effect_p->set_p;
+    f32 next_counter = feel_counter + 0.5f * (f32)game->graph->dt_num_60fps_frames;
+    f32 max = (f32)feel_effect_p->max;
+    int wrapped = FALSE;
+
+    if (max <= 0.0f) {
+        return;
+    }
+
+    while (next_counter >= max) {
+        next_counter -= max;
+        wrapped = TRUE;
+    }
 
     while (set_num != 0) {
-        f32 tmp = (f32)*set_p - feel_counter;
+        f32 set_frame = (f32)*set_p;
 
-        if (tmp >= 0.0f && tmp < 0.5f) {
+        if ((!wrapped && set_frame >= feel_counter && set_frame < next_counter) ||
+            (wrapped && (set_frame >= feel_counter || set_frame < next_counter))) {
             aNPC_set_eff(game, nactorx, data_p->effect_id, data_p->arg0, data_p->arg1);
         }
 
@@ -45,17 +58,17 @@ static void aNPC_set_feel_effect(GAME* game, NPC_ACTOR* nactorx) {
         set_num--;
     }
 
-    feel_counter += 0.5f;
-    while (feel_counter > (f32)feel_effect_p->max) {
-        feel_counter -= (f32)feel_effect_p->max;
-    }
-
-    nactorx->draw.feel_effect_counter = feel_counter;
+    nactorx->draw.feel_effect_counter = next_counter;
 }
 
 static void aNPC_set_other_effect(GAME* game, NPC_ACTOR* nactorx) {
     if (cKF_FrameControl_passCheck_now(&nactorx->draw.main_animation.keyframe.frame_control,
                                        (f32)nactorx->draw.effect_pattern) == TRUE) {
-        aNPC_set_eff(game, nactorx, nactorx->draw.effect_type, 0, 0);
+        if (nactorx->draw.feel_effect_counter <= 0.0f) {
+            aNPC_set_eff(game, nactorx, nactorx->draw.effect_type, 0, 0);
+            nactorx->draw.feel_effect_counter = 1.0f;
+        }
+    } else {
+        nactorx->draw.feel_effect_counter = 0.0f;
     }
 }

@@ -40,33 +40,36 @@ static void eHanabiHoshi_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->offset.y = 0.f;
     effect->offset.z = 0.f;
     effect->effect_specific[3] = (u16)RANDOM_F(10.f) & 1;
+    effect->effect_specific[4] = 0; /* phase counter */
 }
 
 static void eHanabiHoshi_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 framesAlive = EFFECT_LIFETIME - effect->timer;
-    effect->effect_specific[0] += 0x300;
-    effect->effect_specific[1] += 0x100;
-    effect->effect_specific[2] += 0x80;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    effect->effect_specific[0] += (s16)(0x300 * dt);
+    effect->effect_specific[1] += (s16)(0x100 * dt);
+    effect->effect_specific[2] += (s16)(0x80  * dt);
     effect->offset.x = sin_s(effect->effect_specific[1]) * 2.f;
     effect->offset.z = sin_s(-effect->effect_specific[1]) * 2.f;
     add_calc2(&effect->scale.x, 0.024999999f, CALC_EASE(0.2f), 5.f);
     effect->scale.y = effect->scale.x;
     effect->scale.z = effect->scale.x;
-    if (framesAlive == 10) {
+    if (effect->effect_specific[4] < 1 && t >= 10.0f) {
         static rgba_t hoshi_light[] = { { 0x3c, 0x1e, 0x1e, 255 }, { 0x1e, 0x3c, 0x1e, 255 } };
         rgba_t resultColor;
+        effect->effect_specific[4] = 1;
         eEC_CLIP->decide_light_power_proc(&resultColor, hoshi_light[effect->effect_specific[3]], effect->position, game,
                                           2.f, 0.f, 480.f);
         if (effect->arg0) {
-            // `resultColor.r *= (4.f/3.f);` does not match
             resultColor.r = resultColor.r * (4.f / 3.f);
             resultColor.g = resultColor.g * (4.f / 3.f);
             resultColor.b = resultColor.b * (4.f / 3.f);
         }
         eEC_CLIP->regist_effect_light(resultColor, 20, 50, TRUE);
     }
-    if (framesAlive == 72) {
+    if (effect->effect_specific[4] < 2 && t >= 72.0f) {
         xyz_t p = effect->position;
+        effect->effect_specific[4] = 2;
         p.y += 200.f;
         sAdo_OngenTrgStart(NA_SE_HANABI2, &p);
     }
@@ -92,10 +95,11 @@ static void eHanabiHoshi_dw(eEC_Effect_c* effect, GAME* game) {
     u8 result[9];
     f32 v2, v;
     s16 index;
-    s16 active_frames = EFFECT_LIFETIME - effect->timer;
+    f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+    s16 active_frames = (s16)t;
     v = (sin_s(effect->effect_specific[0]) + 1.f) * 0.5f * 0.14000005f + 0.93f;
     index = effect->effect_specific[3];
-    v2 = eEC_CLIP->calc_adjust_proc(active_frames, 0, EFFECT_LIFETIME - 1, 0.0f, 0.01f) + effect->scale.x;
+    v2 = eEL_CalcAdjust_F(t, 0.0f, (f32)(EFFECT_LIFETIME - 1), 0.0f, 0.01f) + effect->scale.x;
     eEC_CLIP->morph_combine_proc(result, eHanabiHoshi_morph_table[index], active_frames);
     OPEN_DISP(game->graph);
     _texture_z_light_fog_prim_xlu(game->graph);

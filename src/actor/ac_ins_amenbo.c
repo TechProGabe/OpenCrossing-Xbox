@@ -43,8 +43,8 @@ extern void aIAB_actor_init(ACTOR* actorx, GAME* game) {
     aIAB_setupAction(insect, act, game);
 }
 
-static void aIAB_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.5f;
+static void aIAB_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += aINS_dt_step(game, 0.5f);
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -73,9 +73,9 @@ static void aIAB_let_escape(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
     f32 grav;
 
-    aIAB_anime_proc(insect);
+    aIAB_anime_proc(insect, game);
     grav = actorx->gravity;
-    grav += grav * 0.1f * 0.5f;
+    grav += grav * 0.1f * aINS_dt_step(game, 0.5f);
     if (grav > 12.0f) {
         grav = 12.0f;
     }
@@ -88,8 +88,8 @@ static void aIAB_move(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
     f32 scale = aIAB_SCALE(insect);
 
-    chase_f(&aIAB_SCALE_RATE(insect), -0.0021f, 0.00035f);
-    scale += aIAB_SCALE_RATE(insect);
+    chase_f(&aIAB_SCALE_RATE(insect), -0.0021f, aINS_dt_step(game, 0.00035f));
+    scale += aINS_dt_step(game, aIAB_SCALE_RATE(insect));
     if (scale < 0.0f) {
         scale = 0.0f;
     }
@@ -109,7 +109,7 @@ static void aIAB_rest(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
 
     aIAB_BGcheck(insect);
-    insect->timer--;
+    insect->timer -= (f32)game->graph->dt_num_60fps_frames;
 
     /* When timer is 0, move again */
     if (insect->timer <= 0) {

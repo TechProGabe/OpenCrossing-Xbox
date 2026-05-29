@@ -20,7 +20,8 @@ struct radio_actor_s{
     u8 pad2[0x2B4 - 0x2A4];
     int current_action;
     int next_action;
-    u8 pad3[0x2DC - 0x2BC];
+    f32 effect_accum;
+    u8 pad3[0x2DC - 0x2C0];
 };
 
 #ifdef __cplusplus

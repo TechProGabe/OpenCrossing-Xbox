@@ -22,6 +22,7 @@ struct mailbox_ovl_s {
     u16 mark_bitfield;
     int mark_flag;
     mMB_GET_LAST_MAIL_IDX_PROC get_last_mail_idx_proc;
+    f32 transfer_accum;
 };
 
 extern void mMB_mailbox_ovl_construct(Submenu* submenu);

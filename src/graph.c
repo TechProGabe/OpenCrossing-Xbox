@@ -41,6 +41,7 @@ static int skip_frame; // TODO: this is actually declared in graph_main
 u8 SoftResetEnable;
 #endif
 static int frame; // TODO: this is actually declared in graph_task_set00
+static float graph_audio_accum;
 
 #ifdef TARGET_PC
 #define CONSTRUCT_THA_GA(tha_ga, name, name2) (THA_GA_ct((tha_ga), sys_dynamic.name, name2 ## _SIZE * sizeof(Gfx)))
@@ -112,6 +113,10 @@ extern void graph_ct(GRAPH* this) {
     bzero(this, sizeof(GRAPH));
     this->frame_counter = 0;
     this->cfb_bank = 0;
+    this->dt = FRAMES_TO_SECONDS(1.0f);
+    this->dt_num_60fps_frames = 1.0f;
+    this->dt_total_60fps_frames = 0.0;
+    graph_audio_accum = 0.0f;
     SETREG(SREG, 33, GETREG(SREG, 33) & ~2);
     SETREG(SREG, 33, GETREG(SREG, 33) & ~1);
     zurumode_init();
@@ -121,6 +126,36 @@ extern void graph_ct(GRAPH* this) {
 extern void graph_dt(GRAPH* this) {
     GRAPH_SET_DOING_POINT(this, DT);
     zurumode_cleanup();
+}
+
+int graph_dt_60hz_ticks(GAME* game, float* accum) {
+    *accum += (float)game->graph->dt_num_60fps_frames;
+    int ticks = (int)*accum;
+    *accum -= (float)ticks;
+    if (ticks > 4) ticks = 4;
+    return ticks;
+}
+
+int graph_dt_period_elapsed(GAME* game, float* accum, float period_frames) {
+    *accum += (float)game->graph->dt_num_60fps_frames;
+    if (*accum >= period_frames) {
+        *accum -= period_frames;
+        if (*accum > period_frames * 4.0f) *accum = 0.0f;
+        return 1;
+    }
+    return 0;
+}
+
+double graph_dt_frame_time(GAME* game) {
+    return game->graph->dt_total_60fps_frames;
+}
+
+int graph_dt_frame_phase(GAME* game, int period_frames) {
+    if (period_frames <= 0) {
+        return 0;
+    }
+
+    return (int)graph_dt_frame_time(game) % period_frames;
 }
 
 static void graph_task_set00(GRAPH* this) {
@@ -249,6 +284,37 @@ static void reset_check(GRAPH* this, GAME* game) {
     }
 }
 
+static void graph_audio_frame() {
+#ifdef TARGET_PC
+    static jmp_buf audio_jmpbuf;
+    pc_crash_set_jmpbuf(&audio_jmpbuf);
+    if (setjmp(audio_jmpbuf) != 0) {
+        printf("[PC] CRASH in sAdo_GameFrame! addr=0x%08X data=0x%08X\n", pc_crash_get_addr(),
+               pc_crash_get_data_addr());
+    } else {
+        sAdo_GameFrame();
+    }
+    pc_crash_set_jmpbuf(NULL);
+#else
+    sAdo_GameFrame();
+#endif
+}
+
+static void graph_audio_gameframe(GRAPH* this, GAME* game) {
+    int ticks = graph_dt_60hz_ticks(game, &graph_audio_accum);
+    int i;
+
+    if (ticks <= 0) {
+        return;
+    }
+
+    GRAPH_SET_DOING_POINT(this, AUDIO);
+    for (i = 0; i < ticks; i++) {
+        graph_audio_frame();
+    }
+    GRAPH_SET_DOING_POINT(this, AUDIO_FINISHED);
+}
+
 // Aus version removes debug frame skip logic
 #if VERSION >= VER_GAFU01_00
 static void graph_main(GRAPH* this, GAME* game) {
@@ -277,9 +343,7 @@ static void graph_main(GRAPH* this, GAME* game) {
     }
 
     if (GETREG(SREG, 20) < 2) {
-        GRAPH_SET_DOING_POINT(this, AUDIO);
-        sAdo_GameFrame();
-        GRAPH_SET_DOING_POINT(this, AUDIO_FINISHED);
+        graph_audio_gameframe(this, game);
     }
 
     reset_check(this, game);
@@ -301,6 +365,8 @@ static void graph_main(GRAPH* this, GAME* game) {
     game_main(game);
     PC_DIAG(10, "graph_main: game_main returned, frame_counter=%d\n", this->frame_counter);
 #ifdef TARGET_PC
+    /* Pause overlay (Resume/Settings/Quit). Appended after game_main so it
+     * draws on top of the scene's font/UI layer. No-op when not paused. */
     pc_pause_menu_draw(game);
 #endif
     GRAPH_SET_DOING_POINT(this, GAME_MAIN_FINISHED);
@@ -326,23 +392,7 @@ static void graph_main(GRAPH* this, GAME* game) {
 
     PC_DIAG(10, "graph2: before audio+reset, frame_counter=%d\n", this->frame_counter);
     if (GETREG(SREG, 20) < 2) {
-        GRAPH_SET_DOING_POINT(this, AUDIO);
-#ifdef TARGET_PC
-        {
-            static jmp_buf audio_jmpbuf;
-            pc_crash_set_jmpbuf(&audio_jmpbuf);
-            if (setjmp(audio_jmpbuf) != 0) {
-                printf("[PC] CRASH in sAdo_GameFrame! addr=0x%08X data=0x%08X\n",
-                       pc_crash_get_addr(), pc_crash_get_data_addr());
-            } else {
-                sAdo_GameFrame();
-            }
-            pc_crash_set_jmpbuf(NULL);
-        }
-#else
-        sAdo_GameFrame();
-#endif
-        GRAPH_SET_DOING_POINT(this, AUDIO_FINISHED);
+        graph_audio_gameframe(this, game);
     }
 
     reset_check(this, game);
@@ -367,6 +417,10 @@ extern void graph_proc(void* arg) {
     while (dlftbl != NULL) {
         size_t size = dlftbl->alloc_size;
         GAME* game = (GAME*)malloc(size);
+        OSTime time = OSGetTime();
+        const OSTick u_multiplier = OSSecondsToTicks(1);
+        const double d_multiplier = 1.0 / (double)u_multiplier;
+
         game_class_p = game;
         bzero(game, size);
         GRAPH_SET_DOING_POINT(__graph, GAME_CT);
@@ -379,7 +433,22 @@ extern void graph_proc(void* arg) {
                && g_pc_running
 #endif
         ) {
-            PC_DIAG(10, "graph_proc: loop top, game=%p\n", (void*)game);
+            const OSTime current_time = OSGetTime();
+            double delta_time = ((u32)(current_time - time)) * d_multiplier;
+            double dt_num_60fps_frames = SECONDS_TO_FRAMES(delta_time);
+            GRAPH* graph = __graph;
+
+            if (dt_num_60fps_frames > 4.0) {
+                dt_num_60fps_frames = 4.0;
+                delta_time = dt_num_60fps_frames / 60.0;
+            }
+
+            graph->dt = delta_time;
+            graph->dt_num_60fps_frames = dt_num_60fps_frames;
+            graph->dt_total_60fps_frames += dt_num_60fps_frames;
+            time = current_time;
+
+            PC_DIAG(10, "graph_proc: loop top, game=%p, dt=%f\n", (void*)game, delta_time);
             if (!dvderr_draw()) {
                 graph_main(__graph, game);
             }

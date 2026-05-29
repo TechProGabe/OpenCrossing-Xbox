@@ -216,7 +216,7 @@ static void aIDG_calc_direction_angl(aINS_INSECT_ACTOR* insect) {
         }
     }
     chase_angle(&insect->tools_actor.actor_class.shape_info.rotation.y, insect->tools_actor.actor_class.world.angle.y,
-                0x800);
+                aINS_dt_angle_step((GAME*)gamePT, 0x800));
 }
 
 static void aIDG_avoid(ACTOR* actor, GAME* game) {

@@ -115,7 +115,7 @@ static void Player_actor_Set_Item_Pickup(ACTOR* actorx) {
     xyz_t* left_hand_pos_p = &player->left_hand_pos;
     f32* timer_p = &main_pickup_p->timer;
 
-    (*timer_p) += 1.0f;
+    (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
     if (*timer_p > 40.0f) {
         *timer_p = 40.0f;
         *scale_p = 0.0f;

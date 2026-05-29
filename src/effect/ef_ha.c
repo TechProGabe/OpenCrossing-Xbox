@@ -46,18 +46,20 @@ static void eHA_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
         effect->effect_specific[0] = 1;
         effect->offset.x += 16.f;
     }
+    effect->effect_specific[1] = 0; /* sfx-fired flag */
 }
 
 static void eHA_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->timer == EFFECT_LIFETIME) {
+    if (effect->effect_specific[1] == 0) {
         sAdo_OngenTrgStart(NA_SE_2C, &effect->position);
+        effect->effect_specific[1] = 1;
     }
 }
 
 static void eHA_dw(eEC_Effect_c* effect, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
     s16 v = effect->effect_specific[0];
-    int opacity = (u8)eEC_CLIP->calc_adjust_proc(EFFECT_LIFETIME - effect->timer, 24, EFFECT_LIFETIME, 255.f, 0.f);
+    int opacity = (u8)eEL_CalcAdjust_F((f32)EFFECT_LIFETIME - effect->lifetime, 24.0f, (f32)EFFECT_LIFETIME, 255.f, 0.f);
     OPEN_DISP(game->graph);
     _texture_z_light_fog_prim_xlu(game->graph);
     Matrix_translate(effect->position.x, effect->position.y, effect->position.z, MTX_LOAD);

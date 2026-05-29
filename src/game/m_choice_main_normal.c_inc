@@ -27,7 +27,7 @@ static int mChoice_Main_Normal_SetChoice(mChoice_c* choice, GAME* game) {
         switch (*choice_automove_p) {
             case mChoice_AUTOMOVE_INCREMENT_WAIT: {
                 if (percent < 0.0f || chkButton(BUTTON_CDOWN)) {
-                    (*choice_automove_timer_p) += 1.0f;
+                    (*choice_automove_timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
 
                     if (*choice_automove_timer_p >= 18.0f) {
                         *choice_automove_timer_p = 0.0f;
@@ -45,7 +45,7 @@ static int mChoice_Main_Normal_SetChoice(mChoice_c* choice, GAME* game) {
 
             case mChoice_AUTOMOVE_INCREMENT: {
                 if (percent < 0.0f || chkButton(BUTTON_CDOWN)) {
-                    (*choice_automove_timer_p) += 1.0f;
+                    (*choice_automove_timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
 
                     if (*choice_automove_timer_p >= 9.0f) {
                         *choice_automove_timer_p = 0.0f;
@@ -62,7 +62,7 @@ static int mChoice_Main_Normal_SetChoice(mChoice_c* choice, GAME* game) {
 
             case mChoice_AUTOMOVE_DECREMENT_WAIT: {
                 if (percent > 0.0f || chkButton(BUTTON_CUP)) {
-                    (*choice_automove_timer_p) += 1.0f;
+                    (*choice_automove_timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
 
                     if (*choice_automove_timer_p >= 18.0f) {
                         *choice_automove_timer_p = 0.0f;
@@ -80,7 +80,7 @@ static int mChoice_Main_Normal_SetChoice(mChoice_c* choice, GAME* game) {
 
             case mChoice_AUTOMOVE_DECREMENT: {
                 if (percent > 0.0f || chkButton(BUTTON_CUP)) {
-                    (*choice_automove_timer_p) += 1.0f;
+                    (*choice_automove_timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
 
                     if (*choice_automove_timer_p >= 9.0f) {
                         *choice_automove_timer_p = 0.0f;

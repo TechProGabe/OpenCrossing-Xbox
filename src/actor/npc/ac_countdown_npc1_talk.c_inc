@@ -98,15 +98,16 @@ static void aCD1_before_run(COUNTDOWN_NPC1_ACTOR* actor) {
         actor->npc_class.action.step = aNPC_ACTION_END_STEP;
     }
 
-    chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl, DEG2SHORT_ANGLE2(5.625f));
+    chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl,
+                aNPC_dt_angle_step(DEG2SHORT_ANGLE2(5.625f)));
     actorx->world.angle.y = actorx->shape_info.rotation.y;
 }
 
 static void aCD1_before_turn(COUNTDOWN_NPC1_ACTOR* actor) {
     ACTOR* actorx = (ACTOR*)actor;
 
-    if (chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl, DEG2SHORT_ANGLE2(11.25f)) ==
-        TRUE) {
+    if (chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
         actor->next_action = actor->action - 1;
         actor->npc_class.action.step = aNPC_ACTION_END_STEP;
     }
@@ -117,8 +118,8 @@ static void aCD1_before_turn(COUNTDOWN_NPC1_ACTOR* actor) {
 static void aCD1_front_turn(COUNTDOWN_NPC1_ACTOR* actor) {
     ACTOR* actorx = (ACTOR*)actor;
 
-    if (chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl, DEG2SHORT_ANGLE2(11.25f)) ==
-        TRUE) {
+    if (chase_angle(&actorx->shape_info.rotation.y, actor->npc_class.movement.mv_angl,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
         aCD1_setupAction(actor, aCD1_ACT_FRONT_WAIT);
     }
 

@@ -21,6 +21,11 @@ static void fTIC_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* 
     f32 target = ftr_actor->switch_bit ? 1.0f : 0.0f;
     cKF_SkeletonInfo_R_c* keyframe = &ftr_actor->keyframe;
 
+    ftr_actor->dynamic_work_f[1] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[1] >= 1024.0f) {
+        ftr_actor->dynamic_work_f[1] -= 1024.0f;
+    }
+
     if (ftr_actor->dynamic_work_f[0] < target) {
         ftr_actor->dynamic_work_f[0] += 0.01f;
 
@@ -76,14 +81,7 @@ static int fTIC_DrawAfter(GAME* game, cKF_SkeletonInfo_R_c* keyframe, int joint_
                           void* arg, s_xyz* joint_rot, xyz_t* joint_pos) {
     FTR_ACTOR* ftr_actor = (FTR_ACTOR*)arg;
     cKF_SkeletonInfo_R_c* ftr_keyframe = &ftr_actor->keyframe;
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    u32 ctr_ofs;
-
-    if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
-        ctr_ofs = play->game_frame;
-    } else {
-        ctr_ofs = game->frame_counter;
-    }
+    int ctr_ofs = (int)ftr_actor->dynamic_work_f[1];
 
     if (joint_idx == 3) {
         OPEN_DISP(game->graph);

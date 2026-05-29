@@ -63,25 +63,23 @@ static void eSleep_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eSleep_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 64 - effect->timer;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 t = 64.0f - effect->lifetime;
 
-    effect->effect_specific[2] += DEG2SHORT_ANGLE2(11.25f);
-    effect->effect_specific[3] += DEG2SHORT_ANGLE2(6.33f);
+    effect->effect_specific[2] += (s16)(DEG2SHORT_ANGLE2(11.25f) * dt);
+    effect->effect_specific[3] += (s16)(DEG2SHORT_ANGLE2(6.33f)  * dt);
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
-    if (timer >= 62) {
-        effect->scale.x = 0.0036000002f;
-        effect->scale.y = 0.0036000002f;
-        effect->scale.z = 0.0036000002f;
-        effect->effect_specific[1] = 200;
-    } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(timer, 0, 40, 0.0f, 0.003f);
-        effect->scale.y = effect->scale.x;
-        effect->scale.z = effect->scale.x;
-        effect->effect_specific[1] = 255;
-    }
+    effect->scale.x = eEL_CalcAdjust_F(t, 0.0f, 40.0f, 0.0f, 0.003f);
+    effect->scale.y = effect->scale.x;
+    effect->scale.z = effect->scale.x;
+    effect->effect_specific[1] = 255;
     effect->scale.x *= sin_s(effect->effect_specific[2]) * 0.3f + 1.0f;
     effect->scale.x *= cos_s(effect->effect_specific[2]) * 0.3f + 1.0f;
 }

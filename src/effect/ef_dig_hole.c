@@ -65,6 +65,7 @@ static void eDig_Hole_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->effect_specific[3] = init_data[effect->arg1].goal_angle_x;
     effect->effect_specific[2] = init_data[effect->arg1].timer;
     effect->effect_specific[1] = 0;
+    effect->effect_specific[5] = 0; /* phase counter for one-shot velocity/accel set */
 
     effect->scale = ZeroVec;
 
@@ -116,20 +117,29 @@ static void eDig_Hole_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     }
 
     effect->timer = effect->effect_specific[2];
+    effect->lifetime = (f32)effect->effect_specific[2];
 }
 
 static void eDig_Hole_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->timer > (effect->effect_specific[2] - 6)) {
-        effect->scale.x += 0.00108333334f;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 es2 = (f32)effect->effect_specific[2];
+    f32 t = es2 - effect->lifetime; /* elapsed time in 60fps frames */
+
+    if (t < 6.0f) {
+        /* timer > es2 - 6: ramp up scale */
+        effect->scale.x += 0.00108333334f * dt;
         effect->scale.y = effect->scale.z = effect->scale.x;
-    } else if (effect->timer < 6 && effect->effect_specific[4] == 1) {
-        effect->scale.x -= 0.00108333334f;
+    } else if (effect->lifetime < 6.0f && effect->effect_specific[4] == 1) {
+        /* timer < 6: ramp down scale (only for type 1) */
+        effect->scale.x -= 0.00108333334f * dt;
         effect->scale.y = effect->scale.z = effect->scale.x;
-    } else if (effect->effect_specific[4] == 1 || effect->timer <= (effect->effect_specific[2] - 8)) {
+    } else if (effect->effect_specific[4] == 1 || t >= 8.0f) {
+        /* timer <= es2 - 8: rotate toward goal angle */
         add_calc_short_angle2(&effect->effect_specific[1], effect->effect_specific[3], 1.0f - sqrtf(0.8f), 1820, 91);
     }
 
-    if (effect->timer == (effect->effect_specific[2] - 8)) {
+    /* one-shot at original timer == es2 - 8 (i.e. t crosses 8.0f) */
+    if (effect->effect_specific[5] < 1 && t >= 8.0f) {
         f32 speed;
 
         if (effect->arg1 == 0 || effect->arg1 == 1 || effect->arg1 == 2) {
@@ -143,11 +153,16 @@ static void eDig_Hole_mv(eEC_Effect_c* effect, GAME* game) {
         effect->velocity.z = speed * cos_s(effect->effect_specific[0]);
 
         effect->acceleration.y = -0.1f;
+        effect->effect_specific[5] = 1;
     }
 
-    if (effect->effect_specific[4] == 0 || effect->timer > (effect->effect_specific[2] - 30)) {
-        xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-        xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    if (effect->effect_specific[4] == 0 || t < 30.0f) {
+        effect->velocity.x += effect->acceleration.x * dt;
+        effect->velocity.y += effect->acceleration.y * dt;
+        effect->velocity.z += effect->acceleration.z * dt;
+        effect->position.x += effect->velocity.x * dt;
+        effect->position.y += effect->velocity.y * dt;
+        effect->position.z += effect->velocity.z * dt;
     }
 }
 
@@ -167,7 +182,7 @@ static void eDig_Hole_dw(eEC_Effect_c* effect, GAME* game) {
     gSPMatrix(NEXT_POLY_XLU_DISP, _Matrix_to_Mtx_new(game->graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
     if (effect->effect_specific[4] == 0) {
-        u8 a = (int)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 10, 0.0f, 255.0f);
+        u8 a = (int)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 10.0f, 0.0f, 255.0f);
 
         gDPSetPrimColor(NEXT_POLY_XLU_DISP, 0, 255, 255, 255, 255, a);
     } else {

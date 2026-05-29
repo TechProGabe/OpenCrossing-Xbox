@@ -37,12 +37,13 @@ static void eHiramekiD_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     effect->timer = 72;
     effect->offset.x = effect->offset.y = effect->offset.z = 0.0f;
     effect->scale.x = effect->scale.y = effect->scale.z = 0.007f;
+    effect->effect_specific[0] = 0; /* sfx-fired flag */
 }
 
 static void eHiramekiD_mv(eEC_Effect_c* effect, GAME* game) {
-    s16 timer = 72 - effect->timer;
-    if (timer == 0) {
+    if (effect->effect_specific[0] == 0) {
         sAdo_OngenTrgStart(0x2E, &effect->position);
+        effect->effect_specific[0] = 1;
     }
 }
 
@@ -50,28 +51,29 @@ static void eHiramekiD_dw(eEC_Effect_c* effect, GAME* game) {
     xyz_t* position = &effect->position;
     xyz_t* offset = &effect->offset;
     xyz_t* scale = &effect->scale;
-    s16 timer;
-    u8 prim_r;
-    u8 prim_g;
-    u8 prim_b;
-    u8 prim_a;
-    u8 env_r;
-    u8 env_g;
+    f32 t = 72.0f - effect->lifetime;
+    u8 prim_r, prim_g, prim_b, prim_a;
+    u8 env_r, env_g;
 
-    timer = 72 - effect->timer;
-    prim_a = (int)eEC_CLIP->calc_adjust_proc(timer, 64, 72, 255.0f, 0.0f);
+    prim_a = (int)eEL_CalcAdjust_F(t, 64.0f, 72.0f, 255.0f, 0.0f);
 
-    if (timer < 4) {
-        s16 val = timer >> 1;
-        s16 idx = val > 0 ? val : 0;
-        u8 p_r = eHiramekiD_01f_primR_envRG[idx];
-        u8 p_gb = eHiramekiD_01f_primGB[idx];
-
-        prim_r = p_r;
-        env_r = p_r;
-        prim_g = p_gb;
-        prim_b = p_gb;
-        env_g = p_r;
+    if (t < 4.0f) {
+        f32 k = t * 0.5f;
+        if (k < 0.0f) k = 0.0f;
+        if (k > 1.0f) k = 1.0f;
+        {
+            int i = (int)k;
+            if (i > 1) i = 1;
+            int j = (i < 1) ? i + 1 : i;
+            f32 frac = k - (f32)i;
+            u8 p_r = (u8)(eHiramekiD_01f_primR_envRG[i] + (eHiramekiD_01f_primR_envRG[j] - eHiramekiD_01f_primR_envRG[i]) * frac);
+            u8 p_gb = (u8)(eHiramekiD_01f_primGB[i] + (eHiramekiD_01f_primGB[j] - eHiramekiD_01f_primGB[i]) * frac);
+            prim_r = p_r;
+            env_r = p_r;
+            prim_g = p_gb;
+            prim_b = p_gb;
+            env_g = p_r;
+        }
     } else {
         prim_r = 255;
         prim_g = 255;

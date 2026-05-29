@@ -984,6 +984,8 @@ static int aMR_CheckDiaryOnMe(FTR_ACTOR* ftr_actor, GAME* game) {
     return FALSE;
 }
 
+static void aMR_AdvanceRoomTimer(s16* timer, f32* accum, GAME* game, s16 max);
+
 static int aMR_ManageMoveBottun(MY_ROOM_ACTOR* my_room, GAME* game, aMR_contact_info_c* contact_info0,
                                 aMR_contact_info_c* contact_info1) {
     aMR_contact_info_c* contact;
@@ -1030,16 +1032,17 @@ static int aMR_ManageMoveBottun(MY_ROOM_ACTOR* my_room, GAME* game, aMR_contact_
                                               &nice_pos)) {
                 my_room->state = 1;
                 my_room->switch_timer = 0;
+                my_room->switch_timer_accum = 0.0f;
             }
         }
     } else if (chkButton(BUTTON_A) && !chkTrigger(BUTTON_B) && !chkTrigger(BUTTON_B) && my_room->demo_flag == FALSE &&
                my_room->msg_type == aMR_MSG_STATE_NONE) {
         if (my_room->state == 1 || my_room->state == 6) {
-            if (my_room->switch_timer < 14) {
-                my_room->switch_timer++;
-            }
+            aMR_AdvanceRoomTimer(&my_room->switch_timer, &my_room->switch_timer_accum, game, 14);
         }
     } else if (!chkButton(BUTTON_A) && my_room->demo_flag == FALSE && my_room->msg_type == aMR_MSG_STATE_NONE) {
+        my_room->switch_timer_accum = 0.0f;
+
         if (my_room->state == 1 || my_room->state == 6) {
             if (my_room->switch_timer < 14) {
                 field_type = Common_GetPointer(field_type);
@@ -1193,11 +1196,32 @@ static int aMR_ManageMoveBottun(MY_ROOM_ACTOR* my_room, GAME* game, aMR_contact_
     if (my_room->state == 0) {
         my_room->push_timer = 0;
         my_room->pull_timer = 0;
+        my_room->push_timer_accum = 0.0f;
+        my_room->pull_timer_accum = 0.0f;
         my_room->keep_push_flag = FALSE;
         my_room->keep_pull_flag = FALSE;
     }
 
     return FALSE;
+}
+
+static void aMR_AdvanceRoomTimer(s16* timer, f32* accum, GAME* game, s16 max) {
+    if (*timer < max) {
+        int ticks;
+
+        *accum += (f32)game->graph->dt_num_60fps_frames;
+        ticks = (int)*accum;
+
+        if (ticks > 0) {
+            *accum -= (f32)ticks;
+            *timer += ticks;
+
+            if (*timer > max) {
+                *timer = max;
+                *accum = 0.0f;
+            }
+        }
+    }
 }
 
 static int aMR_PullDirect2PushDirect(int pull_direct) {
@@ -1220,6 +1244,7 @@ static void aMR_MngPullDirectTimer(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* c
     if (my_room->pull_bubu == TRUE) {
         if (aMR_Get3dDirectStatus(contact_info->direction) != 1) {
             my_room->pull_timer = 0;
+            my_room->pull_timer_accum = 0.0f;
             my_room->state = 6;
             my_room->pull_bubu = FALSE;
             return;
@@ -1232,17 +1257,17 @@ static void aMR_MngPullDirectTimer(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* c
         if (aMR_Get3dDirectStatus(contact_info->direction) == 1) {
             if (my_room->state == 6 && my_room->keep_pull_flag == TRUE) {
                 my_room->pull_timer = 0;
+                my_room->pull_timer_accum = 0.0f;
                 my_room->keep_pull_flag = FALSE;
                 my_room->state = 8;
             }
 
             if (my_room->pull_timer == 0 && my_room->state == 6) {
                 my_room->state = 8;
-                my_room->pull_timer++;
             }
 
             if (my_room->state == 8) {
-                my_room->pull_timer++;
+                aMR_AdvanceRoomTimer(&my_room->pull_timer, &my_room->pull_timer_accum, game, 20000);
             }
         } else if (my_room->state == 6) {
             my_room->keep_pull_flag = FALSE;
@@ -1250,11 +1275,13 @@ static void aMR_MngPullDirectTimer(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* c
             my_room->keep_pull_flag = FALSE;
             my_room->state = 6;
             my_room->pull_timer = 0;
+            my_room->pull_timer_accum = 0.0f;
         }
     }
 
     if (my_room->state == 3 || my_room->state == 2 || my_room->state == 4 || my_room->state == 1) {
         my_room->pull_timer = 0;
+        my_room->pull_timer_accum = 0.0f;
     }
 }
 
@@ -1267,6 +1294,7 @@ static void aMR_MngPushDirectTimer(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* c
     if (my_room->push_bubu == TRUE) {
         if (aMR_JudgeStickFull(aMR_PullDirect2PushDirect(contact_info->direction), game) == FALSE) {
             my_room->push_timer = 0;
+            my_room->push_timer_accum = 0.0f;
             my_room->state = 6;
             my_room->push_bubu = FALSE;
             return;
@@ -1279,17 +1307,17 @@ static void aMR_MngPushDirectTimer(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* c
         if (aMR_JudgeStickFull(aMR_PullDirect2PushDirect(contact_info->direction), game)) {
             if (my_room->state == 6 && my_room->keep_push_flag == TRUE) {
                 my_room->push_timer = 0;
+                my_room->push_timer_accum = 0.0f;
                 my_room->keep_push_flag = FALSE;
                 my_room->state = 7;
             }
 
             if (my_room->push_timer == 0 && my_room->state == 6) {
                 my_room->state = 7;
-                my_room->push_timer++;
             }
 
             if (my_room->state == 7) {
-                my_room->push_timer++;
+                aMR_AdvanceRoomTimer(&my_room->push_timer, &my_room->push_timer_accum, game, 20000);
             }
         } else if (my_room->state == 6) {
             my_room->keep_push_flag = FALSE;
@@ -1297,11 +1325,13 @@ static void aMR_MngPushDirectTimer(MY_ROOM_ACTOR* my_room, aMR_contact_info_c* c
             my_room->keep_push_flag = FALSE;
             my_room->state = 6;
             my_room->push_timer = 0;
+            my_room->push_timer_accum = 0.0f;
         }
     }
 
     if (my_room->state == 2 || my_room->state == 3 || my_room->state == 4 || my_room->state == 1) {
         my_room->push_timer = 0;
+        my_room->push_timer_accum = 0.0f;
     }
 }
 
@@ -2360,10 +2390,11 @@ static void aMR_FtrRotate(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_ro
 
 static void aMR_BirthWait(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_room) {
     f32 scale = ftr_actor->collision_scale;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     int i;
 
     if (ftr_actor->collision_scale < 1.0f) {
-        ftr_actor->collision_scale = scale + ((f32)GETREG(MYKREG, 89) * 0.01f + 0.05f);
+        ftr_actor->collision_scale = scale + (((f32)GETREG(MYKREG, 89) * 0.01f + 0.05f) * dt);
     } else if (ftr_actor->collision_scale > 1.0f) {
         ftr_actor->collision_scale = 1.0f;
     } else {
@@ -2384,6 +2415,8 @@ static void aMR_BirthWait(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_ro
 
 static void aMR_FtrBirth(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_room) {
     static xyz_t scale1 = { 1.0f, 1.0f, 1.0f };
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    f32 prev_dust_timer = ftr_actor->dust_timer_f;
     f32 scale_y;
     f32 scale_xz;
     s16 now_counter;
@@ -2395,15 +2428,23 @@ static void aMR_FtrBirth(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_roo
     xyz_t pos3;
 
     if (ftr_actor->collision_scale < 1.0f) {
-        ftr_actor->collision_scale = ftr_actor->collision_scale + ((f32)GETREG(MYKREG, 89) * 0.01f + 0.05f);
+        ftr_actor->collision_scale =
+            ftr_actor->collision_scale + (((f32)GETREG(MYKREG, 89) * 0.01f + 0.05f) * dt);
     } else if (ftr_actor->collision_scale > 1.0f) {
         ftr_actor->collision_scale = 1.0f;
     } else {
         ftr_actor->collision_scale = ftr_actor->collision_scale;
     }
 
-    ftr_actor->birth_anim_counter += ftr_actor->birth_anim_step;
-    now_counter = ftr_actor->birth_anim_counter;
+    ftr_actor->birth_anim_counter_f += (f32)ftr_actor->birth_anim_step * dt;
+    while (ftr_actor->birth_anim_counter_f >= 32768.0f) {
+        ftr_actor->birth_anim_counter_f -= 65536.0f;
+    }
+    while (ftr_actor->birth_anim_counter_f < -32768.0f) {
+        ftr_actor->birth_anim_counter_f += 65536.0f;
+    }
+    now_counter = (s16)ftr_actor->birth_anim_counter_f;
+    ftr_actor->birth_anim_counter = now_counter;
     scale_y = sinf_table(SHORT2RAD_ANGLE2(now_counter)) * ftr_actor->birth_scale_modifier;
     scale_xz = 1.0f - scale_y;
     scale_y += 1.0f;
@@ -2412,7 +2453,10 @@ static void aMR_FtrBirth(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_roo
     ftr_actor->scale.y = scale_y;
     ftr_actor->scale.z = scale_xz;
 
-    if (ftr_actor->dust_timer == 2) {
+    ftr_actor->dust_timer_f += dt;
+    ftr_actor->dust_timer = (s16)ftr_actor->dust_timer_f;
+
+    if (prev_dust_timer < 2.0f && ftr_actor->dust_timer_f >= 2.0f) {
         aMR_GetDust4Position(&pos0, &pos1, &pos2, &pos3, &center, ftr_actor);
 
         if (eEC_CLIP != NULL) {
@@ -2428,7 +2472,7 @@ static void aMR_FtrBirth(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_roo
             vec.z = pos2.z - center.z;
             eEC_CLIP->effect_make_proc(eEC_EFFECT_DUST, pos2, 2, aMR_GetDustAngle(&vec), game, RSV_NO, 0, 4);
         }
-    } else if (ftr_actor->dust_timer == 6) {
+    } else if (prev_dust_timer < 6.0f && ftr_actor->dust_timer_f >= 6.0f) {
         aMR_GetDust4Position(&pos0, &pos1, &pos2, &pos3, &center, ftr_actor);
 
         if (eEC_CLIP != NULL) {
@@ -2446,7 +2490,6 @@ static void aMR_FtrBirth(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_roo
         }
     }
 
-    ftr_actor->dust_timer++;
     if ((prev_counter < 0 && now_counter >= 0) || (prev_counter < -0x8000 && now_counter >= -0x8000)) {
         ftr_actor->birth_scale_modifier *= 0.4f;
         ftr_actor->birth_anim_step += 1500;
@@ -2829,25 +2872,31 @@ static void aMR_HouseOtherMove(u32 player_no, ACTOR* actorx, GAME* game) {
     aMR_CheckControllerNeutral(my_room);
 }
 
-static void aMR_MakeClockInfo(MY_ROOM_ACTOR* my_room, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
+static int aMR_ClockCrossedFrame(f32 prev, f32 now, f32 target) {
+    if (prev <= now) {
+        return prev < target && now >= target;
+    }
 
-    my_room->clock_info.frame = play->game_frame % 120;
+    return prev < target || now >= target;
+}
+
+static void aMR_MakeClockInfo(MY_ROOM_ACTOR* my_room, GAME* game) {
+    f32 prev_frame = my_room->clock_info.phase_frame;
+    f32 frame = prev_frame + (f32)game->graph->dt_num_60fps_frames;
+
+    while (frame >= 120.0f) {
+        frame -= 120.0f;
+    }
+
+    my_room->clock_info.phase_frame = frame;
+    my_room->clock_info.frame = (int)frame;
     my_room->clock_info.tick0 = FALSE;
     my_room->clock_info.tick1 = FALSE;
     my_room->clock_info.tick_stop = FALSE;
 
-    switch (my_room->clock_info.frame) {
-        case 0:
-            my_room->clock_info.tick_stop = TRUE;
-            break;
-        case 15:
-            my_room->clock_info.tick0 = TRUE;
-            break;
-        case 45:
-            my_room->clock_info.tick1 = TRUE;
-            break;
-    }
+    my_room->clock_info.tick_stop = aMR_ClockCrossedFrame(prev_frame, frame, 0.0f);
+    my_room->clock_info.tick0 = aMR_ClockCrossedFrame(prev_frame, frame, 15.0f);
+    my_room->clock_info.tick1 = aMR_ClockCrossedFrame(prev_frame, frame, 45.0f);
 }
 
 static u16 aMR_Fname2ConpoIndex(u16 fname) {

@@ -64,12 +64,12 @@ extern Gfx obj_s_shrine_sprash_model[];
 
 static void aSHR_actor_draw(ACTOR* actorx, GAME* game) {
   SHRINE_ACTOR* shrine = (SHRINE_ACTOR*)actorx;
-  GAME_PLAY* play = (GAME_PLAY*)game;
   GRAPH* graph = game->graph;
+  int texture_frame = (int)shrine->texture_frame;
   u16* pal = (*Common_Get(clip).structure_clip->get_pal_segment_proc)(aSTR_PAL_SHRINE);
-  Gfx* two_tile0 = aSHR_GetTwoTileGfx(-(play->game_frame * 50), 0, 0, -(play->game_frame * 13), game);
-  Gfx* two_tile1 = aSHR_GetTwoTileGfx(0, -(play->game_frame * -5), 0, -(play->game_frame * -3), game);
-  Gfx* two_tile2 = aSHR_GetTwoTileGfx2(0, -(play->game_frame * 12), game);
+  Gfx* two_tile0 = aSHR_GetTwoTileGfx(-(texture_frame * 50), 0, 0, -(texture_frame * 13), game);
+  Gfx* two_tile1 = aSHR_GetTwoTileGfx(0, -(texture_frame * -5), 0, -(texture_frame * -3), game);
+  Gfx* two_tile2 = aSHR_GetTwoTileGfx2(0, -(texture_frame * 12), game);
   u16* dol_pal = g_fdinfo->field_palette.cedar_tree_pal;
   u8* tex = leaf_texture_table[shrine->structure_class.arg1 & 3];
 

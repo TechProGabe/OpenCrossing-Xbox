@@ -37,7 +37,7 @@ static void aTHB_calc_scale(ACTOR* actor, int idx) {
     static f32 aim[] = { 1.0f, 0.0f };
     f32 hanabi_scale = actor->scale.x;
 
-    chase_f(&hanabi_scale, aim[idx], 0.05f);
+    chase_f(&hanabi_scale, aim[idx], 0.05f * (f32)gamePT->graph->dt_num_60fps_frames);
 
     actor->scale.x = hanabi_scale;
     actor->scale.y = hanabi_scale;

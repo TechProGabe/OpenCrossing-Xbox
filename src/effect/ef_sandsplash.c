@@ -86,17 +86,25 @@ static void eSandsplash_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eSandsplash_mv(eEC_Effect_c* effect, GAME* game) {
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
-    effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 16, effect->offset.y, effect->offset.x);
+    effect->scale.x = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 16.0f, effect->offset.y, effect->offset.x);
     effect->scale.y = effect->scale.z = effect->scale.x;
 }
 
 static void eSandsplash_dw(eEC_Effect_c* effect, GAME* game) {
     float scale;
-    s16 idx = (16 - effect->timer) >> 1;
-    idx = CLAMP(idx, 0, 7);
+    f32 k = (16.0f - effect->lifetime) * 0.5f;
+    s16 idx;
+    if (k < 0.0f) k = 0.0f;
+    if (k > 7.0f) k = 7.0f;
+    idx = (s16)k;
 
     OPEN_DISP(game->graph);
 

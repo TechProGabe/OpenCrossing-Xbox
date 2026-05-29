@@ -209,7 +209,7 @@ static void aKKR_actor_move(ACTOR* actor, GAME* game) {
         kamakura->action_proc(kamakura, play);
 
         window = (aKKR_ctrl_light(kamakura) != 0) ? 1.0f : 0.0f;
-        chase_f(&kamakura->arg0_f, window, 0.019532442f);
+        chase_f(&kamakura->arg0_f, window, 0.019532442f * (f32)game->graph->dt_num_60fps_frames);
     }
 }
 

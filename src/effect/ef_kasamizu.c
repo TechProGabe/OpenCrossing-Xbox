@@ -32,14 +32,15 @@ static void eKasamizu_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     Matrix_Position(&base_offset, &pos);
     xyz_t_add(&effect->position, &pos, &effect->position);
     effect->effect_specific[0] = angle;
+    effect->effect_specific[1] = 0;
     effect->timer = 24;
 }
 
 static void eKasamizu_mv(eEC_Effect_c* effect, GAME* game) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
     if (eEC_CLIP != (eEC_EffectControl_Clip_c*)0) {
         int mEnv_NowWeather();
-        if (mEnv_NowWeather() == mEnv_WEATHER_RAIN && play->game_frame & 1) {
+        effect->effect_specific[1] ^= 1;
+        if (mEnv_NowWeather() == mEnv_WEATHER_RAIN && effect->effect_specific[1]) {
             xyz_t pos = effect->position;
             eEC_CLIP->effect_make_proc(eEC_EFFECT_KASAMIZUTAMA, pos, effect->prio, effect->effect_specific[0], game,
                                        effect->item_name, 0, 0);

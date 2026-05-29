@@ -8,9 +8,14 @@
 extern "C" {
 #endif
 
+#define WEATHER_PRV_COUNT 100
+#define WEATHER_PRV_NO_EXIST_ID -1
+#define WEATHER_PRV_HOLD_TIMER -100
+
 extern int aWeather_ChangingWeather();
 extern void aWeather_RequestChangeWeatherToIsland();
 extern void aWeather_RequestChangeWeatherFromIsland();
+extern int aWeather_ShouldSpawnEvery(ACTOR* actorx, f32 period_frames);
 
 extern ACTOR_PROFILE Weather_Profile;
 
@@ -19,7 +24,7 @@ typedef struct ac_weather_priv_s {
     xyz_t speed;
     f32 currentY;
     f32 unk1C;
-    s16 timer;
+    float timer;
     s16 work[5];
     u8 use;
     u8 id;
@@ -66,7 +71,7 @@ struct weather_actor_s {
     /* 0x174 */ aWeather_Profile_c* current_profile;
     /* 0x178 */ s16 current_status;
     /* 0x17A */ s16 next_status;
-    /* 0x17C */ s16 counter;
+    /* 0x17C */ float counter;
     /* 0x17E */ s16 current_level;
     /* 0x180 */ s16 current_aim_level;
     /* 0x182 */ s16 next_level;
@@ -77,11 +82,11 @@ struct weather_actor_s {
     /* 0x19C */ u8 request_change;
     /* 0x19E */ s16 unk19E;
     /* 0x1A0 */ aWeather_Clip_c clip;
-    /* 0x1C0 */ s16 timer;
-    /* 0x1C2 */ s16 timer2;
+    /* 0x1C0 */ float timer;
+    /* 0x1C2 */ float timer2;
     /* 0x1C4 */ xyz_t wind_info;
-    /* 0x1D0 */ s16 lightning_timer;
-    /* 0x1D2 */ s16 lightning_timer2;
+    /* 0x1D0 */ float lightning_timer;
+    /* 0x1D2 */ float lightning_timer2;
     /* 0x1D4 */ s16 current_sound_effect;
     /* 0x1D6 */ s16 umbrella_flag;
     /* 0x1D8 */ s16 current_yAngle;
@@ -89,6 +94,9 @@ struct weather_actor_s {
     /* 0x1DC */ s16 start_sound_effect;
     /* 0x1DE */ s16 stop_sound_effect;
     /* 0x1E0 */ s16 basement_event;
+    /* 0x1E4 */ f32 make_accum;
+    /* 0x1E8 */ f32 spawn_accum;
+    int spawn_in_advance;
 };
 
 #ifdef __cplusplus

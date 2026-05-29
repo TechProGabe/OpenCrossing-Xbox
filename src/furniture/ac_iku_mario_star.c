@@ -3,6 +3,11 @@ static void fIMS_ct(FTR_ACTOR* ftr_actor, u8* data) {
 }
 
 static void fIMS_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
+    ftr_actor->dynamic_work_f[0] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[0] >= 40.0f) {
+        ftr_actor->dynamic_work_f[0] -= 40.0f;
+    }
+
     if (aFTR_CAN_PLAY_SE(ftr_actor)) {
         if (ftr_actor->switch_bit == TRUE) {
             sAdo_OngenPos((u32)ftr_actor, 0x5F, &ftr_actor->position);
@@ -31,15 +36,8 @@ static u16* fIMS_palette_table[] = {
 extern Gfx int_iku_mario_star_model[];
 
 static void fIMS_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    int ctr_ofs;
+    int ctr_ofs = (int)ftr_actor->dynamic_work_f[0];
     int pal_idx;
-
-    if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
-        ctr_ofs = play->game_frame;
-    } else {
-        ctr_ofs = game->frame_counter;
-    }
 
     if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
         if (ftr_actor->switch_bit == TRUE) {

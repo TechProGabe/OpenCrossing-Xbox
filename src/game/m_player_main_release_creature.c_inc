@@ -269,7 +269,7 @@ static void Player_actor_request_proc_index_fromRelease_creature(ACTOR* actorx, 
     mPlayer_main_release_creature_c* release_creature_p = &player->main_data.release_creature;
     f32* timer_p = &release_creature_p->timer;
 
-    (*timer_p) += 1.0f;
+    (*timer_p) += (f32)gamePT->graph->dt_num_60fps_frames;
     if (*timer_p >= 84.0f && end_flag) {
         Player_actor_SettleRequestMainIndexPriority(actorx);
 

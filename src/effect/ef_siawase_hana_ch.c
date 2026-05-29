@@ -70,21 +70,26 @@ static void eSSHNC_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eSSHNC_mv(eEC_Effect_c* effect, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
     f32 scale;
-    s16 timer = 92 - effect->timer;
+    f32 t = 92.0f - effect->lifetime;
 
-    if (timer >= 58) {
+    if (t >= 58.0f) {
         effect->acceleration.y = 0.01f;
     } else {
-        effect->acceleration.y = eEC_CLIP->calc_adjust_proc(timer, 40, 58, 0.0f, 0.01f);
+        effect->acceleration.y = eEL_CalcAdjust_F(t, 40.0f, 58.0f, 0.0f, 0.01f);
     }
 
-    xyz_t_add(&effect->velocity, &effect->acceleration, &effect->velocity);
-    xyz_t_add(&effect->position, &effect->velocity, &effect->position);
+    effect->velocity.x += effect->acceleration.x * dt;
+    effect->velocity.y += effect->acceleration.y * dt;
+    effect->velocity.z += effect->acceleration.z * dt;
+    effect->position.x += effect->velocity.x * dt;
+    effect->position.y += effect->velocity.y * dt;
+    effect->position.z += effect->velocity.z * dt;
 
-    effect->effect_specific[1] += effect->effect_specific[2];
+    effect->effect_specific[1] += (s16)(effect->effect_specific[2] * dt);
 
-    scale = eEC_CLIP->calc_adjust_proc(timer, 40, 58, 0.0f, 0.005f);
+    scale = eEL_CalcAdjust_F(t, 40.0f, 58.0f, 0.0f, 0.005f);
     effect->scale.x = scale;
     effect->scale.y = scale;
     effect->scale.z = scale;
@@ -93,12 +98,12 @@ static void eSSHNC_mv(eEC_Effect_c* effect, GAME* game) {
 static void eSSHNC_dw(eEC_Effect_c* effect, GAME* game) {
     GRAPH* graph;
     u8 prim_a;
-    s16 timer = 92 - effect->timer;
+    f32 t = 92.0f - effect->lifetime;
     u8* prim = eSSHNC_color_info[2 * effect->effect_specific[0]];
     u8* env = eSSHNC_color_info[2 * effect->effect_specific[0] + 1];
 
-    if (timer >= 66) {
-        prim_a = (int)eEC_CLIP->calc_adjust_proc(timer, 66, 92, 255.0f, 0.0f);
+    if (t >= 66.0f) {
+        prim_a = (int)eEL_CalcAdjust_F(t, 66.0f, 92.0f, 255.0f, 0.0f);
     } else {
         prim_a = 255;
     }

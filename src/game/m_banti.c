@@ -21,7 +21,7 @@ extern void banti_ct() {
 
     banti.addressable_type = 0;
     banti.disabled = 0;
-    banti.timer = 0;
+    banti.timer = 0.0f;
     banti.alpha = 0.0f;
     banti.disp_left = 0;
     banti.move_left = 0;
@@ -72,6 +72,7 @@ extern void banti_dt() {
 
 static void banti_chk_disp_left(GAME_PLAY* play) {
     xyz_t player_pos_screen;
+    f32 dt = (f32)play->game.graph->dt_num_60fps_frames;
 
     Game_play_Projection_Trans(play, &get_player_actor_withoutCheck(play)->actor_class.world.position,
                                &player_pos_screen);
@@ -82,7 +83,7 @@ static void banti_chk_disp_left(GAME_PLAY* play) {
             banti.move_timer = 0.0f;
         }
 
-        banti.move_timer += 1.0f;
+        banti.move_timer += dt;
 
         if (banti.move_timer > 10.0f) {
             banti.move_timer = 10.0f;
@@ -100,7 +101,7 @@ static void banti_chk_disp_left(GAME_PLAY* play) {
             banti.move_timer = 0.0f;
         }
 
-        banti.move_timer += 1.0f;
+        banti.move_timer += dt;
 
         if (banti.move_timer > 10.0f) {
             banti.move_timer = 10.0f;
@@ -283,26 +284,26 @@ extern void banti_move(GAME_PLAY* play) {
 
     if (banti.addressable_type != addressable_type) {
         update = FALSE;
-        banti.timer++;
+        banti.timer += (f32)play->game.graph->dt_num_60fps_frames;
 
         if (addressable_type == mPlayer_ADDRESSABLE_FALSE_READY_NET) {
-            if (banti.timer > 50) {
+            if (banti.timer > 50.0f) {
                 update = TRUE;
             }
         } else if (banti.addressable_type != mPlayer_ADDRESSABLE_TRUE) {
-            if (banti.timer > 30 || addressable_type == mPlayer_ADDRESSABLE_FALSE_TALKING) {
+            if (banti.timer > 30.0f || addressable_type == mPlayer_ADDRESSABLE_FALSE_TALKING) {
                 update = TRUE;
             }
-        } else if (banti.timer > 50 || addressable_type == mPlayer_ADDRESSABLE_FALSE_TALKING) {
+        } else if (banti.timer > 50.0f || addressable_type == mPlayer_ADDRESSABLE_FALSE_TALKING) {
             update = TRUE;
         }
 
         if (update == TRUE) {
-            banti.timer = 0;
+            banti.timer = 0.0f;
             banti.addressable_type = addressable_type;
         }
     } else {
-        banti.timer = 0;
+        banti.timer = 0.0f;
     }
 
     banti_calc_disp_alpha_rate(play);

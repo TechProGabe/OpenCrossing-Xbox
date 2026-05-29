@@ -35,8 +35,8 @@ typedef struct lighthouse_pole_s {
     xyz_t pos;
     f32 speed;
     s16 state;
-    s16 timer;
-    s16 off_timer;
+    f32 timer;
+    f32 off_timer;
     int keyframe_state;
     int _1C;
     cKF_SkeletonInfo_R_c keyframe;

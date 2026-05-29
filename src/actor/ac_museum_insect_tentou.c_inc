@@ -22,7 +22,8 @@ xyz_t tentou_flower_pos[4] = {
 void mi_tentou_kama_anime(MUSEUM_INSECT_PRIVATE_DATA* actor) {
     static f32 scaleX_table[7] = { 1.f, 0.95f, 1.15f, 0.95f, 1.15f, 0.95f, 1.15f };
     if (actor->_7E < 7) {
-        if (chase_f(&actor->_5C, (GETREG(NMREG, 1) * 0.01f + 1.0f) * scaleX_table[actor->_7E], 0.115f) == 1) {
+        if (chase_f(&actor->_5C, (GETREG(NMREG, 1) * 0.01f + 1.0f) * scaleX_table[actor->_7E],
+                    0.115f) == 1) {
             actor->_7E--;
             if (actor->_7E < 0) {
                 actor->_7E = (s16)(RANDOM_F(2.0F) * 60.0f) + 67;

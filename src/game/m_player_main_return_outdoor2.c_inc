@@ -52,7 +52,7 @@ static void Player_actor_request_proc_index_fromReturn_outdoor2(ACTOR* actor, GA
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actor;
     f32 max_timer = player->main_data.return_outdoor2.max_timer;
     int prev = player->main_data.return_outdoor2.prev_main_index;
-    player->main_data.return_outdoor2.timer += 1.0f;
+    player->main_data.return_outdoor2.timer += (f32)gamePT->graph->dt_num_60fps_frames;
 
     if (player->main_data.return_outdoor2.timer >= max_timer) {
         if (prev != mPlayer_INDEX_DEMO_WAIT) {

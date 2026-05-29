@@ -66,19 +66,16 @@ static void eTMK_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 
 static void eTMK_mv(eEC_Effect_c* effect, GAME* game) {
     f32 scale;
-    s16 timer = 30 - effect->timer;
+    f32 t = 30.0f - effect->lifetime;
 
-    if (timer < 10) {
-        scale = eEC_CLIP->calc_adjust_proc(timer, 0, 10, 0.0f, 0.009f);
-        effect->scale.x = scale;
-        effect->scale.y = scale;
-        effect->scale.z = scale;
+    if (t < 10.0f) {
+        scale = eEL_CalcAdjust_F(t, 0.0f, 10.0f, 0.0f, 0.009f);
     } else {
-        scale = eEC_CLIP->calc_adjust_proc(timer, 11, 29, 0.009f, 0.0f);
-        effect->scale.x = scale;
-        effect->scale.y = scale;
-        effect->scale.z = scale;
+        scale = eEL_CalcAdjust_F(t, 11.0f, 29.0f, 0.009f, 0.0f);
     }
+    effect->scale.x = scale;
+    effect->scale.y = scale;
+    effect->scale.z = scale;
 }
 
 static void eTMK_dw(eEC_Effect_c* effect, GAME* game) {

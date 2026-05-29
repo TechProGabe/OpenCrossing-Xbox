@@ -2159,15 +2159,17 @@ static void mEnv_JudgeSwitchStatus() {
 }
 
 static void mEnv_rainbow_power_calc() {
+    f32 dt = gamePT->graph->dt_num_60fps_frames;
+
     if (Save_Get(rainbow_reserved) && mFI_CheckFieldData() && mFI_GET_TYPE(mFI_GetFieldId()) == mFI_FIELD_FG &&
         mEv_IsNotTitleDemo() && Common_Get(time.rtc_time).month == Save_Get(rainbow_month) &&
         Common_Get(time.rtc_time).day == Save_Get(rainbow_day) && Common_Get(time).now_sec >= mEnv_RAINBOW_TIME_START &&
         Common_Get(time).now_sec < mEnv_RAINBOW_TIME_END && Common_Get(time).season == mTM_SEASON_SUMMER) {
-        if (chase_f(Common_GetPointer(rainbow_opacity), 1.0f, (1.0f / 1800.0f)) != FALSE) {
+        if (chase_f(Common_GetPointer(rainbow_opacity), 1.0f, (1.0f / 1800.0f) * dt) != FALSE) {
             Save_Set(rainbow_reserved, FALSE); // rainbow has been shown
         }
     } else {
-        chase_f(Common_GetPointer(rainbow_opacity), 0.0f, (1.0f / 108000.0f)); // slowly fade out rainbow
+        chase_f(Common_GetPointer(rainbow_opacity), 0.0f, (1.0f / 108000.0f) * dt); // slowly fade out rainbow
     }
 }
 

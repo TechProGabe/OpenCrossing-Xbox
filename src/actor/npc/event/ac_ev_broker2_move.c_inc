@@ -166,7 +166,8 @@ static void aEBR2_search_player(EV_BROKER2_ACTOR* broker2, GAME_PLAY* play) {
         if (ABS(angle) > DEG2SHORT_ANGLE2(90.0f)) {
             aEBR2_setupAction(broker2, aEBR2_ACTION_TURN);
         } else {
-            chase_angle(&broker2->npc_class.actor_class.shape_info.rotation.y, broker2->player_angle, DEG2SHORT_ANGLE2(11.25f));
+            chase_angle(&broker2->npc_class.actor_class.shape_info.rotation.y, broker2->player_angle,
+                        aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
             broker2->npc_class.actor_class.world.angle.y = broker2->npc_class.actor_class.shape_info.rotation.y;
         }
     }
@@ -184,7 +185,8 @@ static void aEBR2_search_player2(EV_BROKER2_ACTOR* broker2, GAME_PLAY* play) {
         f32 dist;
         s16 angle = atans_table(dz, dx);
 
-        chase_angle(&broker2->npc_class.actor_class.shape_info.rotation.y, angle, DEG2SHORT_ANGLE2(11.25f));
+        chase_angle(&broker2->npc_class.actor_class.shape_info.rotation.y, angle,
+                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
         broker2->npc_class.actor_class.world.angle.y = broker2->npc_class.actor_class.shape_info.rotation.y;
 
         dist = SQ(dx) + SQ(dz);
@@ -277,7 +279,8 @@ static int aEBR2_message_ctrl(EV_BROKER2_ACTOR* broker2, GAME_PLAY* play) {
 
             if (mDemo_Check(mDemo_TYPE_SPEAK, actorx) == TRUE) {
                 if (mDemo_Check_ListenAble() == FALSE) {
-                    if (chase_angle(&actorx->shape_info.rotation.y, broker2->player_angle, DEG2SHORT_ANGLE2(11.25f)) == TRUE) {
+                    if (chase_angle(&actorx->shape_info.rotation.y, broker2->player_angle,
+                                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
                         aEBR2_setupAction(broker2, aEBR2_ACTION_SELL_CHECK);
                         aEBR2_Set_ListenAble(broker2);
                         ret = TRUE;
@@ -287,7 +290,8 @@ static int aEBR2_message_ctrl(EV_BROKER2_ACTOR* broker2, GAME_PLAY* play) {
                 }
             } else if (mDemo_Check(mDemo_TYPE_TALK, actorx) == TRUE) {
                 if (mDemo_Check_ListenAble() == FALSE) {
-                    if (chase_angle(&actorx->shape_info.rotation.y, broker2->player_angle, DEG2SHORT_ANGLE2(11.25f)) == TRUE) {
+                    if (chase_angle(&actorx->shape_info.rotation.y, broker2->player_angle,
+                                    aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f))) == TRUE) {
                         aEBR2_setupAction(broker2, aEBR2_ACTION_TALK_END_WAIT);
                         aEBR2_Set_ListenAble(broker2);
                         ret = TRUE;
@@ -371,7 +375,8 @@ static void aEBR2_turn(EV_BROKER2_ACTOR* broker2, GAME_PLAY* play) {
         if (playerx != NULL) {
             s16 player_angle = broker2->player_angle;
 
-            chase_angle(&broker2->npc_class.actor_class.shape_info.rotation.y, player_angle, DEG2SHORT_ANGLE2(11.25f));
+            chase_angle(&broker2->npc_class.actor_class.shape_info.rotation.y, player_angle,
+                        aNPC_dt_angle_step(DEG2SHORT_ANGLE2(11.25f)));
             broker2->npc_class.actor_class.world.angle.y = broker2->npc_class.actor_class.shape_info.rotation.y;
 
             if (ABS(player_angle - broker2->npc_class.actor_class.shape_info.rotation.y) <= DEG2SHORT_ANGLE2(90.0f)) {

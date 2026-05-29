@@ -41,7 +41,7 @@ static void aANT_actor_ct(ACTOR* actorx, GAME* game) {
     ant->below_fg_p = mFI_GetUnitFG(actorx->world.position);
     actorx->home.position.y = actorx->world.position.y = mCoBG_GetBgY_OnlyCenter_FromWpos(actorx->world.position, -10.0f);
     actorx->shape_info.rotation.x = DEG2SHORT_ANGLE2(45.0f);
-    ant->alpha = 255;
+    ant->alpha = 255.0f;
     actorx->mv_proc = &aANT_actor_move;
     aANT_setupAction(ant, aANT_ACT_WAIT);
 }
@@ -78,6 +78,7 @@ static void aANT_wait(ANT_ACTOR* ant, GAME* game) {
 
 static void aANT_caught(ANT_ACTOR* ant, GAME* game) {
     aINS_Init_c insect_init;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
 
     insect_init.insect_type = aINS_INSECT_TYPE_ANT;
     xyz_t_move(&insect_init.position, &ant->actor_class.world.position);
@@ -90,25 +91,27 @@ static void aANT_caught(ANT_ACTOR* ant, GAME* game) {
             aANT_setupAction(ant, aANT_ACT_DISAPPEAR);
         }
     } else {
-        ant->disappear_counter++;
-        if (ant->disappear_counter > 1) {
+        ant->disappear_counter += dt;
+        if (ant->disappear_counter > 1.0f) {
             aANT_setupAction(ant, aANT_ACT_DISAPPEAR);
         }
     }
 }
 
 static void aANT_disappear(ANT_ACTOR* ant, GAME* game) {
-    ant->alpha -= 15;
-    if (ant->alpha < 0) {
-        ant->alpha = 0;
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+
+    ant->alpha -= 15.0f * dt;
+    if (ant->alpha <= 0.0f) {
+        ant->alpha = 0.0f;
         Actor_delete((ACTOR*)ant);
     } else {
-        aANT_calc_scale(ant, 0.1f, 0.01f);
+        aANT_calc_scale(ant, 0.1f * dt, 0.01f);
     }
 }
 
 static void aANT_caught_init(ANT_ACTOR* ant) {
-    ant->disappear_counter = 0;
+    ant->disappear_counter = 0.0f;
 }
 
 static void aANT_disappear_init(ANT_ACTOR* ant) {
@@ -172,7 +175,7 @@ static void aANT_actor_draw(ACTOR* actorx, GAME* game) {
     OPEN_POLY_XLU_DISP(graph);
 
     gSPMatrix(POLY_XLU_DISP++, _Matrix_to_Mtx_new(graph), G_MTX_LOAD | G_MTX_NOPUSH);
-    gDPSetPrimColor(POLY_XLU_DISP++, 0, 255, 0, 0, 0, ant->alpha);
+    gDPSetPrimColor(POLY_XLU_DISP++, 0, 255, 0, 0, 0, (u8)ant->alpha);
     gSPDisplayList(POLY_XLU_DISP++, act_antT_model);
 
     CLOSE_POLY_XLU_DISP(graph);

@@ -1,4 +1,9 @@
 static void fYMF_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
+    ftr_actor->dynamic_work_f[0] += (f32)game->graph->dt_num_60fps_frames;
+    while (ftr_actor->dynamic_work_f[0] >= 80.0f) {
+        ftr_actor->dynamic_work_f[0] -= 80.0f;
+    }
+
     if (aFTR_CAN_PLAY_SE(ftr_actor)) {
         if (ftr_actor->switch_changed_flag == TRUE) {
             sAdo_OngenTrgStart(0x17B, &ftr_actor->position);
@@ -22,14 +27,7 @@ extern Gfx int_yaz_mario_flower_hana_model[];
 extern Gfx int_yaz_mario_flower_body_model[];
 
 static void fYMF_dw(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game, u8* data) {
-    GAME_PLAY* play = (GAME_PLAY*)game;
-    u32 ctr_ofs;
-
-    if (ftr_actor->ctr_type == aFTR_CTR_TYPE_GAME_PLAY) {
-        ctr_ofs = play->game_frame;
-    } else {
-        ctr_ofs = game->frame_counter;
-    }
+    int ctr_ofs = (int)ftr_actor->dynamic_work_f[0];
 
     OPEN_DISP(game->graph);
 

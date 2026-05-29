@@ -38,13 +38,13 @@ static void eUranai_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
 }
 
 static void eUranai_mv(eEC_Effect_c* effect, GAME* game) {
-    if (effect->timer >= 70) {
+    if (effect->lifetime >= 70.0f) {
         effect->scale.x = 0.01f;
         effect->scale.y = 0.01f;
         effect->scale.z = 0.01f;
     } else {
-        effect->scale.x = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 70, 0.0139999999f, 0.01f);
-        effect->scale.y = eEC_CLIP->calc_adjust_proc(effect->timer, 0, 70, 0.012f, 0.01f);
+        effect->scale.x = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 70.0f, 0.0139999999f, 0.01f);
+        effect->scale.y = eEL_CalcAdjust_F(effect->lifetime, 0.0f, 70.0f, 0.012f, 0.01f);
         effect->scale.z = 0.01f;
     }
 }
@@ -54,16 +54,16 @@ static void eUranai_dw(eEC_Effect_c* effect, GAME* game) {
     GRAPH* graph;
     GAME_PLAY* play = (GAME_PLAY*)game;
 
-    if (effect->timer >= 70) {
+    if (effect->lifetime >= 70.0f) {
         r = 255;
         g = 0;
         b = 100;
-        a = (s8)eEC_CLIP->calc_adjust_proc(effect->timer, 70, 80, 255.0f, 0.0f);
+        a = (s8)eEL_CalcAdjust_F(effect->lifetime, 70.0f, 80.0f, 255.0f, 0.0f);
     } else {
         r = 255;
         g = 0;
-        b = (s8)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 70, 255.0f, 100.0f);
-        a = (s8)eEC_CLIP->calc_adjust_proc(effect->timer, 0, 70, 0.0f, 255.0f);
+        b = (s8)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 70.0f, 255.0f, 100.0f);
+        a = (s8)eEL_CalcAdjust_F(effect->lifetime, 0.0f, 70.0f, 0.0f, 255.0f);
     }
 
     graph = game->graph;

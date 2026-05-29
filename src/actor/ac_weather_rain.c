@@ -96,11 +96,11 @@ static void aWeatherRain_make(ACTOR* actor, GAME* game) {
 static void aWeatherRain_ct(aWeather_Priv*, GAME*) {
 }
 
-static void aWeatherRain_MoveRain(aWeather_Priv* priv) {
-
-    priv->pos.x += priv->speed.x;
-    priv->pos.y += priv->speed.y;
-    priv->pos.z += priv->speed.z;
+static void aWeatherRain_MoveRain(aWeather_Priv* priv, GAME* game) {
+    f32 dt = (f32)game->graph->dt_num_60fps_frames;
+    priv->pos.x += priv->speed.x * dt;
+    priv->pos.y += priv->speed.y * dt;
+    priv->pos.z += priv->speed.z * dt;
 }
 
 static void aWeatherRain_MakePicha(ACTOR* actor, GAME* game, xyz_t pos) {
@@ -140,10 +140,10 @@ static void aWeatherRain_set(GAME* game) {
 
 static void aWeatherRain_move(aWeather_Priv* priv, GAME* game) {
     WEATHER_ACTOR* weather;
-    s16 timer = (1000 - priv->timer);
+    float timer = (1000.0f - priv->timer);
 
     if (priv->work[0] == 0) {
-        aWeatherRain_MoveRain(priv);
+        aWeatherRain_MoveRain(priv, game);
         if ((timer >= 10) && (Common_Get(clip.weather_clip) != NULL)) {
             weather = (WEATHER_ACTOR*)Common_Get(clip.weather_clip)->actor;
             if (weather != NULL) {
@@ -156,7 +156,7 @@ static void aWeatherRain_move(aWeather_Priv* priv, GAME* game) {
 
 void aWeatherRain_draw(aWeather_Priv* priv, GAME* game) {
     static f32 rain_scale[] = {
-        0.000299999985145f,
+        0.0003f,
         0.035f,
         0.01f,
     };
