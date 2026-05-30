@@ -934,12 +934,21 @@ static void mMP_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu) {
         sAdo_SysTrgStart(NA_SE_CURSOL);
     }
 
+#ifdef TARGET_PC
+    map_ovl->cursor_frame += (f32)gamePT->graph->dt_num_60fps_frames;
+    if (map_ovl->cursor_frame >= (f32)mMP_CURSOR_FRAMES) {
+        map_ovl->cursor_frame -= (f32)mMP_CURSOR_FRAMES;
+    } else if (map_ovl->cursor_frame < 0.0f) {
+        map_ovl->cursor_frame = 0.0f;
+    }
+#else
     map_ovl->cursor_frame++;
     if (map_ovl->cursor_frame >= mMP_CURSOR_FRAMES) {
         map_ovl->cursor_frame %= mMP_CURSOR_FRAMES;
     } else if (map_ovl->cursor_frame < 0) {
         map_ovl->cursor_frame = 0;
     }
+#endif
 }
 
 static void mMP_move_Wait(Submenu* submenu, mSM_MenuInfo_c* menu) {
@@ -1102,8 +1111,18 @@ static void mMP_set_cursol_dl(GRAPH* graph, mMP_Ovl_c* map_ovl, f32 base_x, f32 
 
     f32 x = map_ovl->map_cursor_current_xpos + base_x;
     f32 y = map_ovl->map_cursor_current_zpos + base_y;
+#ifdef TARGET_PC
+    int frame = (int)map_ovl->cursor_frame;
+#else
     int frame = map_ovl->cursor_frame;
+#endif
     Gfx* gfx;
+
+    if (frame >= mMP_CURSOR_FRAMES) {
+        frame %= mMP_CURSOR_FRAMES;
+    } else if (frame < 0) {
+        frame = 0;
+    }
 
     Matrix_scale(16.0f, 16.0f, 1.0f, MTX_LOAD);
     Matrix_translate(x + 11.7f, y + 45.7f, 140.0f, MTX_MULT);

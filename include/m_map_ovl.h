@@ -93,7 +93,11 @@ struct map_overlay_s {
   f32 map_cursor_target_xpos;
   f32 map_cursor_target_zpos;
 
+#ifdef TARGET_PC
+  f32 cursor_frame;
+#else
   int cursor_frame;
+#endif
 
   int unk_18[2];
 
