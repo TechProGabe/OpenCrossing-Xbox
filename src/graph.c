@@ -129,10 +129,18 @@ extern void graph_dt(GRAPH* this) {
 }
 
 int graph_dt_60hz_ticks(GAME* game, float* accum) {
+    int max_ticks = 4;
+
+#ifdef TARGET_PC
+    if (g_pc_speedhack_enabled) {
+        max_ticks = (int)PC_SPEEDHACK_MULTIPLIER;
+    }
+#endif
+
     *accum += (float)game->graph->dt_num_60fps_frames;
     int ticks = (int)*accum;
     *accum -= (float)ticks;
-    if (ticks > 4) ticks = 4;
+    if (ticks > max_ticks) ticks = max_ticks;
     return ticks;
 }
 
@@ -440,6 +448,13 @@ extern void graph_proc(void* arg) {
                 dt_num_60fps_frames = 4.0;
                 delta_time = dt_num_60fps_frames / 60.0;
             }
+
+#ifdef TARGET_PC
+            if (g_pc_speedhack_enabled) {
+                dt_num_60fps_frames *= PC_SPEEDHACK_MULTIPLIER;
+                delta_time *= PC_SPEEDHACK_MULTIPLIER;
+            }
+#endif
 
             graph->dt = delta_time;
             graph->dt_num_60fps_frames = dt_num_60fps_frames;

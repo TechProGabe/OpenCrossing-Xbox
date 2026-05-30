@@ -33,6 +33,8 @@
 #define PC_ARAM_SIZE          (16 * 1024 * 1024)
 #define PC_FIFO_SIZE          (256 * 1024)
 
+#define PC_SPEEDHACK_MULTIPLIER 10.0
+
 #define PC_PI  3.14159265358979323846
 #define PC_PIf 3.14159265358979323846f
 #define PC_DEG_TO_RAD (PC_PI / 180.0)
@@ -68,6 +70,7 @@ extern SDL_GLContext  g_pc_gl_context;
 extern int           g_pc_running;
 extern int           g_pc_verbose;
 extern int           g_pc_frame_limit_override;
+extern int           g_pc_speedhack_enabled;
 extern int           g_pc_time_override;
 extern int           g_pc_min_override;
 extern int           g_pc_sec_override;

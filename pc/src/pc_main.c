@@ -20,6 +20,7 @@ SDL_Window*   g_pc_window = NULL;
 SDL_GLContext  g_pc_gl_context = NULL;
 int           g_pc_running = 1;
 int           g_pc_frame_limit_override = -1;
+int           g_pc_speedhack_enabled = 0;
 int           g_pc_verbose = 0;
 int           g_pc_time_override = -1; /* -1=system clock, 0-23=override hour */
 int           g_pc_min_override = -1; /* -1=system clock, 0-59=override minute */
@@ -187,6 +188,17 @@ void pc_platform_init(void) {
 
 extern void PADCleanup(void);
 
+static void pc_speedhack_toggle(void) {
+    g_pc_speedhack_enabled = !g_pc_speedhack_enabled;
+    if (g_pc_window != NULL) {
+        SDL_SetWindowTitle(g_pc_window, g_pc_speedhack_enabled ? "Animal Crossing [5x]" : PC_WINDOW_TITLE);
+    }
+
+    if (g_pc_verbose) {
+        printf("[PC] speedhack %s\n", g_pc_speedhack_enabled ? "5x" : "off");
+    }
+}
+
 void pc_platform_shutdown(void) {
     pc_audio_shutdown();
     pc_audio_mq_shutdown();
@@ -231,6 +243,10 @@ int pc_platform_poll_events(void) {
                 }
                 break;
             case SDL_KEYDOWN:
+                if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat) {
+                    pc_speedhack_toggle();
+                    break;
+                }
                 if (event.key.keysym.sym == SDLK_ESCAPE && !event.key.repeat) {
                     if (g_pc_paused) {
                         pc_pause_menu_handle_event(&event);
