@@ -148,7 +148,7 @@ static void write_defaults(const char* path) {
     fprintf(f, "#   Left Alt, Right Alt, Return, Escape, Tab, Backspace, Delete,\n");
     fprintf(f, "#   A-Z, 0-9, F1-F12, Up, Down, Left, Right, etc.\n");
     fprintf(f, "# Mouse buttons: Mouse1 (left), Mouse2 (right), Mouse3 (middle)\n");
-    fprintf(f, "# Full list: https://wiki.libsdl.org/SDL2/SDL_Scancode\n");
+    fprintf(f, "# For the full list, search the SDL2 scancode name table.\n");
     fprintf(f, "\n");
     fprintf(f, "# Buttons\n");
 
