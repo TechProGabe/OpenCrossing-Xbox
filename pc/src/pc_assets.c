@@ -29860,7 +29860,7 @@ extern void _pc_load_src_static_nintendo_hi_0_c(void);
 extern void _pc_load_src_game_m_choice_draw_c_inc(void);
 extern void _pc_load_src_static_bootdata_logo_nin_c(void);
 
-void pc_assets_init(void) {
+int pc_assets_init(void) {
     int i, loaded = 0, failed = 0, rom_mode = 0;
     int total = (int)(sizeof(s_assets) / sizeof(s_assets[0]));
 
@@ -29879,10 +29879,14 @@ void pc_assets_init(void) {
             rom_mode = 1;
             if (g_pc_verbose) printf("[PC] ROM-direct mode: loaded pre-extracted DOL + REL\n");
         } else {
-            if (g_pc_verbose) printf("[PC] .bin fallback mode\n");
             if (g_rel_data) { free(g_rel_data); g_rel_data = NULL; }
             if (g_dol_data) { free(g_dol_data); g_dol_data = NULL; }
         }
+    }
+
+    if (!rom_mode) {
+        printf("[PC] No ROM data found (no disc image, no pre-extracted DOL/REL)\n");
+        return 0;
     }
 
     /* Load all central-table assets */
@@ -30672,6 +30676,8 @@ void pc_assets_init(void) {
 
     if (g_pc_verbose)
         printf("[PC] Assets: %d loaded (%s)\n", loaded, rom_mode ? "ROM-direct" : ".bin fallback");
+
+    return 1;
 }
 
 #endif /* TARGET_PC */

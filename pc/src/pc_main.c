@@ -379,7 +379,17 @@ int main(int argc, char* argv[]) {
     pc_keybindings_load();
     pc_platform_init();
     pc_disc_init();
-    pc_assets_init();
+    if (!pc_assets_init()) {
+        const char* msg =
+            "No game data found.\n\n"
+            "Animal Crossing needs the original GameCube ROM to run.\n"
+            "Place a disc image (.iso, .gcm, or .ciso) to the \"rom\" subfolder.";
+        fprintf(stderr, "[PC] %s\n", msg);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                                 "Animal Crossing - Missing ROM", msg, g_pc_window);
+        pc_platform_shutdown();
+        return 1;
+    }
 
     ac_entry();                         /* sets HotStartEntry = &entry */
     boot_main(argc, (const char**)argv); /* full init → HotStartEntry → game loop */

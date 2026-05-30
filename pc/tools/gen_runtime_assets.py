@@ -960,7 +960,7 @@ def generate_pc_assets_c(central_entries, init_func_names, dry_run):
         lines.append('')
 
     # pc_assets_init
-    lines.append('void pc_assets_init(void) {')
+    lines.append('int pc_assets_init(void) {')
     lines.append('    int i, loaded = 0, failed = 0, rom_mode = 0;')
     lines.append('    int total = (int)(sizeof(s_assets) / sizeof(s_assets[0]));')
     lines.append('')
@@ -971,9 +971,14 @@ def generate_pc_assets_c(central_entries, init_func_names, dry_run):
     lines.append('        rom_mode = 1;')
     lines.append('        if (g_pc_verbose) printf("[PC] ROM-direct mode: loaded DOL + REL\\n");')
     lines.append('    } else {')
-    lines.append('        if (g_pc_verbose) printf("[PC] .bin fallback mode\\n");')
     lines.append('        if (g_rel_data) { free(g_rel_data); g_rel_data = NULL; }')
     lines.append('        if (g_dol_data) { free(g_dol_data); g_dol_data = NULL; }')
+    lines.append('    }')
+    lines.append('')
+    lines.append('    /* No ROM data: nothing to boot from. Let main report it. */')
+    lines.append('    if (!rom_mode) {')
+    lines.append('        printf("[PC] No ROM data found (no pre-extracted DOL/REL)\\n");')
+    lines.append('        return 0;')
     lines.append('    }')
     lines.append('')
     lines.append('    /* Load all central-table assets */')
@@ -996,6 +1001,8 @@ def generate_pc_assets_c(central_entries, init_func_names, dry_run):
     lines.append('')
     lines.append('    if (g_pc_verbose)')
     lines.append('        printf("[PC] Assets: %d loaded (%s)\\n", loaded, rom_mode ? "ROM-direct" : ".bin fallback");')
+    lines.append('')
+    lines.append('    return 1;')
     lines.append('}')
     lines.append('')
     lines.append('#endif /* TARGET_PC */')
@@ -1020,7 +1027,7 @@ def generate_pc_assets_h(dry_run):
         'void pc_bswap_asset_u16(void* data, unsigned int size);\n'
         'void pc_bswap_asset_u32(void* data, unsigned int size);\n'
         'void pc_bswap_asset_vtx(void* data, unsigned int size);\n'
-        'void pc_assets_init(void);\n'
+        'int pc_assets_init(void);\n'
         '\n'
         '#endif /* PC_ASSETS_H */\n'
     )
