@@ -11,9 +11,29 @@ extern "C" {
 
 #ifndef _GBI_STATIC_PTR
 #ifdef TARGET_PC
+#ifndef _GBI_STATIC_ASSERT
+#ifdef __cplusplus
+#define _GBI_STATIC_ASSERT(cond, msg) static_assert(cond, msg)
+#else
+#define _GBI_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
+#endif
+#endif
+
+#ifndef _GBI_RUNTIME_PTR_HELPERS
+#define _GBI_RUNTIME_PTR_HELPERS
+_GBI_STATIC_ASSERT(sizeof(void*) == sizeof(unsigned int), "GBI pointer packing requires 32-bit pointers");
+
+unsigned int pc_gbi_pack_runtime_ptr(uintptr_t addr, int is_ptr, const char* expr, const char* file, int line);
+uintptr_t pc_gbi_unpack_runtime_ptr(unsigned int packed);
+#endif
+
 #define _GBI_STATIC_PTR(s) (unsigned int)(uintptr_t)(s)
+#define _GBI_IS_RUNTIME_PTR_EXPR(s) (__builtin_classify_type(s) == 5 || __builtin_classify_type(s) == 14)
+#define _GBI_RUNTIME_PTR(s) \
+    pc_gbi_pack_runtime_ptr((uintptr_t)(s), _GBI_IS_RUNTIME_PTR_EXPR(s), #s, __FILE__, __LINE__)
 #else
 #define _GBI_STATIC_PTR(s) (unsigned int)(s)
+#define _GBI_RUNTIME_PTR(s) (unsigned int)(s)
 #endif
 #endif
 #include <PR/mbi.h>
@@ -1078,7 +1098,7 @@ do { \
 do { \
     Gfx* _g = (Gfx*)(pkt); \
     _g->words.w0 = _SHIFTL(G_LOADTLUT, 24, 8) | _SHIFTL(G_TLUT_DOLPHIN, 22, 2) | _SHIFTL(name, 16, 4) | _SHIFTL(unk, 14, 2) | _SHIFTL(count, 0, 14); \
-    _g->words.w1 = (unsigned int)addr; \
+    _g->words.w1 = _GBI_RUNTIME_PTR(addr); \
 } while (0)
 
 #define gsDPLoadTLUT_Dolphin(name, count, unk, addr) \
@@ -1104,7 +1124,7 @@ do { \
     Gfx* _gfx = (Gfx*)(pkt); \
     _gfx->words.w0 = _SHIFTL(G_SETTIMG, 24, 8) | _SHIFTL(fmt, 21, 3) | _SHIFTL(siz, 19, 2) | _SHIFTL(1, 18, 1) | \
         _SHIFTL((h/4)-1, 10, 8) | _SHIFTL((w-1), 0, 10); \
-    _gfx->words.w1 = (unsigned int)img; \
+    _gfx->words.w1 = _GBI_RUNTIME_PTR(img); \
 }}
 
 #define gDPSetTile_Dolphin(pkt, d_fmt, tile, tlut_name, wrap_s, wrap_t, shift_s, shift_t) \

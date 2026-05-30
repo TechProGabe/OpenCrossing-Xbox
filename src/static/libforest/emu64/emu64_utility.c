@@ -5,41 +5,25 @@
 #include "MSL_C/w_math.h"
 
 #ifdef TARGET_PC
+static_assert(sizeof(void*) == sizeof(u32), "seg2k0 pointer resolution requires 32-bit pointers");
+
 /* Executable image range from pc_main.c — BSS/data can collide with N64 segments */
 extern "C" unsigned int pc_image_base;
 extern "C" unsigned int pc_image_end;
-
-/* Arena range from pc_os.c — heap pointers in arena also bypass segment resolution */
-extern "C" unsigned char* pc_arena_base;
-extern "C" unsigned char* pc_arena_end;
-
-/* Page-granularity cache for VirtualQuery results.
- * Avoids repeated syscalls for addresses in the same page. */
-#define SEG2K0_PAGE_CACHE_SIZE 32
-static struct { u32 page; u8 committed; } seg2k0_page_cache[SEG2K0_PAGE_CACHE_SIZE];
-static int seg2k0_cache_next = 0;
-
-static int seg2k0_is_committed(u32 addr) {
-    u32 page = addr & ~0xFFF;
-    /* Check cache first */
-    for (int i = 0; i < SEG2K0_PAGE_CACHE_SIZE; i++) {
-        if (seg2k0_page_cache[i].page == page) {
-            return seg2k0_page_cache[i].committed;
-        }
-    }
-    /* Cache miss — query the OS */
-    MEMORY_BASIC_INFORMATION mbi;
-    int committed = 0;
-    if (VirtualQuery((void*)addr, &mbi, sizeof(mbi)) > 0 && mbi.State == MEM_COMMIT) {
-        committed = 1;
-    }
-    seg2k0_page_cache[seg2k0_cache_next].page = page;
-    seg2k0_page_cache[seg2k0_cache_next].committed = committed;
-    seg2k0_cache_next = (seg2k0_cache_next + 1) % SEG2K0_PAGE_CACHE_SIZE;
-    return committed;
-}
+extern "C" uintptr_t pc_gbi_unpack_runtime_ptr(unsigned int packed);
 
 u32 emu64::seg2k0(u32 segadr) {
+    uintptr_t odd_ptr = pc_gbi_unpack_runtime_ptr(segadr);
+    if (odd_ptr != 0) {
+        return (u32)odd_ptr;
+    }
+
+    /* Runtime GBI macros tag direct PC pointers in bit 0. Segment references
+       keep the low bit clear so they still resolve through the segment table. */
+    if ((segadr & 1) != 0) {
+        return segadr & ~1u;
+    }
+
     /* Addresses above the N64 segment range (upper nibble != 0) or below
        the minimum segment address are definitely raw PC pointers. */
     if ((segadr >> 28) != 0 || segadr < 0x03000000) {
@@ -51,58 +35,17 @@ u32 emu64::seg2k0(u32 segadr) {
         return segadr;
     }
 
-    /* Check if address falls within the main memory arena (JKRHeap, Object_Exchange
-       banks, cloth data, etc.).*/
-    if (pc_arena_base && segadr >= (u32)(uintptr_t)pc_arena_base &&
-        segadr < (u32)(uintptr_t)pc_arena_end) {
-        return segadr;
-    }
-
     u32 seg = (segadr >> 24) & 0xF;
     u32 offset = segadr & 0xFFFFFF;
 
-    if (this->segments[seg] == 0) {
-        return segadr;
-    }
+    u32 base = this->segments[seg] & ~1u;
 
-    /* On PC, raw heap/DLL pointers can fall in the 0x03000000-0x0FFFFFFF range,
-       colliding with N64 segmented addresses (seg<<24|offset). On GC, all real
-       pointers had bit 31 set (k0 space) so they bypassed segment resolution.
-
-       Real N64 segment addresses come from GBI macros like SEGMENT_ADDR(seg, offset)
-       and always have small offsets (textures, matrices that are never > 512KB).
-       PC heap pointers that collide with the segment range have large "offsets"
-       (the low 24 bits of an arbitrary address). Use this to discriminate:
-       large offset + committed raw address = heap pointer, not segment ref. 
-       
-       This might be the last memory fix needed.
-       */
-
-    /* Large offset (> 512KB) with committed raw address = definitely a heap pointer,
-       not a real segment reference. N64 segments never have offsets this large. */
-    if (offset > 0x80000 && seg2k0_is_committed(segadr)) {
+    if (base == 0) {
         return segadr;
     }
 
     /* Normal segment resolution path */
-    u32 resolved = (u32)this->segments[seg] + offset;
-
-    if (seg2k0_is_committed(resolved)) {
-        /* Segment resolution gave a valid address — use it (normal path) */
-        this->resolved_addresses++;
-        return resolved;
-    }
-
-    /* Resolved address is invalid. Check if the raw address is valid memory. */
-    if (seg2k0_is_committed(segadr)) {
-        /* Raw address IS valid — it's a direct PC pointer misidentified as
-           a segment reference. This happens when heap/stack/DLL pointers
-           fall in the 0x03-0x0F range. Return as-is. */
-        return segadr;
-    }
-
-    /* Neither resolved nor raw is committed. Fall through to segment resolution
-       (may crash, but the VEH crash recovery will handle it). */
+    u32 resolved = base + offset;
     this->resolved_addresses++;
     return resolved;
 }

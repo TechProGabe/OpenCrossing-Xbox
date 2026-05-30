@@ -8,10 +8,6 @@ static u8* arena_memory = NULL;
 static u8* arena_lo = NULL;
 static u8* arena_hi = NULL;
 
-/* Exported for seg2k0 collision avoidance */
-u8* pc_arena_base = NULL;
-u8* pc_arena_end  = NULL;
-
 void* OSGetArenaLo(void) { return arena_lo; }
 void* OSGetArenaHi(void) { return arena_hi; }
 void  OSSetArenaLo(void* lo) { arena_lo = (u8*)lo; }
@@ -238,39 +234,12 @@ void LCDisable(void) {}
 /* --- Init --- */
 void OSInit(void) {
     if (!arena_memory) {
-        /* alloc arena at >=0x10000000 to avoid collision with N64 segment addresses */
-        {
-            u32 base;
-            for (base = 0x10000000; base <= 0x50000000; base += 0x01000000) {
-#ifdef _WIN32
-                arena_memory = (u8*)VirtualAlloc((void*)(uintptr_t)base,
-                    PC_MAIN_MEMORY_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-#else
-                #ifndef MAP_FIXED_NOREPLACE
-                #define MAP_FIXED_NOREPLACE 0x100000
-                #endif
-                arena_memory = (u8*)mmap((void*)(uintptr_t)base, PC_MAIN_MEMORY_SIZE,
-                    PROT_READ | PROT_WRITE,
-                    MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED_NOREPLACE, -1, 0);
-                if (arena_memory == MAP_FAILED) arena_memory = NULL;
-#endif
-                if (arena_memory) break;
-            }
-        }
-        if (!arena_memory) {
-            /* fallback (may cause seg2k0 issues) */
-            fprintf(stderr, "[PC] WARNING: VirtualAlloc at high address failed, "
-                            "falling back to malloc (seg2k0 may misfire)\n");
-            arena_memory = (u8*)malloc(PC_MAIN_MEMORY_SIZE);
-        }
+        arena_memory = (u8*)malloc(PC_MAIN_MEMORY_SIZE);
         if (!arena_memory) {
             fprintf(stderr, "Failed to allocate main memory arena\n");
             exit(1);
         }
         memset(arena_memory, 0, PC_MAIN_MEMORY_SIZE);
-
-        pc_arena_base = arena_memory;
-        pc_arena_end  = arena_memory + PC_MAIN_MEMORY_SIZE;
 
         /* GC system info at phys addr 0; offset 0x28 = mem size for JKRHeap */
         *(u32*)(arena_memory + 0x28) = PC_MAIN_MEMORY_SIZE;

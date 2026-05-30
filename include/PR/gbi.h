@@ -22,12 +22,46 @@
 
 #include <PR/ultratypes.h>
 
+#ifdef __cplusplus
+#define _GBI_STATIC_ASSERT(cond, msg) static_assert(cond, msg)
+#else
+#define _GBI_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
+#endif
+
 #ifdef TARGET_PC
+#ifndef _GBI_RUNTIME_PTR_HELPERS
+#define _GBI_RUNTIME_PTR_HELPERS
+_GBI_STATIC_ASSERT(sizeof(void*) == sizeof(unsigned int), "GBI pointer packing requires 32-bit pointers");
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+unsigned int pc_gbi_pack_runtime_ptr(uintptr_t addr, int is_ptr, const char* expr, const char* file, int line);
+uintptr_t pc_gbi_unpack_runtime_ptr(unsigned int packed);
+#ifdef __cplusplus
+}
+#endif
+#endif
+
 /* GCC GNU extension: pointer-to-integer cast in static initializers.
    Safe on 32-bit where sizeof(void*) == sizeof(unsigned int). */
+#ifndef _GBI_STATIC_PTR
 #define _GBI_STATIC_PTR(s) (unsigned int)(uintptr_t)(s)
+#endif
+/* Runtime display-list commands tag real PC pointers in bit 0. N64 segmented
+   addresses are integer expressions and are left unchanged. */
+#ifndef _GBI_RUNTIME_PTR
+#define _GBI_IS_RUNTIME_PTR_EXPR(s) (__builtin_classify_type(s) == 5 || __builtin_classify_type(s) == 14)
+#define _GBI_RUNTIME_PTR(s) \
+    pc_gbi_pack_runtime_ptr((uintptr_t)(s), _GBI_IS_RUNTIME_PTR_EXPR(s), #s, __FILE__, __LINE__)
+#endif
 #else
+#ifndef _GBI_STATIC_PTR
 #define _GBI_STATIC_PTR(s) (unsigned int)(s)
+#endif
+#ifndef _GBI_RUNTIME_PTR
+#define _GBI_RUNTIME_PTR(s) (unsigned int)(s)
+#endif
 #endif
 
 /*
@@ -1892,7 +1926,7 @@ typedef union {
 	Gfx *_g = (Gfx *)(pkt);						\
 									\
 	_g->words.w0 = _SHIFTL((c), 24, 8) | _SHIFTL((l), 0, 24);	\
-	_g->words.w1 = (unsigned int)(s);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(s);				\
 }
 
 #define	gsDma0p(c, s, l)						\
@@ -1906,7 +1940,7 @@ typedef union {
 									\
 	_g->words.w0 = (_SHIFTL((c), 24, 8) | _SHIFTL((p), 16, 8) |	\
 			_SHIFTL((l), 0, 16));				\
-	_g->words.w1 = (unsigned int)(s);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(s);				\
 }
 
 #define	gsDma1p(c, s, l, p)						\
@@ -1921,7 +1955,7 @@ typedef union {
 	Gfx *_g = (Gfx *)(pkt);						\
 	_g->words.w0 = (_SHIFTL((c),24,8)|_SHIFTL(((len)-1)/8,19,5)|	\
 			_SHIFTL((ofs)/8,8,8)|_SHIFTL((idx),0,8));	\
-	_g->words.w1 = (unsigned int)(adrs);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(adrs);				\
 }
 #define	gsDma2p(c, adrs, len, idx, ofs)					\
 {{									\
@@ -1958,7 +1992,7 @@ typedef union {
 	Gfx *_g = (Gfx *)(pkt);						\
 	_g->words.w0 =							\
 	  _SHIFTL(G_VTX,24,8)|_SHIFTL((n),12,8)|_SHIFTL((v0)+(n),1,7);	\
-	_g->words.w1 = (unsigned int)(v);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(v);				\
 }
 # define	gsSPVertex(v, n, v0)					\
 {{									\
@@ -2373,7 +2407,7 @@ typedef union {
 #endif
 
 #define gSPSegment(pkt, segment, base)					\
-	gMoveWd(pkt, G_MW_SEGMENT, (segment)*4, base)
+	gMoveWd(pkt, G_MW_SEGMENT, (segment)*4, _GBI_RUNTIME_PTR(base))
 #define gsSPSegment(segment, base)					\
 	gsMoveWd(    G_MW_SEGMENT, (segment)*4, base)
 
@@ -2515,7 +2549,7 @@ typedef union {
 {									\
 	Gfx *_g = (Gfx *)(pkt);						\
 	_g->words.w0 = _SHIFTL(G_RDPHALF_1,24,8);			\
-	_g->words.w1 = (unsigned int)(dl);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(dl);				\
 	_g = (Gfx *)(pkt);						\
 	_g->words.w0 = (_SHIFTL(G_BRANCH_Z,24,8)|			\
 		        _SHIFTL((vtx)*5,12,12)|_SHIFTL((vtx)*2,0,12));	\
@@ -2544,7 +2578,7 @@ typedef union {
 {									\
 	Gfx *_g = (Gfx *)(pkt);						\
 	_g->words.w0 = _SHIFTL(G_RDPHALF_1,24,8);			\
-	_g->words.w1 = (unsigned int)(dl);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(dl);				\
 	_g = (Gfx *)(pkt);						\
 	_g->words.w0 = (_SHIFTL(G_BRANCH_Z,24,8)|			\
 		        _SHIFTL((vtx)*5,12,12)|_SHIFTL((vtx)*2,0,12));	\
@@ -2567,11 +2601,11 @@ typedef union {
 {									\
 	Gfx *_g = (Gfx *)(pkt);						\
 	_g->words.w0 = _SHIFTL(G_RDPHALF_1,24,8);			\
-	_g->words.w1 = (unsigned int)(uc_dstart);			\
+	_g->words.w1 = _GBI_RUNTIME_PTR(uc_dstart);			\
 	_g = (Gfx *)(pkt);						\
 	_g->words.w0 = (_SHIFTL(G_LOAD_UCODE,24,8)|			\
 			_SHIFTL((int)(uc_dsize)-1,0,16));		\
-	_g->words.w1 = (unsigned int)(uc_start);			\
+	_g->words.w1 = _GBI_RUNTIME_PTR(uc_start);			\
 }
 
 #define	gsSPLoadUcodeEx(uc_start, uc_dstart, uc_dsize)			\
@@ -2603,7 +2637,7 @@ typedef union {
 	Gfx *_g = (Gfx *)(pkt);						\
 	_g->words.w0 = _SHIFTL(G_DMA_IO,24,8)|_SHIFTL((flag),23,1)|	\
 	  _SHIFTL((dmem)/8,13,10)|_SHIFTL((size)-1,0,12);		\
-	_g->words.w1 = (unsigned int)(dram);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(dram);				\
 }
 
 #define	gsSPDma_io(flag, dmem, dram, size)				\
@@ -3183,7 +3217,7 @@ typedef union {
 									\
 	_g->words.w0 = _SHIFTL(cmd, 24, 8) | _SHIFTL(fmt, 21, 3) |	\
 		       _SHIFTL(siz, 19, 2) | _SHIFTL((width)-1, 0, 12);	\
-	_g->words.w1 = (unsigned int)(i);				\
+	_g->words.w1 = _GBI_RUNTIME_PTR(i);				\
 }
 
 #define	gsSetImage(cmd, fmt, siz, width, i)				\
