@@ -24,6 +24,7 @@
 #ifdef PC_ENHANCEMENTS
 #include "pc_settings.h"
 #include "pc_settings_menu.h"
+#include "pc_menu_util.h"
 #include "main.h"
 #include <stdio.h>
 #endif
@@ -770,7 +771,8 @@ static void aAL_pc_menu_draw(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   GRAPH* graph = game->graph;
   int td = actor->titledemo_no;
 
-  /* Reset modelview to identity — title_draw leaves it transformed */
+  /* pc_text_draw emits modelview-transformed verts, but title_draw left the
+   * modelview transformed; reset it to identity first. */
   {
     Gfx* gfx;
     OPEN_DISP(graph);
@@ -787,40 +789,27 @@ static void aAL_pc_menu_draw(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   static const u32 dim_g[5] = {  40,  50,  40,  50,  50 };
   static const u32 dim_b[5] = {  40,  30,  60,  70,  60 };
 
-  static u8 str_start[]   = "Start Game";
-  static u8 str_options[] = "Options";
-  static u8 str_quit[]    = "Quit Game";
-
-  static u8* const labels[3] = { str_start, str_options, str_quit };
-  static const int label_lens[3] = {
-    sizeof(str_start)   - 1,
-    sizeof(str_options) - 1,
-    sizeof(str_quit)    - 1,
-  };
+  static const char* const labels[3] = { "Start Game", "Options", "Quit Game" }; // me when const
 
   f32 y_base = 135.0f;
   f32 line_h = 18.0f;
   int sel = actor->pc_menu_sel;
 
-  /* Hide the title's main menu items while the Options overlay is open —
-   * otherwise Start/Options/Quit bleed through the dimmed backdrop. */
+  /* Hide the title's main menu items while the Options overlay is open, else
+   * Start/Options/Quit bleed through the dimmed backdrop. */
   if (!actor->pc_options_open) {
-    /* Match the pause/settings menu's selection style. */
     for (int i = 0; i < 3; i++) {
-      f32 sc = (sel == i) ? 1.15f : 1.0f;
-      f32 w = (f32)mFont_GetStringWidth(labels[i], label_lens[i], TRUE) * sc;
-      f32 x = (SCREEN_WIDTH_F - w) * 0.5f;
-      mFont_SetLineStrings(game, labels[i], label_lens[i], x,
-        y_base + i * line_h,
-        sel == i ? sel_r[td] : dim_r[td],
-        sel == i ? sel_g[td] : dim_g[td],
-        sel == i ? sel_b[td] : dim_b[td],
-        sel == i ? 255 : 220,
-        FALSE, TRUE, sc, sc, mFont_MODE_FONT);
+      int on = (sel == i);
+      pc_menu_draw_centered(game, labels[i], y_base + i * line_h,
+        on ? sel_r[td] : dim_r[td],
+        on ? sel_g[td] : dim_g[td],
+        on ? sel_b[td] : dim_b[td],
+        on ? 255 : 220,
+        on ? PC_MENU_SCALE_SELECTED : 1.0f);
     }
   }
 
-  /* Options sub-menu — shared with the in-game pause menu. */
+  /* Options sub-menu, shared with the in-game pause menu. */
   if (actor->pc_options_open) {
     pc_settings_menu_tick();
     pc_settings_menu_draw(game, /*with_dim_backdrop=*/1);

@@ -1,5 +1,6 @@
 #include "pc_settings_menu.h"
 #include "pc_settings.h"
+#include "pc_menu_util.h"
 #include "pc_text_draw.h"
 
 #include "graph.h"
@@ -10,7 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* --- Item IDs (stable across tabs — used by the dispatch switches) --- */
+/* --- Item IDs (stable across tabs - used by the dispatch switches) --- */
 enum {
     ITEM_DISPLAY,
     ITEM_VSYNC,
@@ -75,7 +76,7 @@ static SubPage s_sub    = SUB_SETTINGS;
 static int     s_tab    = 0;
 static int     s_sel    = -1; /* start on the tab row */
 
-/* Pending edits — only committed to g_pc_settings on Apply. */
+/* Pending edits - only committed to g_pc_settings on Apply. */
 static PCSettings s_pending;
 static int        s_pending_dirty = 0;
 
@@ -196,7 +197,7 @@ static void item_format(int id, char* buf, size_t n) {
                                                   "< Preload&Cache >");
             break;
         case ITEM_RESETTI:
-            /* disable_resetti flips the polarity — show the user-facing side. */
+            /* disable_resetti flips the polarity - show the user-facing side. */
             snprintf(buf, n, "%s", s_pending.disable_resetti ? "< Disabled >" : "< Enabled >");
             break;
         case ITEM_NES_ASPECT:
@@ -256,7 +257,6 @@ static void recompute_restart_needed(void) {
 static int cur_item_count(void) { return s_tabs[s_tab].count; }
 static int idx_apply(void)      { return cur_item_count(); }
 static int idx_back(void)       { return cur_item_count() + 1; }
-static int idx_last(void)       { return cur_item_count() + 1; }
 
 /* --- Apply / res-confirm finalisers --- */
 
@@ -339,8 +339,8 @@ int pc_settings_menu_active(void) {
 int pc_settings_menu_nav_up(void) {
     if (!s_active) return 0;
     if (s_sub != SUB_SETTINGS) return 1;
-    /* Clamp at the top — no wrap. */
-    if (s_sel == 0)      s_sel = -1;            /* first item → tab row */
+    /* Clamp at the top - no wrap. */
+    if (s_sel == 0)      s_sel = -1;            /* first item -> tab row */
     else if (s_sel > 0)  s_sel--;
     return 1;
 }
@@ -348,13 +348,15 @@ int pc_settings_menu_nav_up(void) {
 int pc_settings_menu_nav_down(void) {
     if (!s_active) return 0;
     if (s_sub != SUB_SETTINGS) return 1;
-    /* Clamp at the bottom — no wrap. */
-    if (s_sel == -1)             s_sel = 0;     /* tab row → first item */
-    else if (s_sel < idx_last()) s_sel++;
+    /* Clamp at the bottom - no wrap. */
+    if (s_sel == -1)             s_sel = 0;     /* tab row -> first item */
+    else if (s_sel < idx_back()) s_sel++;
     return 1;
 }
 
-int pc_settings_menu_nav_left(void) {
+/* dir: -1 = left, +1 = right. Drives confirm-page choice toggles, tab
+ * switching on the tab row, and value cycling on a selected item. */
+static int nav_horizontal(int dir) {
     if (!s_active) return 0;
     if (s_sub == SUB_CONFIRM_RES) {
         s_res_sel = (s_res_sel + 1) % 2;
@@ -365,32 +367,17 @@ int pc_settings_menu_nav_left(void) {
         return 1;
     }
     if (s_sel == -1) {
-        /* Clamp at the first tab — no wrap. */
-        if (s_tab > 0) s_tab--;
+        /* Tab row: clamp at the ends, no wrap. */
+        if (dir < 0) { if (s_tab > 0) s_tab--; }
+        else         { if (s_tab < TAB_COUNT - 1) s_tab++; }
     } else if (s_sel < cur_item_count()) {
-        item_cycle(s_tabs[s_tab].items[s_sel].id, -1);
+        item_cycle(s_tabs[s_tab].items[s_sel].id, dir);
     }
     return 1;
 }
 
-int pc_settings_menu_nav_right(void) {
-    if (!s_active) return 0;
-    if (s_sub == SUB_CONFIRM_RES) {
-        s_res_sel = (s_res_sel + 1) % 2;
-        return 1;
-    }
-    if (s_sub == SUB_CONFIRM_BACK) {
-        s_back_sel = (s_back_sel + 1) % 2;
-        return 1;
-    }
-    if (s_sel == -1) {
-        /* Clamp at the last tab — no wrap. */
-        if (s_tab < TAB_COUNT - 1) s_tab++;
-    } else if (s_sel < cur_item_count()) {
-        item_cycle(s_tabs[s_tab].items[s_sel].id, +1);
-    }
-    return 1;
-}
+int pc_settings_menu_nav_left(void)  { return nav_horizontal(-1); }
+int pc_settings_menu_nav_right(void) { return nav_horizontal(+1); }
 
 int pc_settings_menu_confirm(void) {
     if (!s_active) return 0;
@@ -400,7 +387,7 @@ int pc_settings_menu_confirm(void) {
     }
     if (s_sub == SUB_CONFIRM_BACK) {
         if (s_back_sel == 1) {
-            /* Discard — close the menu; pending edits drop on the floor. */
+            /* Discard - close the menu; pending edits drop on the floor. */
             s_active = 0;
             return 0;
         }
@@ -408,7 +395,7 @@ int pc_settings_menu_confirm(void) {
         return 1;
     }
     if (s_sel == -1) {
-        /* Confirm on the tab row — just hop into the first item. */
+        /* Confirm on the tab row - just hop into the first item. */
         s_sel = 0;
     } else if (s_sel < cur_item_count()) {
         item_cycle(s_tabs[s_tab].items[s_sel].id, +1);
@@ -434,7 +421,7 @@ int pc_settings_menu_cancel(void) {
         return 1;
     }
     if (s_sub == SUB_CONFIRM_BACK) {
-        /* Esc = cancel the confirm — snap back to the settings page. */
+        /* Esc = cancel the confirm - snap back to the settings page. */
         s_sub = SUB_SETTINGS;
         return 1;
     }
@@ -461,54 +448,13 @@ void pc_settings_menu_tick(void) {
  * Drawing
  * ========================================================================= */
 
-static void draw_dim_rect(GRAPH* graph) {
-    Gfx* gfx;
-    OPEN_DISP(graph);
-    gfx = NOW_FONT_DISP;
-    gDPNoOpTag(gfx++, PC_NOOP_WIDESCREEN_STRETCH);
-    gDPPipeSync(gfx++);
-    gDPSetOtherMode(gfx++,
-        G_AD_DISABLE | G_CD_MAGICSQ | G_CK_NONE | G_TC_FILT |
-        G_TF_POINT | G_TT_NONE | G_TL_TILE | G_TD_CLAMP |
-        G_TP_NONE | G_CYC_1CYCLE | G_PM_NPRIMITIVE,
-        G_AC_NONE | G_ZS_PRIM | G_RM_XLU_SURF | G_RM_XLU_SURF2);
-    gDPSetCombineMode(gfx++, G_CC_PRIMITIVE, G_CC_PRIMITIVE);
-    gDPSetPrimColor(gfx++, 0, 0, 0, 0, 0, 180);
-    gfx = gfx_gSPTextureRectangle1(gfx,
-        0, 0, 320 << 2, 240 << 2, 0, 0, 0, 0, 0);
-    gDPPipeSync(gfx++);
-    gDPNoOpTag(gfx++, PC_NOOP_WIDESCREEN_STRETCH_OFF);
-    SET_FONT_DISP(gfx);
-    CLOSE_DISP(graph);
-}
-
-/* Selected row gets a small scale bump — the font atlas has no bold
- * variant, so this is how we highlight the cursor position. */
-#define SETTINGS_SCALE_SELECTED 1.15f
-
-static void draw_centered(struct game_s* game, const char* s, f32 y,
-                          int r, int g, int b, int a, f32 scale) {
-    f32 w = (f32)pc_text_width(s) * scale;
-    f32 x = (SCREEN_WIDTH_F - w) * 0.5f;
-    pc_text_draw(game, s, x, y, r, g, b, a, scale);
-}
-
-static void draw_left(struct game_s* game, const char* s, f32 x, f32 y,
-                      int r, int g, int b, int a, f32 scale) {
-    pc_text_draw(game, s, x, y, r, g, b, a, scale);
-}
-
-static void row_colors(int selected, int* r, int* g, int* b, int* a) {
-    if (selected) { *r = 255; *g = 235; *b = 120; *a = 255; }
-    else          { *r = 200; *g = 200; *b = 200; *a = 200; }
-}
-
+/* Changed-but-unapplied values render amber; otherwise the normal row color. */
 static void value_colors(int selected, int changed, int* r, int* g, int* b, int* a) {
     if (changed) {
         *r = 255; *g = 215; *b = 90;
         *a = selected ? 255 : 200;
     } else {
-        row_colors(selected, r, g, b, a);
+        pc_menu_row_colors(selected, r, g, b, a);
     }
 }
 
@@ -540,14 +486,13 @@ static void draw_tab_row(struct game_s* game, f32 y) {
         /* Active tab + cursor-on-tab-row gets the full bump; active but
          * cursor-off-tab-row stays normal size (the white color already
          * marks it). Inactive tabs render normal too. */
-        f32 s = (active && on_tab_row) ? SETTINGS_SCALE_SELECTED : 1.0f;
+        f32 s = (active && on_tab_row) ? PC_MENU_SCALE_SELECTED : 1.0f;
         pc_text_draw(game, name, x, y, r, g, b, a, s);
         x += (f32)widths[t] + (f32)gap_px;
     }
 }
 
 static void draw_settings_page(struct game_s* game) {
-    char buf[64];
     int r, g, b, a;
     f32 lx = 70.0f;
     f32 vx = 200.0f;
@@ -555,7 +500,7 @@ static void draw_settings_page(struct game_s* game) {
     f32 y0    = 78.0f;
     f32 line_h = 16.0f;
 
-    draw_centered(game, "- Settings -", 30.0f, 255, 255, 255, 255, 1.0f);
+    pc_menu_draw_centered(game, "- Settings -", 30.0f, 255, 255, 255, 255, 1.0f);
     draw_tab_row(game, y_tab);
 
     const Tab* tab = &s_tabs[s_tab];
@@ -569,11 +514,11 @@ static void draw_settings_page(struct game_s* game) {
         int changed = item_changed(it->id);
         f32 y = y0 + i * line_h;
 
-        f32 s = selected ? SETTINGS_SCALE_SELECTED : 1.0f;
-        row_colors(selected, &r, &g, &b, &a);
-        draw_left(game, it->label, lx, y, r, g, b, a, s);
+        f32 s = selected ? PC_MENU_SCALE_SELECTED : 1.0f;
+        pc_menu_row_colors(selected, &r, &g, &b, &a);
+        pc_menu_draw_left(game, it->label, lx, y, r, g, b, a, s);
         value_colors(selected, changed, &r, &g, &b, &a);
-        draw_left(game, value_buf, vx, y, r, g, b, a, s);
+        pc_menu_draw_left(game, value_buf, vx, y, r, g, b, a, s);
     }
 
     /* Anchor Apply/Back to the tallest tab's footprint so they don't
@@ -583,7 +528,7 @@ static void draw_settings_page(struct game_s* game) {
         if (s_tabs[t].count > max_items) max_items = s_tabs[t].count;
     }
 
-    /* Apply — coloured green when there's something to apply. */
+    /* Apply: green when there's something to apply. */
     f32 apy = y0 + max_items * line_h + 10.0f;
     int sel_apply = (s_sel == idx_apply());
     if (sel_apply && s_pending_dirty) {
@@ -595,87 +540,54 @@ static void draw_settings_page(struct game_s* game) {
     } else {
         r = 120; g = 120; b = 120; a = 160;
     }
-    draw_centered(game, "Apply", apy, r, g, b, a,
-                  sel_apply ? SETTINGS_SCALE_SELECTED : 1.0f);
+    pc_menu_draw_centered(game, "Apply", apy, r, g, b, a,
+                          sel_apply ? PC_MENU_SCALE_SELECTED : 1.0f);
 
     /* Back */
     f32 bky = apy + line_h;
     int sel_back = (s_sel == idx_back());
-    row_colors(sel_back, &r, &g, &b, &a);
-    draw_centered(game, "Back", bky, r, g, b, a,
-                  sel_back ? SETTINGS_SCALE_SELECTED : 1.0f);
+    pc_menu_row_colors(sel_back, &r, &g, &b, &a);
+    pc_menu_draw_centered(game, "Back", bky, r, g, b, a,
+                          sel_back ? PC_MENU_SCALE_SELECTED : 1.0f);
 
-    /* Persistent "restart required" banner. Stays up until the process
-     * actually restarts — survives closing and re-opening the menu. Sits
-     * below Back so it never competes with the row cursor. */
+    /* Restart banner stays up until the process actually restarts (survives
+     * reopening the menu). Sits below Back so it never competes with the cursor. */
     if (s_pending_restart) {
-        draw_centered(game, "Restart the game to apply all changes",
-                      bky + line_h + 6.0f, 255, 195, 85, 230, 1.0f);
+        pc_menu_draw_centered(game, "Restart the game to apply all changes",
+                              bky + line_h + 6.0f, 255, 195, 85, 230, 1.0f);
     }
-
-    (void)buf;
-    (void)bky;
 }
 
 static void draw_res_confirm_page(struct game_s* game) {
-    int r, g, b, a;
     char buf[48];
 
-    draw_centered(game, "- Keep this resolution? -", 70.0f, 255, 255, 255, 255, 1.0f);
+    pc_menu_draw_centered(game, "- Keep this resolution? -", 70.0f, 255, 255, 255, 255, 1.0f);
 
     snprintf(buf, sizeof(buf), "%dx%d",
              g_pc_settings.window_width, g_pc_settings.window_height);
-    draw_centered(game, buf, 95.0f, 230, 230, 230, 255, 1.0f);
+    pc_menu_draw_centered(game, buf, 95.0f, 230, 230, 230, 255, 1.0f);
 
     Uint32 now = SDL_GetTicks();
     Uint32 ms_left = (now < s_res_deadline) ? s_res_deadline - now : 0;
     int secs = (int)((ms_left + 999) / 1000);
     snprintf(buf, sizeof(buf), "Reverting in %d...", secs);
-    draw_centered(game, buf, 125.0f, 230, 200, 110, 255, 1.0f);
+    pc_menu_draw_centered(game, buf, 125.0f, 230, 200, 110, 255, 1.0f);
 
-    f32 y = 160.0f;
-    f32 gap = 70.0f;
-    int lw_keep = pc_text_width("Keep");
-    f32 cx = SCREEN_WIDTH_F * 0.5f;
-    f32 keep_x   = cx - gap - (f32)lw_keep;
-    f32 revert_x = cx + gap;
-
-    row_colors(s_res_sel == 0, &r, &g, &b, &a);
-    draw_left(game, "Keep",   keep_x,   y, r, g, b, a,
-              s_res_sel == 0 ? SETTINGS_SCALE_SELECTED : 1.0f);
-    row_colors(s_res_sel == 1, &r, &g, &b, &a);
-    draw_left(game, "Revert", revert_x, y, r, g, b, a,
-              s_res_sel == 1 ? SETTINGS_SCALE_SELECTED : 1.0f);
+    pc_menu_draw_two_choice(game, "Keep", "Revert", s_res_sel, 160.0f);
 }
 
 /* Discard-changes confirmation shown when the user tries to Back out
- * while s_pending_dirty. Mirrors the res-confirm layout but with no
- * auto-timer (the user must pick). */
+ * while s_pending_dirty. No auto-timer (the user must pick). */
 static void draw_back_confirm_page(struct game_s* game) {
-    int r, g, b, a;
-
-    draw_centered(game, "- Discard changes? -", 80.0f, 255, 255, 255, 255, 1.0f);
-    draw_centered(game, "You have unapplied changes.",
-                  115.0f, 230, 230, 230, 255, 1.0f);
-
-    f32 y = 160.0f;
-    f32 gap = 70.0f;
-    int lw_keep = pc_text_width("Keep editing");
-    f32 cx = SCREEN_WIDTH_F * 0.5f;
-    f32 keep_x    = cx - gap - (f32)lw_keep;
-    f32 discard_x = cx + gap;
-
-    row_colors(s_back_sel == 0, &r, &g, &b, &a);
-    draw_left(game, "Keep editing", keep_x,    y, r, g, b, a,
-              s_back_sel == 0 ? SETTINGS_SCALE_SELECTED : 1.0f);
-    row_colors(s_back_sel == 1, &r, &g, &b, &a);
-    draw_left(game, "Discard",      discard_x, y, r, g, b, a,
-              s_back_sel == 1 ? SETTINGS_SCALE_SELECTED : 1.0f);
+    pc_menu_draw_centered(game, "- Discard changes? -", 80.0f, 255, 255, 255, 255, 1.0f);
+    pc_menu_draw_centered(game, "You have unapplied changes.",
+                          115.0f, 230, 230, 230, 255, 1.0f);
+    pc_menu_draw_two_choice(game, "Keep editing", "Discard", s_back_sel, 160.0f);
 }
 
 void pc_settings_menu_draw(struct game_s* game, int with_dim_backdrop) {
     if (!s_active || !game || !game->graph) return;
-    if (with_dim_backdrop) draw_dim_rect(game->graph);
+    if (with_dim_backdrop) pc_menu_dim_rect(game->graph, 180);
     if (s_sub == SUB_SETTINGS)          draw_settings_page(game);
     else if (s_sub == SUB_CONFIRM_RES)  draw_res_confirm_page(game);
     else                                draw_back_confirm_page(game);

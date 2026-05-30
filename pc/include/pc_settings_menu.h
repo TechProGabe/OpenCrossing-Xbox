@@ -26,7 +26,7 @@ int  pc_settings_menu_nav_down(void);
 int  pc_settings_menu_nav_left(void);
 int  pc_settings_menu_nav_right(void);
 int  pc_settings_menu_confirm(void);
-int  pc_settings_menu_cancel(void); /* Esc/B — reverts on res-confirm, else closes */
+int  pc_settings_menu_cancel(void); /* Esc/B - reverts on res-confirm, else closes */
 
 /* Call once per frame while the revert menu is active. Auto-reverts if the 15s expires. */
 void pc_settings_menu_tick(void);
