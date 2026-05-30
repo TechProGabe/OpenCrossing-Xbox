@@ -19,7 +19,11 @@ struct npc_guide2_actor_s {
     int next_action;
     aNG2_PROC proc;
     int lock_camera_flag;
+#ifdef TARGET_PC
+    f32 camera_morph_counter;
+#else
     int camera_morph_counter;
+#endif
     s16 camera_move;
     s8 camera_move_cnt;
     s8 camera_move_set_counter;

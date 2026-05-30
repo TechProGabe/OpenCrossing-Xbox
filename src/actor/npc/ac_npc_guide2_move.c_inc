@@ -15,14 +15,22 @@ static void aNG2_set_camera(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
     f32 sin;
     f32 ground_y;
     s16 angle;
+    s32 camera_step = 0xE20;
 
     move = guide2->camera_move;
-    guide2->camera_move += 0xE20;
+#ifdef TARGET_PC
+    /* Keep the train tremor phase in 60 Hz time when actor ticks run faster than the original game. */
+    camera_step = (s32)((0xE20 * (f32)play->game.graph->dt_num_60fps_frames) + 0.5f);
+    if (camera_step < 1) {
+        camera_step = 1;
+    }
+#endif
+    guide2->camera_move += camera_step;
     angle = move;
-    angle += 0xE20;
+    angle += camera_step;
     moveX = cos_s(angle) * 0.1f;
     angle = move;
-    angle += 0xE20;
+    angle += camera_step;
     moveY = sin_s(angle) * guide2->camera_move_range;
 
     if (guide2->camera_move_y <= 0.0f && moveY >= 0.0f) {
@@ -82,6 +90,21 @@ static void aNG2_set_camera(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
         pos.y = ground.y + guide2->npc_class.eye_y;
         pos.z = ground.z;
     } else if (mDemo_Check(mDemo_TYPE_SPEAK, &guide2->npc_class.actor_class) == TRUE) {
+#ifdef TARGET_PC
+        f32 morph_counter = guide2->camera_morph_counter;
+        f32 r;
+
+        guide2->camera_morph_counter = morph_counter - (f32)play->game.graph->dt_num_60fps_frames;
+        if (guide2->camera_morph_counter <= 0.0f) {
+            guide2->camera_morph_counter = 0.0f;
+            guide2->lock_camera_flag = TRUE;
+        }
+
+        r = (40.0f - guide2->camera_morph_counter) / 40.0f;
+        if (r > 1.0f) {
+            r = 1.0f;
+        }
+#else
         int morph_counter = guide2->camera_morph_counter;
         f32 r;
 
@@ -91,6 +114,7 @@ static void aNG2_set_camera(NPC_GUIDE2_ACTOR* guide2, GAME_PLAY* play) {
         }
 
         r = (40.0f - (f32)(morph_counter - 1)) / 40.0f;
+#endif
         inter = cKF_HermitCalc(r, 1.0f, 0.0f, 1.0f, 3.2f, 0.0f);
 
         pos.x = (ground.x - 90.0f) * inter + 90.0f;

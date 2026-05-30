@@ -19,7 +19,7 @@ typedef struct train_window_s {
     ACTOR actor_class;
     TRAIN_WINDOW_DRAW_TYPE draw_type;
     s16 pallete_id;
-    int unk17C;
+    int tree_scroll_subtexels;
     u16* current_pallete;
     u32 Single_Scrollx;
     u32 Single_Scrolly;

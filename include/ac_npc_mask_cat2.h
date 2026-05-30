@@ -19,7 +19,11 @@ struct npc_mask_cat2_s {
     /* 0x994 */ int action;
     /* 0x998 */ aNM2_MOVE_PROC move_proc;
     /* 0x99C */ BOOL lock_camera_flag;
+#ifdef TARGET_PC
+    /* 0x9A0 */ f32 camera_morph_counter;
+#else
     /* 0x9A0 */ int camera_morph_counter;
+#endif
     /* 0x9A4 */ s16 camera_move;
     /* 0x9A6 */ s8 camera_move_cnt;
     /* 0x9A7 */ s8 camera_move_set_counter;

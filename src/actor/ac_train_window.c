@@ -233,6 +233,7 @@ static void Train_Window_Actor_ct(ACTOR* actor, GAME* game) {
             window->Two_Scrollx2 = 0;
             window->Two_Scrolly2 = 0;
             window->scroll_speed = 0.07f;
+            window->tree_scroll_subtexels = 0;
             break;
 
         case SCENE_START_DEMO2:
@@ -244,6 +245,7 @@ static void Train_Window_Actor_ct(ACTOR* actor, GAME* game) {
             window->Two_Scrollx2 = 0;
             window->Two_Scrolly2 = 0;
             window->scroll_speed = 1.0f;
+            window->tree_scroll_subtexels = 0;
             break;
     }
     window->pallete_id = aTrainWindow_GetTreePalletIdx();
@@ -278,7 +280,18 @@ static void Train_Window_Actor_move(ACTOR* actor, GAME* game) {
 
     f32 alpha;
 
+#ifdef TARGET_PC
+    {
+        /* PC frame pacing can run this actor faster than 60 Hz; keep texture scroll in 60 Hz units. */
+        const int step = (int)((5.0f * (f32)game->graph->dt_num_60fps_frames * 256.0f) + 0.5f);
+
+        window->tree_scroll_subtexels += step;
+        window->TreeScrollx += window->tree_scroll_subtexels >> 8;
+        window->tree_scroll_subtexels &= 0xFF;
+    }
+#else
     window->TreeScrollx += 5;
+#endif
     add_calc(&window->xlu_alpha, aTW_GetNowAlpha(), window->scroll_speed, 50.0f, 1.0f);
     if ((Common_Get(time.now_sec) < 14400) || (Common_Get(time.now_sec) >= 72000)) {
         alpha = 0.0f;
