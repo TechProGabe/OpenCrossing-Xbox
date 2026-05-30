@@ -132,6 +132,9 @@ extern cKF_Animation_R_c cKF_ba_r_obj_gara;
 static void aGRGR_FukubikiDayCt(ACTOR* actorx, GAME* game) {
     GARAGARA_ACTOR* garagara = (GARAGARA_ACTOR*)actorx;
 
+#ifdef TARGET_PC
+    garagara->logic_accum = 0.0f;
+#endif
     aGRGR_AnimeCt(&cKF_bs_r_obj_gara, &cKF_ba_r_obj_gara, &garagara->keyframe, garagara->work, garagara->morph, 0.0f);
     actorx->mv_proc = &Garagara_Actor_move;
     actorx->dw_proc = &Garagara_Actor_draw;
@@ -230,19 +233,32 @@ static void Garagara_Actor_move_dummy(ACTOR* actorx, GAME* game) {
 
 static void Garagara_Actor_move(ACTOR* actorx, GAME* game) {
     GARAGARA_ACTOR* garagara = (GARAGARA_ACTOR*)actorx;
+#ifdef TARGET_PC
+    double saved_dt;
+    int ticks;
+    int tick;
 
-    aGRBL_move(&garagara->ball, game);
-    if (garagara->request_flag) {
-        (*aGaragara_init_proc_table[garagara->request_status])(actorx, game);
-        garagara->status = garagara->request_status;
-        garagara->request_flag = FALSE;
-        garagara->anime_frame = 0;
-    }
+    ticks = graph_dt_60hz_ticks(game, &garagara->logic_accum);
+    saved_dt = game->graph->dt_num_60fps_frames;
+    game->graph->dt_num_60fps_frames = 1.0;
+    for (tick = 0; tick < ticks; tick++) {
+#endif
+        aGRBL_move(&garagara->ball, game);
+        if (garagara->request_flag) {
+            (*aGaragara_init_proc_table[garagara->request_status])(actorx, game);
+            garagara->status = garagara->request_status;
+            garagara->request_flag = FALSE;
+            garagara->anime_frame = 0;
+        }
 
-    if (garagara->status >= 0 && garagara->status < aGRGR_STATUS_NUM) {
-        (*aGaragara_move_proc_table[garagara->status])(actorx, game);
-        garagara->anime_frame++;
-    } else {
-        garagara->status = aGRGR_STATUS_WAIT;
+        if (garagara->status >= 0 && garagara->status < aGRGR_STATUS_NUM) {
+            (*aGaragara_move_proc_table[garagara->status])(actorx, game);
+            garagara->anime_frame++;
+        } else {
+            garagara->status = aGRGR_STATUS_WAIT;
+        }
+#ifdef TARGET_PC
     }
+    game->graph->dt_num_60fps_frames = saved_dt;
+#endif
 }

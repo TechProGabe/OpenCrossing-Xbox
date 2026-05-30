@@ -17,6 +17,9 @@ struct gyo_release_actor_s {
     /* 0x178 */ int gyo_type;
     /* 0x17C */ s16 size_type;
     /* 0x180 */ int anime_frame;
+#ifdef TARGET_PC
+    f32 anime_accum;
+#endif
     /* 0x184 */ int segment;
     /* 0x188 */ int _188;
     /* 0x18C */ ClObjPipe_c col_pipe;

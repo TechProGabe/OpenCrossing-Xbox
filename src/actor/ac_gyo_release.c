@@ -116,7 +116,7 @@ static void aGYR_actor_dt(ACTOR* actorx, GAME* game) {
     ClObjPipe_dt(game, &gyo_release->col_pipe);
 }
 
-static int aGYR_anime_frame(GYO_RELEASE_ACTOR* gyo_release) {
+static int aGYR_anime_frame(GYO_RELEASE_ACTOR* gyo_release, int advance) {
     static int aGYR_frame_ptn1[] = { 1, 1, 0, 0, 2, 2, 0, 0 };
     static int aGYR_frame_ptn2[] = { 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0 };
     static int aGYR_anime_ptn[] = {
@@ -127,7 +127,9 @@ static int aGYR_anime_frame(GYO_RELEASE_ACTOR* gyo_release) {
     int cur_frame = gyo_release->anime_frame;
     int next_frame;
 
-    cur_frame++;
+    if (advance) {
+        cur_frame++;
+    }
     if (aGYR_anime_ptn[gyo_release->gyo_type] == 1) {
         if (cur_frame >= ARRAY_COUNT(aGYR_frame_ptn1)) {
             cur_frame = 0;
@@ -354,7 +356,17 @@ static void aGYR_actor_draw(ACTOR* actorx, GAME* game) {
     if (actorx->bg_collision_check.result.on_ground) {
         frame = 0;
     } else {
-        frame = aGYR_anime_frame(gyo_release);
+#ifdef TARGET_PC
+        int ticks = graph_dt_60hz_ticks(game, &gyo_release->anime_accum);
+        int tick;
+
+        frame = aGYR_anime_frame(gyo_release, ticks > 0);
+        for (tick = 1; tick < ticks; tick++) {
+            frame = aGYR_anime_frame(gyo_release, TRUE);
+        }
+#else
+        frame = aGYR_anime_frame(gyo_release, TRUE);
+#endif
     }
     gSPDisplayList(NEXT_POLY_OPA_DISP, ((Gfx**)aGYO_displayList[gyo_release->gyo_type])[(int)(frame * 0.5f)]);
 

@@ -2644,6 +2644,11 @@ static void aMR_FurnitureMoveFunction(ACTOR* actorx, GAME* game) {
     MY_ROOM_ACTOR* my_room = (MY_ROOM_ACTOR*)actorx;
     FTR_ACTOR* ftr_actor = l_aMR_work.ftr_actor_list;
     u8* used = l_aMR_work.used_list;
+#ifdef TARGET_PC
+    int tex_anim_ticks = graph_dt_60hz_ticks(game, &my_room->tex_animation_accum);
+#else
+    int tex_anim_ticks = 1;
+#endif
 
     static aMR_FPROC fproc[aFTR_STATE_NUM] = {
         &aMR_FtrStop,        &aMR_FtrWaitPush, &aMR_FtrWaitPush2,   &aMR_FtrWaitPush3,
@@ -2669,10 +2674,13 @@ static void aMR_FurnitureMoveFunction(ACTOR* actorx, GAME* game) {
 
                 if (profile->tex_anim != NULL) {
                     int count = profile->tex_anim->animation_count;
+                    int tick;
 
-                    ftr_actor->tex_animation.frame++;
-                    if (ftr_actor->tex_animation.frame >= count || ftr_actor->tex_animation.frame < 0) {
-                        ftr_actor->tex_animation.frame = 0;
+                    for (tick = 0; tick < tex_anim_ticks; tick++) {
+                        ftr_actor->tex_animation.frame++;
+                        if (ftr_actor->tex_animation.frame >= count || ftr_actor->tex_animation.frame < 0) {
+                            ftr_actor->tex_animation.frame = 0;
+                        }
                     }
                 }
 

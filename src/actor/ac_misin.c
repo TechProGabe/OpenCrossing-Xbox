@@ -49,6 +49,9 @@ static xyz_t aMSN_dustcloth_target_table[4] = {
 static void aMSN_DustclothCT(aMSN_DustCloth_c* dustcloth, GAME* game) {
     dustcloth->switch_flag = TRUE;
     dustcloth->frame = 0;
+#ifdef TARGET_PC
+    dustcloth->logic_accum = 0.0f;
+#endif
     dustcloth->original_p = (mNW_original_design_c*)zelda_malloc_align(sizeof(mNW_original_design_c), 32);
 
     if (dustcloth->original_p != NULL) {
@@ -365,6 +368,23 @@ static void Misin_Actor_move(ACTOR* actorx, GAME* game) {
     MISIN_ACTOR* misin = (MISIN_ACTOR*)actorx;
     aMSN_DustCloth_c* dustcloth = &misin->dustcloth;
 
+#ifdef TARGET_PC
+    // The fabric and needle share frame-exact state, but only cKF scales by dt.
+    // Run both in fixed 60Hz ticks so the manual counters stay synchronized.
+    double saved_dt;
+    int ticks;
+    int tick;
+
+    ticks = graph_dt_60hz_ticks(game, &dustcloth->logic_accum);
+    saved_dt = game->graph->dt_num_60fps_frames;
+    game->graph->dt_num_60fps_frames = 1.0;
+    for (tick = 0; tick < ticks; tick++) {
+        aMSN_MoveDustcloth(dustcloth, game);
+        aMSN_MoveMisin(&misin->misin, dustcloth, game);
+    }
+    game->graph->dt_num_60fps_frames = saved_dt;
+#else
     aMSN_MoveDustcloth(dustcloth, game);
     aMSN_MoveMisin(&misin->misin, dustcloth, game);
+#endif
 }

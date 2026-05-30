@@ -62,6 +62,9 @@ struct garagara_actor_s {
     s16 status;
     int ball_type;
     int anime_frame;
+#ifdef TARGET_PC
+    f32 logic_accum;
+#endif
     cKF_SkeletonInfo_R_c keyframe;
     s_xyz work[aGRGR_JOINT_NUM];
     s_xyz morph[aGRGR_JOINT_NUM];

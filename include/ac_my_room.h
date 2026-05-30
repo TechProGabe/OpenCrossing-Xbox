@@ -271,6 +271,9 @@ struct my_room_actor_s {
     s16 force_open_demo_flag;
     f32 pull_timer_accum;
     f32 push_timer_accum;
+#ifdef TARGET_PC
+    f32 tex_animation_accum;
+#endif
     int room_msg_flag;
     int haniwa_step_idx;
     aMR_parent_ftr_c parent_ftr;

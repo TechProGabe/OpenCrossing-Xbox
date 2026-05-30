@@ -25,6 +25,9 @@ typedef struct misin_dustcloth_s {
     int moving_flag;
     mNW_original_design_c* original_p;
     u16* palette_p;
+#ifdef TARGET_PC
+    f32 logic_accum;
+#endif
 } aMSN_DustCloth_c;
 
 typedef struct misin_misin_s {
