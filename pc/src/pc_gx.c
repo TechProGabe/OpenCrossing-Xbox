@@ -159,7 +159,6 @@ void pc_gx_flush_if_begin_complete(void) {
 }
 
 int pc_emu64_frame_cmds = 0;
-int pc_emu64_frame_crashes = 0;
 int pc_emu64_frame_noop_cmds = 0;
 int pc_emu64_frame_tri_cmds = 0;
 int pc_emu64_frame_vtx_cmds = 0;
@@ -262,7 +261,6 @@ void pc_gx_init(void) {
 
 void pc_gx_begin_frame(void) {
     pc_emu64_frame_cmds = 0;
-    pc_emu64_frame_crashes = 0;
     pc_emu64_frame_noop_cmds = 0;
     pc_emu64_frame_tri_cmds = 0;
     pc_emu64_frame_vtx_cmds = 0;

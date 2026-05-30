@@ -1,4 +1,4 @@
-/* pc_platform.h - SDL2/OpenGL platform layer, global state, crash protection */
+/* pc_platform.h - SDL2/OpenGL platform layer and global state */
 #ifndef PC_PLATFORM_H
 #define PC_PLATFORM_H
 
@@ -53,12 +53,10 @@
 #undef near
 #undef far
 #else
-#include <signal.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
 #include <elf.h>
 #endif
-#include <setjmp.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,12 +97,6 @@ void pc_platform_shutdown(void);
 void pc_platform_swap_buffers(void);
 int  pc_platform_poll_events(void);
 
-/* --- Crash protection (VEH + setjmp/longjmp) --- */
-void pc_crash_protection_init(void);
-void pc_crash_set_jmpbuf(jmp_buf* buf);  /* NULL to disable */
-unsigned int pc_crash_get_addr(void);
-unsigned int pc_crash_get_data_addr(void);
-
 /* EXE image range for seg2k0 pointer disambiguation (vs N64 segment addresses) */
 extern unsigned int pc_image_base;
 extern unsigned int pc_image_end;
@@ -116,7 +108,6 @@ extern int g_pc_model_viewer_no_cull;
 
 /* --- Per-frame diagnostics --- */
 extern int pc_emu64_frame_cmds;
-extern int pc_emu64_frame_crashes;
 extern int pc_emu64_frame_noop_cmds;
 extern int pc_emu64_frame_tri_cmds;
 extern int pc_emu64_frame_vtx_cmds;

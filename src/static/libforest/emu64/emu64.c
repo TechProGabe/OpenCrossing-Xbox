@@ -15,8 +15,6 @@
 
 #ifdef TARGET_PC
 #include "pc_platform.h"
-
-static jmp_buf pc_dl_crash_jmpbuf;
 #endif
 
 // this pragma may be unnecessary
@@ -5763,41 +5761,10 @@ static dl_func dl_func_tbl[NUM_COMMANDS] = {
 };
 
 u32 emu64::emu64_taskstart_r(Gfx* dl_p) {
-#ifdef TARGET_PC
-    pc_crash_protection_init();
-#endif
     this->gfx_p = dl_p;
     EMU64_INFO("*** emu64taskstart ***\n");
     OSInitFastCast();
     this->end_dl = false;
-
-#ifdef TARGET_PC
-    pc_crash_set_jmpbuf(&pc_dl_crash_jmpbuf);
-    volatile int pc_dl_recovery_point = 0; /* 0=normal, 1=from crash */
-    if (setjmp(pc_dl_crash_jmpbuf) != 0) {
-        pc_dl_recovery_point = 1;
-    }
-    if (pc_dl_recovery_point) {
-        pc_emu64_frame_crashes++;
-        pc_dl_recovery_point = 0;
-        /* Re-arm the crash protection for the next iteration */
-        pc_crash_set_jmpbuf(&pc_dl_crash_jmpbuf);
-        /* Pop DL stack to return to parent display list instead of terminating */
-        if (this->DL_stack_level > 0) {
-            this->gfx_p = (Gfx*)(this->DL_stack[--this->DL_stack_level]);
-            /* gfx_p now points to the command AFTER the bad gsSPDisplayList.
-               The while loop will read *gfx_p, process it, then gfx_p++ at the bottom.
-               No adjustment needed - we want to process the next command. */
-            /* Continue the main loop */
-        } else {
-            /* No parent DL to return to - skip the bad command and continue.
-               Previously we terminated here, but that cuts off ALL remaining
-               DL commands (including 2D sprites, inventory icons, etc.) */
-            this->gfx_p++;
-            /* Continue the main loop - gfx_p now points past the crashed command */
-        }
-    }
-#endif
 
     while (!this->end_dl && !FrameCansel) {
         this->cmds_processed++;
@@ -5871,10 +5838,6 @@ u32 emu64::emu64_taskstart_r(Gfx* dl_p) {
         EMU64_INFO("\n");
         this->gfx_p++;
     }
-
-#ifdef TARGET_PC
-    pc_crash_set_jmpbuf(NULL);
-#endif
 
 #ifdef PC_GX_VERBOSE
     printf("[PC] emu64: loop done, cmds=%d end_dl=%d\n", this->cmds_processed, this->end_dl);

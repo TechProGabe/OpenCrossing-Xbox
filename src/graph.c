@@ -30,7 +30,6 @@
 #include "pc_diag.h"
 #include "pc_platform.h"
 #include "pc_pause_menu.h"
-#include <setjmp.h>
 extern int g_pc_running;
 #endif
 
@@ -293,19 +292,7 @@ static void reset_check(GRAPH* this, GAME* game) {
 }
 
 static void graph_audio_frame() {
-#ifdef TARGET_PC
-    static jmp_buf audio_jmpbuf;
-    pc_crash_set_jmpbuf(&audio_jmpbuf);
-    if (setjmp(audio_jmpbuf) != 0) {
-        printf("[PC] CRASH in sAdo_GameFrame! addr=0x%08X data=0x%08X\n", pc_crash_get_addr(),
-               pc_crash_get_data_addr());
-    } else {
-        sAdo_GameFrame();
-    }
-    pc_crash_set_jmpbuf(NULL);
-#else
     sAdo_GameFrame();
-#endif
 }
 
 static void graph_audio_gameframe(GRAPH* this, GAME* game) {

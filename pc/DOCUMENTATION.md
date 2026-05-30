@@ -2,8 +2,6 @@
 
 PC port of Animal Crossing GameCube built on top of a 99.52% complete C decompilation.
 
-Documentation is currently outdated. Will update soon.
-
 ## Architecture Overview
 
 The game's rendering has 3 tiers:
@@ -19,7 +17,7 @@ We replace **only tier 3** (GX → OpenGL 3.3). The emu64 layer and game code st
 ```
 main() [pc_main.c]
   → pc_settings_load()          # load settings.ini
-  → pc_platform_init()          # SDL2, GL 3.3, GLAD, VEH/signal crash handler
+  → pc_platform_init()          # SDL2, GL 3.3, GLAD
   → pc_disc_init()              # find & open disc image (CISO/ISO/GCM)
   → pc_assets_init()            # extract DOL/REL from disc, load all ~2500 assets
   → pc_texture_pack_init()      # scan texture_pack/ for HD replacements
@@ -74,13 +72,13 @@ User provides disc image (.ciso/.iso/.gcm)
 
 ## File Reference
 
-### PC Port Layer
+### PC Port Layer (what we wrote)
 
 #### Core
 
 | File | Purpose |
 |------|---------|
-| `pc/src/pc_main.c` | Entry point, SDL2/GL init, VEH crash protection, CLI flags, DPI scaling |
+| `pc/src/pc_main.c` | Entry point, SDL2/GL init, CLI flags, DPI scaling |
 | `pc/src/pc_gx.c` | GX → OpenGL: all GX API functions, vertex submission, state, draw dispatch, dirty-flag uniform system |
 | `pc/src/pc_gx_tev.c` | TEV shader: GLSL program loading, uniform upload |
 | `pc/src/pc_gx_texture.c` | 10 GC texture format decoders, 2048-entry cache with FNV-1a |
@@ -149,7 +147,7 @@ These are the most-modified files from the upstream decompilation:
 
 | File | Why |
 |------|-----|
-| `src/static/libforest/emu64/emu64.c` | Texture cache routing, TEXEL1, vertex colors, crash protection, fog guard, per-stage texture binding, widescreen NOOPTag handling |
+| `src/static/libforest/emu64/emu64.c` | Texture cache routing, TEXEL1, vertex colors, fog guard, per-stage texture binding, widescreen NOOPTag handling |
 | `include/libforest/gbi_extensions.h` | 30 GBI bitfield structs reversed for LE x86 |
 | `src/static/libforest/emu64/emu64_utility.c` | seg2k0 proximity heuristic, N64Mtx byte-swap |
 | `src/static/boot.c` | Arena init, REL skip, actable endian swap |
@@ -164,7 +162,7 @@ These are the most-modified files from the upstream decompilation:
 | `src/game/m_npc.c` | Title demo animal slot cleanup: clear before write, skip sentinel entries |
 | `src/game/m_trademark.c` | Clear npclist before demo repopulation, sentinel entry for demo_npc_list |
 | `src/actor/npc/ac_npc_think_wander.c_inc` | Clamp `looks` before indexing decide_boarder[] (latent OOB bug) |
-| `src/game.c` | Crash diagnostic printf in setjmp recovery |
+| `src/game.c` | Frame timing and game exec dispatch |
 | `src/jaudio_NES/na_combo.c` | Melody sequence u16 offset byte-swap |
 
 About ~100 decomp files total are modified. Most changes are small `#ifdef TARGET_PC` blocks for byte-swapping or platform adaptation.
@@ -313,12 +311,10 @@ SDL2 gamepad with hotplug, analog sticks (deadzone 500), triggers, D-pad, and ru
 
 PADRead returns GC button format. Conversion to N64 format happens in `padmgr_UpdatePC()`.
 
-## Crash Protection
+## Fault Handling
 
-Three layers:
-1. **VEH/signal handler** (pc_main.c): catches ACCESS_VIOLATION, ILLEGAL_INSTRUCTION, INT_DIVIDE_BY_ZERO, PRIV_INSTRUCTION (Windows VEH) or SIGSEGV/SIGFPE/SIGILL (Linux signals). Recovers via longjmp.
-2. **game_main wrapper** (game.c): setjmp/longjmp around scene exec. Logs doing_point, specific, crash address, and data address on recovery.
-3. **Actor profile guard** (m_actor.c): skips NULL/invalid profiles.
+The PC port does not install a VEH/signal crash recovery handler. Faults are allowed to propagate to the OS/debugger.
+Actor profile validation remains in `m_actor.c` to skip NULL/invalid profiles before dispatch.
 
 ## Build System
 
@@ -361,9 +357,9 @@ pc/build32/bin/AnimalCrossing.exe --verbose
 | Platform | Status |
 |----------|--------|
 | Windows (MinGW i686) | Primary target, fully tested |
-| Linux (i686) | Compiles and links, signal-based crash handler, mmap arena |
+| Linux (i686) | Compiles and links, mmap arena |
 
-Linux support uses POSIX equivalents: `signal()` instead of VEH, `mmap()` instead of `VirtualAlloc()`, `mkdir()` guards for directory creation.
+Linux support uses POSIX equivalents: `mmap()` instead of `VirtualAlloc()`, `mkdir()` guards for directory creation.
 
 ## Common Pitfalls
 

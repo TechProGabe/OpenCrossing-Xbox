@@ -1,4 +1,4 @@
-/* pc_main.c - PC entry point: SDL2/GL init, crash protection, boot sequence */
+/* pc_main.c - PC entry point: SDL2/GL init and boot sequence */
 #include "pc_platform.h"
 #include "pc_gx_internal.h"
 #include "pc_texture_pack.h"
@@ -34,79 +34,6 @@ int           g_pc_widescreen_stretch = 0;
 /* exe image range -- used by seg2k0 to distinguish pointers from segment addresses */
 unsigned int pc_image_base = 0;
 unsigned int pc_image_end  = 0;
-
-static jmp_buf* pc_active_jmpbuf = NULL;
-static volatile unsigned int pc_last_crash_addr = 0;
-
-static volatile unsigned int pc_last_crash_data_addr = 0;
-
-#ifdef _WIN32
-/* longjmp from VEH is technically UB, but works on x86 MinGW (no SEH to corrupt).
- * GCC doesn't have __try/__except and checking every pointer in emu64 is impractical. */
-static LONG WINAPI pc_veh_handler(PEXCEPTION_POINTERS ep) {
-    DWORD code = ep->ExceptionRecord->ExceptionCode;
-    if (pc_active_jmpbuf != NULL &&
-        (code == EXCEPTION_ACCESS_VIOLATION ||
-         code == EXCEPTION_ILLEGAL_INSTRUCTION ||
-         code == EXCEPTION_INT_DIVIDE_BY_ZERO ||
-         code == EXCEPTION_PRIV_INSTRUCTION)) {
-        pc_last_crash_addr = (unsigned int)(uintptr_t)ep->ExceptionRecord->ExceptionAddress;
-        if (code == EXCEPTION_ACCESS_VIOLATION)
-            pc_last_crash_data_addr = (unsigned int)(uintptr_t)ep->ExceptionRecord->ExceptionInformation[1];
-        else
-            pc_last_crash_data_addr = 0;
-        jmp_buf* buf = pc_active_jmpbuf;
-        pc_active_jmpbuf = NULL;
-        longjmp(*buf, 1);
-    }
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-#else
-/* POSIX equivalent of VEH — longjmp from signal handler (POSIX-defined for program faults) */
-static void pc_signal_handler(int sig, siginfo_t* info, void* ucontext) {
-    (void)ucontext;
-    if (pc_active_jmpbuf != NULL) {
-        pc_last_crash_addr = (unsigned int)(uintptr_t)info->si_addr;
-        pc_last_crash_data_addr = (sig == SIGSEGV) ?
-            (unsigned int)(uintptr_t)info->si_addr : 0;
-        jmp_buf* buf = pc_active_jmpbuf;
-        pc_active_jmpbuf = NULL;
-        longjmp(*buf, 1);
-    }
-    signal(sig, SIG_DFL);
-    raise(sig);
-}
-#endif
-
-unsigned int pc_crash_get_data_addr(void) {
-    return pc_last_crash_data_addr;
-}
-
-void pc_crash_protection_init(void) {
-    static int installed = 0;
-    if (!installed) {
-#ifdef _WIN32
-        AddVectoredExceptionHandler(1, pc_veh_handler);
-#else
-        struct sigaction sa;
-        memset(&sa, 0, sizeof(sa));
-        sa.sa_sigaction = pc_signal_handler;
-        sa.sa_flags = SA_SIGINFO;
-        sigaction(SIGSEGV, &sa, NULL);
-        sigaction(SIGILL, &sa, NULL);
-        sigaction(SIGFPE, &sa, NULL);
-#endif
-        installed = 1;
-    }
-}
-
-void pc_crash_set_jmpbuf(jmp_buf* buf) {
-    pc_active_jmpbuf = buf;
-}
-
-unsigned int pc_crash_get_addr(void) {
-    return pc_last_crash_addr;
-}
 
 void pc_platform_init(void) {
 #ifdef _WIN32
