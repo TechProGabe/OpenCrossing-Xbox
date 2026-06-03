@@ -22,7 +22,7 @@ void VIInit(void) {
         printf("[VI] frame limit=%dus (%lu Hz)\n",
                (u32)((1.0 / (double)g_frame_limiter) * 1000000), (unsigned long)g_frame_limiter);
     } else {
-        printf("[VI] frame limit=unlimited\n");
+        printf("[VI] frame limit=disabled\n");
     }
 }
 

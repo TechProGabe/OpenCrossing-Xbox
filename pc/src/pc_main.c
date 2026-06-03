@@ -222,8 +222,8 @@ int main(int argc, char* argv[]) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("Usage: AnimalCrossing [options]\n");
             printf("  --verbose, -v       Enable diagnostic output\n");
-            printf("  --no-framelimit     Alias for --framelimit 0\n");
-            printf("  --framelimit N      Set the target frame rate (default 60, 0 = unlimited)\n");
+            printf("  --no-framelimit     Alias for --framelimit 0 (uses 960 FPS cap)\n");
+            printf("  --framelimit N      Set the target frame rate (default 60, 0 = 960 FPS cap)\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
             printf("  --rain [intensity]  Force rainy weather; intensity is light, normal, or heavy\n");

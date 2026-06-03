@@ -29,7 +29,7 @@ static const char* DEFAULT_SETTINGS =
     "# Vertical sync: 0 = off, 1 = on\n"
     "vsync = 0\n"
     "\n"
-    "# Max FPS: 60, 120, 180, 240, or 0 for unlimited\n"
+    "# Max FPS: 60, 120, 180, 240, 300, 360, 960, or 0 for the 960 FPS cap\n"
     "max_fps = 60\n"
     "\n"
     "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n"
@@ -75,7 +75,7 @@ static void apply_setting(const char* key, const char* value) {
     } else if (strcmp(key, "vsync") == 0) {
         if (val == 0 || val == 1) g_pc_settings.vsync = val;
     } else if (strcmp(key, "max_fps") == 0) {
-        if (val == 0 || val == 60 || val == 120 || val == 180 || val == 240) {
+        if (val >= 0 && val <= PC_MAX_FPS_CAP) {
             g_pc_settings.max_fps = val;
         }
     } else if (strcmp(key, "msaa") == 0) {
@@ -102,11 +102,14 @@ static void apply_frame_limit_setting(void) {
 
     max_fps = g_pc_settings.max_fps;
 
-    if (max_fps <= 0) {
-        g_frame_limiter = 0;
-    } else {
-        g_frame_limiter = (u32)max_fps;
+    if (max_fps > PC_MAX_FPS_CAP) {
+        max_fps = PC_MAX_FPS_CAP;
+        g_pc_settings.max_fps = max_fps;
+    } else if (max_fps <= 0) {
+        max_fps = PC_MAX_FPS_CAP;
     }
+
+    g_frame_limiter = (u32)max_fps;
 }
 
 static void write_defaults(const char* path) {
@@ -134,7 +137,7 @@ void pc_settings_save(void) {
     fprintf(f, "# Vertical sync: 0 = off, 1 = on\n");
     fprintf(f, "vsync = %d\n", g_pc_settings.vsync);
     fprintf(f, "\n");
-    fprintf(f, "# Max FPS: 60, 120, 180, 240, or 0 for unlimited\n");
+    fprintf(f, "# Max FPS: 60, 120, 180, 240, 300, 360, 960, or 0 for the 960 FPS cap\n");
     fprintf(f, "max_fps = %d\n", g_pc_settings.max_fps);
     fprintf(f, "\n");
     fprintf(f, "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n");

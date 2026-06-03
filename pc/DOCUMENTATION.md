@@ -347,7 +347,7 @@ pc/build32/bin/AnimalCrossing.exe --verbose
 | Flag | Effect |
 |------|--------|
 | `--verbose` / `-v` | Enable diagnostic output |
-| `--no-framelimit` | Disable frame pacing |
+| `--no-framelimit` | Use the 960 FPS cap |
 | `--model-viewer [N]` | Launch model viewer (optional start index) |
 | `--time HOUR` | Override in-game hour (0-23) |
 | `--help` / `-h` | Show help |
