@@ -601,14 +601,31 @@ static void aNPC_tex_anm_ctrl(NPC_ACTOR* nactorx) {
     u8 seq_type_bak;
     aNPC_tex_anim_c* tex_anim = nactorx->draw.tex_anim;
     int i;
+    f32 kutipaku_timer = nactorx->talk_info.kutipaku_timer;
+    int kutipaku_allowed = (nactorx->condition_info.demo_flg & aNPC_COND_DEMO_SKIP_KUTIPAKU) == 0;
+    int kutipaku_now = kutipaku_allowed && aNPC_check_kutipaku(nactorx) == TRUE;
+    int kutipaku_active;
+
+    if (!kutipaku_allowed) {
+        kutipaku_timer = 0.0f;
+    } else if (kutipaku_now) {
+        kutipaku_timer = 8.0f;
+    } else if (kutipaku_timer > 0.0f) {
+        kutipaku_timer -= (f32)gamePT->graph->dt_num_60fps_frames;
+        if (kutipaku_timer < 0.0f) {
+            kutipaku_timer = 0.0f;
+        }
+    }
+
+    kutipaku_active = kutipaku_timer > 0.0f;
 
     for (i = 0; i < aNPC_TEX_ANIM_NUM; i++) {
         seq_type_bak = tex_anim->seq_type;
 
         if (tex_anim->fixed_pattern_seq == NULL) {
             if (i == aNPC_TEX_ANIM_MOUTH) {
-                if ((nactorx->condition_info.demo_flg & aNPC_COND_DEMO_SKIP_KUTIPAKU) == 0) {
-                    if (aNPC_check_kutipaku(nactorx) == TRUE) {
+                if (kutipaku_allowed) {
+                    if (kutipaku_active) {
                         if (tex_anim->seq_type == 0) {
                             tex_anim->seq_type = 1;
                         }
@@ -637,26 +654,15 @@ static void aNPC_tex_anm_ctrl(NPC_ACTOR* nactorx) {
     }
 
     if (nactorx->talk_info.type == 1) {
-        f32 timer = nactorx->talk_info.kutipaku_timer;
-
-        if (aNPC_check_kutipaku(nactorx) == TRUE &&
-            (nactorx->condition_info.demo_flg & aNPC_COND_DEMO_SKIP_KUTIPAKU) == 0) {
+        if (kutipaku_active) {
             nactorx->draw.sub_animation1.keyframe.frame_control.speed = 0.5f;
-            timer = 8.0f;
-        } else if (timer > 0.0f) {
-            nactorx->draw.sub_animation1.keyframe.frame_control.speed = 0.5f;
-            timer -= (f32)gamePT->graph->dt_num_60fps_frames;
-            if (timer < 0.0f) {
-                timer = 0.0f;
-            }
         } else {
             nactorx->draw.sub_animation1.keyframe.frame_control.current_frame = 1.0f;
             nactorx->draw.sub_animation1.keyframe.frame_control.speed = 0.0f;
-            timer = 0.0f;
         }
-
-        nactorx->talk_info.kutipaku_timer = timer;
     }
+
+    nactorx->talk_info.kutipaku_timer = kutipaku_timer;
 }
 
 static void aNPC_set_frame_sub_speed(NPC_ACTOR* nactorx, int seqNo) {

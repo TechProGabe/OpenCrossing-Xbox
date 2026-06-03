@@ -1105,8 +1105,13 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
   int utter = FALSE;
   int processed = FALSE;
 
-  if (chkTrigger(BUTTON_B) && (msg_p->status_flags & mMsg_STATUS_FLAG_CURSOL_JUST) == 0) {
-    msg_p->status_flags |= mMsg_STATUS_FLAG_FAST_TEXT;
+  if ((msg_p->status_flags & mMsg_STATUS_FLAG_CURSOL_JUST) == 0) {
+    if (chkButton(BUTTON_B)) {
+      msg_p->status_flags |= mMsg_STATUS_FLAG_FAST_TEXT;
+    }
+    else {
+      msg_p->status_flags &= ~mMsg_STATUS_FLAG_FAST_TEXT;
+    }
   }
 
   if (mMsg_Check_CancelOrder(msg_p)) {
@@ -1117,19 +1122,11 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
     *cursor_timer = 0.0f;
   }
   else if ((msg_p->status_flags & mMsg_STATUS_FLAG_FAST_TEXT) && (msg_p->status_flags & mMsg_STATUS_FLAG_CURSOL_JUST) == 0) {
-    /* Fast text: drain at 2x rate so 2.0f-set timer empties in 1 60Hz-frame, giving 60 chars/sec at any host refresh */
+    /* Fast text drains at 2x. Keep negative overshoot so cadence is not quantized by host FPS. */
     (*cursor_timer) -= 2.0f * (f32)gamePT->graph->dt_num_60fps_frames;
-
-    if (*cursor_timer <= 0.0f) {
-      *cursor_timer = 0.0f;
-    }
   }
   else {
     (*cursor_timer) -= (f32)gamePT->graph->dt_num_60fps_frames;
-
-    if (*cursor_timer <= 0.0f) {
-      *cursor_timer = 0.0f;
-    }
   }
 
   if (choice_hidden) {
@@ -1142,6 +1139,9 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
   }
   else {
     msg_p->hide_choice_window_timer = 3;
+    if (*cursor_timer < 0.0f) {
+      *cursor_timer = 0.0f;
+    }
   }
 
   mMsg_Unset_NowUtter(msg_p);
@@ -1190,14 +1190,17 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
         idx += mMsg_Set_SizeCode(msg_p, idx);
         msg_p->end_text_cursor_idx = idx;
         processed = TRUE;
-        /* 30Hz character cadence; += retains negative overshoot so the next
-         * fire happens at the correct fractional frame instead of being
-         * rounded up to the next whole frame at high refresh. */
+        /* 30Hz character cadence; retain overshoot and keep consuming chars
+         * while this frame's dt budget allows it. */
         *cursor_timer += 2.0f;
 
         if  (msg_p->cancel_flag == FALSE) {
-         utter = mMsg_sound_CodeVoice(msg_p, cur_idx);
-          break;
+          if (mMsg_sound_CodeVoice(msg_p, cur_idx)) {
+            utter = TRUE;
+          }
+          if (*cursor_timer > 0.0f) {
+            break;
+          }
         }
       }
     }
