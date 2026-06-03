@@ -980,6 +980,9 @@ struct npc_actor_s {
     f32 eye_y;
     aNPC_condition_info_c condition_info;
     aNPC_uzai_c uzai;
+#ifdef TARGET_PC
+    f32 uzai_step_accum;
+#endif
     aNPC_hand_c left_hand;
     aNPC_hand_c right_hand;
     aNPC_head_c head;

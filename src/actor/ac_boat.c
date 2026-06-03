@@ -3,6 +3,7 @@
 #include "ac_boat_demo.h"
 #include "m_play.h"
 #include "m_common_data.h"
+#include "m_field_info.h"
 #include "m_rcp.h"
 #include "m_player_lib.h"
 #include "libultra/libultra.h"
@@ -45,7 +46,8 @@ static void aBT_actor_draw(ACTOR*, GAME*);
 ACTOR_PROFILE Boat_Profile = {
     mAc_PROFILE_BOAT,
     ACTOR_PART_ITEM,
-    ACTOR_STATE_CAN_MOVE_IN_DEMO_SCENES | ACTOR_STATE_TA_SET | ACTOR_STATE_NO_MOVE_WHILE_CULLED,
+    ACTOR_STATE_CAN_MOVE_IN_DEMO_SCENES | ACTOR_STATE_TA_SET | ACTOR_STATE_NO_MOVE_WHILE_CULLED |
+        ACTOR_STATE_NO_DRAW_WHILE_CULLED,
     BOAT,
     ACTOR_OBJ_BANK_KEEP,
     sizeof(BOAT_ACTOR),
@@ -111,7 +113,13 @@ static void aBT_actor_ct(ACTOR* actorx, GAME* game) {
         actorx->gravity = 0.003f;
         actorx->max_velocity_y = 0.1f;
         actorx->position_speed.y = 0.1f;
+        boat_actor->roll_cycle = 0;
         boat_actor->roll_timer = 200;
+        boat_actor->roll_timer_accum = 0.0f;
+        boat_actor->roll_cycle_accum = 0.0f;
+        boat_actor->rudder_angle_accum = 0.0f;
+        boat_actor->yaw_angle_accum = 0.0f;
+        boat_actor->draw_up_angle_accum = 0.0f;
         boat_actor->direction = direction;
         aBT_setupAction(boat_actor, play, aBT_ACTION_DEMO_CTRL_BIRTH_WAIT);
         mCoBG_MakeBoatCollision(actorx, &actorx->world.position, &actorx->shape_info.rotation.y);
@@ -186,7 +194,7 @@ static void aBT_actor_draw(ACTOR* actorx, GAME* game) {
     cKF_SkeletonInfo_R_c* keyframe = &boat_actor->keyframe;
     GRAPH* graph = game->graph;
     Gfx* scroll_gfx;
-    f32 _2C8 = boat_actor->_2C8 - actorx->speed * 0.5f;
+    f32 _2C8 = boat_actor->_2C8 - actorx->speed * 0.5f * (f32)graph->dt_num_60fps_frames;
 
     while (_2C8 < -32.0f) {
         _2C8 += 32.0f;

@@ -131,6 +131,11 @@ struct editor_ovl_s {
   mED_ENDCODE_DRAW_PROC end_code_draw;
   mED_CURSOL_DRAW_PROC cursol_draw;
   u8 _34;
+#ifdef TARGET_PC
+  f32 button_repeat_accum;
+  f32 stick_repeat_accum;
+  f32 cursol_opacity_accum;
+#endif
 };
 
 extern void mED_editor_ovl_set_proc(Submenu* submenu);

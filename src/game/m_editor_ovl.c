@@ -266,15 +266,36 @@ static void mED_move_keyboard_cursor(mED_Ovl_c* editor_ovl) {
     if (stick_area != mED_STICK_AREA_CENTER) {
         if (editor_ovl->stick_area_changed == TRUE) {
             editor_ovl->stick_area_held_frames = 0;
+#ifdef TARGET_PC
+            editor_ovl->stick_repeat_accum = 0.0f;
+#endif
             move = TRUE;
         } else {
+#ifdef TARGET_PC
+            editor_ovl->stick_repeat_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+            while (editor_ovl->stick_repeat_accum >= 1.0f) {
+                editor_ovl->stick_area_held_frames++;
+                editor_ovl->stick_repeat_accum -= 1.0f;
+
+                if (editor_ovl->stick_area_held_frames >= 16) {
+                    editor_ovl->stick_area_held_frames = 12;
+                    move = TRUE;
+                    break;
+                }
+            }
+#else
             editor_ovl->stick_area_held_frames++;
 
             if (editor_ovl->stick_area_held_frames >= 16) {
                 editor_ovl->stick_area_held_frames = 12;
                 move = TRUE;
             }
+#endif
         }
+#ifdef TARGET_PC
+    } else {
+        editor_ovl->stick_repeat_accum = 0.0f;
+#endif
     }
 
     if (move == TRUE) {
@@ -316,8 +337,44 @@ static int mED_check_move_cursol(mED_Ovl_c* editor_ovl) {
         editor_ovl->_10 = 30;
         editor_ovl->_0F = 26;
         editor_ovl->_0E = 0;
+#ifdef TARGET_PC
+        editor_ovl->button_repeat_accum = 0.0f;
+#endif
     } else {
         if (buttons == editor_ovl->last_buttons) {
+#ifdef TARGET_PC
+            int repeat_ready = FALSE;
+
+            editor_ovl->button_repeat_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+            while (editor_ovl->button_repeat_accum >= 1.0f) {
+                if (editor_ovl->_0E == 1 && editor_ovl->_0F != 0) {
+                    editor_ovl->_0F--;
+                }
+
+                if (editor_ovl->_10 != 0) {
+                    editor_ovl->_10--;
+                    editor_ovl->button_repeat_accum -= 1.0f;
+                    continue;
+                }
+
+                if (editor_ovl->_0F == 0) {
+                    editor_ovl->_10 = 2;
+                    editor_ovl->_34 = 3;
+                } else {
+                    editor_ovl->_10 = 6;
+                    editor_ovl->_0E = 1;
+                    editor_ovl->_34 = 2;
+                }
+
+                editor_ovl->button_repeat_accum -= 1.0f;
+                repeat_ready = TRUE;
+                break;
+            }
+
+            if (repeat_ready == FALSE) {
+                return mED_COMMAND_9;
+            }
+#else
             if (editor_ovl->_0E == 1 && editor_ovl->_0F != 0) {
                 editor_ovl->_0F--;
             }
@@ -335,11 +392,15 @@ static int mED_check_move_cursol(mED_Ovl_c* editor_ovl) {
                 editor_ovl->_0E = 1;
                 editor_ovl->_34 = 2;
             }
+#endif
         } else {
             editor_ovl->last_buttons = buttons;
             editor_ovl->_10 = 30;
             editor_ovl->_0F = 26;
             editor_ovl->_0E = 0;
+#ifdef TARGET_PC
+            editor_ovl->button_repeat_accum = 0.0f;
+#endif
         }
 
         if ((buttons & BUTTON_B) != 0) {
@@ -629,6 +690,11 @@ static void mED_init(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
     editor_ovl->stick_area_held_frames = 0;
     editor_ovl->command = mED_COMMAND_NONE;
     editor_ovl->now_code = 0;
+#ifdef TARGET_PC
+    editor_ovl->button_repeat_accum = 0.0f;
+    editor_ovl->stick_repeat_accum = 0.0f;
+    editor_ovl->cursol_opacity_accum = 0.0f;
+#endif
     editor_ovl->max_line_no = edit_line[menu_info->data0];
     editor_ovl->input_str = (u8*)menu_info->data2;
     editor_ovl->line_width = menu_info->data3;
@@ -1726,11 +1792,23 @@ static void mED_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
             }
         }
     } else {
+#ifdef TARGET_PC
+        editor_ovl->cursol_opacity_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+        while (editor_ovl->cursol_opacity_accum >= 1.0f) {
+            editor_ovl->cursol_opacity_step++;
+            editor_ovl->cursol_opacity_accum -= 1.0f;
+
+            if (editor_ovl->cursol_opacity_step == 35) {
+                editor_ovl->cursol_opacity_step = 0;
+            }
+        }
+#else
         editor_ovl->cursol_opacity_step++;
 
         if (editor_ovl->cursol_opacity_step == 35) {
             editor_ovl->cursol_opacity_step = 0;
         }
+#endif
 
 #if defined(TARGET_PC) && defined(KEYBOARD_TYPING)
         {
@@ -1785,6 +1863,9 @@ static void mED_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
                 editor_ovl->command == mED_COMMAND_CURSOL_UPPER || editor_ovl->command == mED_COMMAND_CURSOL_LOWER ||
                 editor_ovl->command == mED_COMMAND_BACKSPACE || editor_ovl->command == mED_COMMAND_OUTPUT_CODE) {
                 editor_ovl->cursol_opacity_step = 0;
+#ifdef TARGET_PC
+                editor_ovl->cursol_opacity_accum = 0.0f;
+#endif
             }
         }
     }

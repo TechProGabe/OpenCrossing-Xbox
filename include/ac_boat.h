@@ -21,10 +21,10 @@ struct boat_s {
   s_xyz work[15];
   s_xyz morph[15];
   aBT_PROC action_proc;
-  int _2A4;
-  int _2A8;
-  int _2AC;
-  int _2B0;
+  f32 roll_timer_accum;
+  f32 roll_cycle_accum;
+  f32 rudder_angle_accum;
+  f32 yaw_angle_accum;
   int action;
   int roll_cycle;
   int roll_timer;
@@ -34,7 +34,7 @@ struct boat_s {
   f32 _2CC;
   f32 _2D0;
   f32 rudder;
-  int _2D8;
+  f32 draw_up_angle_accum;
 };
 
 extern ACTOR_PROFILE Boat_Profile;
