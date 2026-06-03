@@ -236,7 +236,7 @@ static void aSTR_init_clip_area() {
             int* str_used_tbl = Common_Get(clip).structure_clip->structure_actor_used_tbl;
             aSTR_Overlay_info_c* overlay_info = Common_Get(clip).structure_clip->overlay_area;
             for (i = 0; i < aSTR_ACTOR_TBL_COUNT; i++) {
-                *str_tbl = &aSTR_actor_cl[i];
+                *str_tbl = aSTR_pc_actor_slot(i);
                 *str_used_tbl = FALSE;
 
                 str_tbl++;

@@ -23,7 +23,26 @@ ACTOR_PROFILE Structure_Profile = { mAc_PROFILE_STRUCTURE,
                                     NULL };
 
 static u8 aSTR_overlay[aSTR_ACTOR_TBL_COUNT][aSTR_OVERLAY_SIZE];
+#ifdef TARGET_PC
+/* Structure profiles such as TOUDAI_ACTOR are larger than STRUCTURE_ACTOR because of Delta time. 
+ * If you are modding, be careful to not make the same mistake. */
+#define aSTR_PC_ACTOR_SLOT_SIZE 0x300
+
+typedef union {
+    u64 align;
+    STRUCTURE_ACTOR actor;
+    u8 bytes[aSTR_PC_ACTOR_SLOT_SIZE];
+} aSTR_pc_actor_storage_c;
+
+static aSTR_pc_actor_storage_c aSTR_actor_cl[aSTR_ACTOR_TBL_COUNT];
+
+static STRUCTURE_ACTOR* aSTR_pc_actor_slot(int idx) {
+    return &aSTR_actor_cl[idx].actor;
+}
+#else
 static STRUCTURE_ACTOR aSTR_actor_cl[aSTR_ACTOR_TBL_COUNT];
+#define aSTR_pc_actor_slot(idx) (&aSTR_actor_cl[idx])
+#endif
 
 #include "../src/actor/ac_structure_clip.c_inc"
 
