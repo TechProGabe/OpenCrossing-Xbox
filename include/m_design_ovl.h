@@ -96,6 +96,11 @@ struct design_ovl_s {
     u8 _6DA;
     u8 _6DB;
     u8 _6DC;
+#ifdef TARGET_PC
+    f32 stick_repeat_accum;
+    f32 stick_full_accum;
+    f32 palette_repeat_accum;
+#endif
 };
 
 extern void mDE_maskcat_init(MaskCat_c* mask_cat);

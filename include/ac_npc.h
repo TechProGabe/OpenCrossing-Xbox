@@ -982,6 +982,7 @@ struct npc_actor_s {
     aNPC_uzai_c uzai;
 #ifdef TARGET_PC
     f32 uzai_step_accum;
+    f32 fatigue_accum;
 #endif
     aNPC_hand_c left_hand;
     aNPC_hand_c right_hand;

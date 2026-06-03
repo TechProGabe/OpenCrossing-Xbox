@@ -153,11 +153,30 @@ static void aNPC_calc_fatigue(NPC_ACTOR* nactorx) {
 
     int fatigue = nactorx->condition_info.fatigue;
 
+#ifdef TARGET_PC
+    {
+        int ticks;
+
+        nactorx->fatigue_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+        ticks = (int)nactorx->fatigue_accum;
+        if (ticks > 0) {
+            nactorx->fatigue_accum -= (f32)ticks;
+            fatigue += fatigue_add_table[nactorx->condition_info.action] * ticks;
+        }
+    }
+#else
     fatigue += fatigue_add_table[nactorx->condition_info.action];
+#endif
     if (fatigue < 0) {
         fatigue = 0;
+#ifdef TARGET_PC
+        nactorx->fatigue_accum = 0.0f;
+#endif
     } else if (fatigue > 1600) {
         fatigue = 1600;
+#ifdef TARGET_PC
+        nactorx->fatigue_accum = 0.0f;
+#endif
     }
 
     nactorx->condition_info.fatigue = fatigue;

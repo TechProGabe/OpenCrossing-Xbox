@@ -337,6 +337,10 @@ static void aNPC_actor_ct(ACTOR* actorx, GAME* game, aNPC_ct_data_c* ct_data) {
 
         nactorx->talk_info.feel = 0xFF;
         nactorx->talk_info.memory = TRUE;
+#ifdef TARGET_PC
+        nactorx->uzai_step_accum = 0.0f;
+        nactorx->fatigue_accum = 0.0f;
+#endif
 
         nactorx->head.angle_add_x = 0x200;
         nactorx->head.angle_add_y = 0x400;

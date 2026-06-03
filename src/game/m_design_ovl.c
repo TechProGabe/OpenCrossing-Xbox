@@ -283,21 +283,38 @@ static void mDE_pallet_RGB5A3_to_RGB24(mDE_Ovl_c* design_ovl) {
 }
 
 static u8 mDE_judge_stick(mDE_Ovl_c* design_ovl) {
+#ifdef TARGET_PC
+    design_ovl->stick_repeat_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+    while (design_ovl->stick_repeat_accum >= 1.0f) {
+        design_ovl->_6B8++;
+        design_ovl->stick_repeat_accum -= 1.0f;
+    }
+#else
     design_ovl->_6B8++;
+#endif
     if (design_ovl->move_pR >= 0.1f && design_ovl->_6B5 == 0) {
         design_ovl->_6B5 = 1;
         design_ovl->_6B8 = 0;
+#ifdef TARGET_PC
+        design_ovl->stick_repeat_accum = 0.0f;
+#endif
         return TRUE;
     }
 
     if (design_ovl->move_pR > 0.9f && design_ovl->_6C0 >= design_ovl->_6C4 && design_ovl->_6B5 &&
         design_ovl->_6B8 > design_ovl->_6BC) {
         design_ovl->_6B8 = 0;
+#ifdef TARGET_PC
+        design_ovl->stick_repeat_accum = 0.0f;
+#endif
         return TRUE;
     }
 
     if (design_ovl->_6B8 > design_ovl->_6BC) {
         design_ovl->_6B8 = 0;
+#ifdef TARGET_PC
+        design_ovl->stick_repeat_accum = 0.0f;
+#endif
     }
 
     return FALSE;
@@ -305,9 +322,20 @@ static u8 mDE_judge_stick(mDE_Ovl_c* design_ovl) {
 
 static int mDE_judge_stick_full(mDE_Ovl_c* design_ovl) {
     if (design_ovl->move_pR >= 0.9f) {
+#ifdef TARGET_PC
+        design_ovl->stick_full_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+        while (design_ovl->stick_full_accum >= 1.0f) {
+            design_ovl->_6C0++;
+            design_ovl->stick_full_accum -= 1.0f;
+        }
+#else
         design_ovl->_6C0++;
+#endif
         if (design_ovl->_6C0 > design_ovl->_6C4) {
             design_ovl->_6C0 = design_ovl->_6C4;
+#ifdef TARGET_PC
+            design_ovl->stick_full_accum = 0.0f;
+#endif
         }
 
         return TRUE;
@@ -321,6 +349,10 @@ static int mDE_judge_stick_nuetral(mDE_Ovl_c* design_ovl) {
         design_ovl->_6C0 = 0;
         design_ovl->_6B4 = 0;
         design_ovl->_6B5 = 0;
+#ifdef TARGET_PC
+        design_ovl->stick_repeat_accum = 0.0f;
+        design_ovl->stick_full_accum = 0.0f;
+#endif
         return TRUE;
     }
 
@@ -1778,8 +1810,26 @@ void mDE_mode_main_move(mDE_Ovl_c* design_ovl) {
         design_ovl->_6CE = 1;
         design_ovl->_6A4++;
         design_ovl->_6D0 = 0;
+#ifdef TARGET_PC
+        design_ovl->palette_repeat_accum = 0.0f;
+#endif
         sAdo_SysTrgStart(0x459);
     } else if (chkButton(BUTTON_CDOWN) && design_ovl->_6CE) {
+#ifdef TARGET_PC
+        design_ovl->palette_repeat_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+        while (design_ovl->palette_repeat_accum >= 1.0f) {
+            if (design_ovl->_6D0 > design_ovl->_6D4) {
+                design_ovl->_6A4++;
+                design_ovl->_6D0 = 0;
+                sAdo_SysTrgStart(0x459);
+                design_ovl->palette_repeat_accum -= 1.0f;
+                break;
+            } else {
+                design_ovl->_6D0++;
+            }
+            design_ovl->palette_repeat_accum -= 1.0f;
+        }
+#else
         if (design_ovl->_6D0 > design_ovl->_6D4) {
             design_ovl->_6A4++;
             design_ovl->_6D0 = 0;
@@ -1787,16 +1837,38 @@ void mDE_mode_main_move(mDE_Ovl_c* design_ovl) {
         } else {
             design_ovl->_6D0++;
         }
+#endif
     } else {
         design_ovl->_6CE = 0;
+#ifdef TARGET_PC
+        design_ovl->palette_repeat_accum = 0.0f;
+#endif
     }
 
     if (chkTrigger(BUTTON_CUP)) {
         design_ovl->_6CF = 1;
         design_ovl->_6A4--;
         design_ovl->_6D0 = 0;
+#ifdef TARGET_PC
+        design_ovl->palette_repeat_accum = 0.0f;
+#endif
         sAdo_SysTrgStart(0x459);
     } else if (chkButton(BUTTON_CUP) && design_ovl->_6CF) {
+#ifdef TARGET_PC
+        design_ovl->palette_repeat_accum += (f32)gamePT->graph->dt_num_60fps_frames;
+        while (design_ovl->palette_repeat_accum >= 1.0f) {
+            if (design_ovl->_6D0 > design_ovl->_6D4) {
+                design_ovl->_6A4--;
+                design_ovl->_6D0 = 0;
+                sAdo_SysTrgStart(0x459);
+                design_ovl->palette_repeat_accum -= 1.0f;
+                break;
+            } else {
+                design_ovl->_6D0++;
+            }
+            design_ovl->palette_repeat_accum -= 1.0f;
+        }
+#else
         if (design_ovl->_6D0 > design_ovl->_6D4) {
             design_ovl->_6A4--;
             design_ovl->_6D0 = 0;
@@ -1804,8 +1876,12 @@ void mDE_mode_main_move(mDE_Ovl_c* design_ovl) {
         } else {
             design_ovl->_6D0++;
         }
+#endif
     } else {
         design_ovl->_6CF = 0;
+#ifdef TARGET_PC
+        design_ovl->palette_repeat_accum = 0.0f;
+#endif
     }
 
     design_ovl->_6A5 = design_ovl->_6A4;
@@ -2667,6 +2743,11 @@ void mDE_design_ovl_init(Submenu* submenu) {
     design_ovl->_6B4 = 0;
     design_ovl->_6B8 = 0;
     design_ovl->_6C0 = 0;
+#ifdef TARGET_PC
+    design_ovl->stick_repeat_accum = 0.0f;
+    design_ovl->stick_full_accum = 0.0f;
+    design_ovl->palette_repeat_accum = 0.0f;
+#endif
     design_ovl->_6D8 = 0;
     design_ovl->_6D9 = 0;
     design_ovl->_6DA = 0;
