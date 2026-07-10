@@ -44,18 +44,39 @@ static void eHanabiSwitch_ct(eEC_Effect_c* effect, GAME* game, void* ct_arg) {
     eHanabiSwitch_SearchLakePos(&effect->position);
     effect->offset = effect->position;
     effect->effect_specific[0] = 0; /* phase: 0 = pre-init, 1 = pos-captured, 2 = set-spawned */
+#ifdef TARGET_PC
+    {
+        extern int g_pc_verbose;
+        if (g_pc_verbose) {
+            printf("[HANABI] switch ct: lake pos=(%.1f, %.1f, %.1f)\n", effect->position.x, effect->position.y,
+                   effect->position.z);
+        }
+    }
+#endif
 }
 
 static void eHanabiSwitch_mv(eEC_Effect_c* effect, GAME* game) {
     eEC_CLIP->set_continious_env_proc(effect, 300, 300);
     if (mEv_CheckTitleDemo() != mEv_TITLEDEMO_STAFFROLL) {
         f32 t = (f32)EFFECT_LIFETIME - effect->lifetime;
+        /* continuous env wraps lifetime each cycle; re-arm so a new set fires
+         * every cycle like the original frame-exact triggers did */
+        if ((s16)t < effect->effect_specific[3]) {
+            effect->effect_specific[0] = 0;
+        }
+        effect->effect_specific[3] = (s16)t;
         if (effect->effect_specific[0] < 1 && eEC_CLIP->check_lookat_block_proc(effect->position)) {
             effect->offset = effect->position;
             effect->effect_specific[0] = 1;
         }
         if (effect->effect_specific[0] < 2 && t >= 40.0f) {
             effect->effect_specific[0] = 2;
+#ifdef TARGET_PC
+            {
+                extern int g_pc_verbose;
+                if (g_pc_verbose) printf("[HANABI] switch mv: spawning HANABI_SET (t=%.1f)\n", t);
+            }
+#endif
             eEC_CLIP->effect_make_proc(eEC_EFFECT_HANABI_SET, effect->position, effect->prio, 0, game,
                                        (mActor_name_t)effect->item_name, 0, 0);
         }

@@ -41,14 +41,16 @@ static s16 eEL_RandomFirstSpeed(xyz_t* speed, f32 y, f32 max_z, f32 max_x) {
 }
 
 static void eEL_SetContiniousEnv(eEC_Effect_c* effect, s16 unused, s16 timer) {
+    /* lifetime arm: a dt spike can push lifetime past 0 while timer is still
+     * above 1, which would kill a continuous effect at its wrap point */
     if (effect->state == eEC_STATE_NORMAL) {
-        if (effect->timer <= 1) {
+        if (effect->timer <= 1 || effect->lifetime <= 1.0f) {
             effect->state = eEC_STATE_CONTINUOUS;
             effect->timer = timer;
             effect->lifetime = (f32)timer;
         }
     } else if (effect->state == eEC_STATE_CONTINUOUS) {
-        if (effect->timer <= 1) {
+        if (effect->timer <= 1 || effect->lifetime <= 1.0f) {
             effect->state = eEC_STATE_CONTINUOUS;
             effect->timer = timer;
             effect->lifetime = (f32)timer;
@@ -168,6 +170,11 @@ static void eEL_CalcEffectLight_Set(GAME* game) {
     int r;
     int g;
     int b;
+#ifdef TARGET_PC
+    /* ctr is a 60Hz frame counter; singleton light so a single accum is fine */
+    static f32 eEL_light_ctr_accum = 0.0f;
+    int ticks = graph_dt_60hz_ticks(game, &eEL_light_ctr_accum);
+#endif
 
     if (eEL_light_data.ctr > eEL_light_data.n_frames) {
         eEL_InitEffectLight();
@@ -203,7 +210,11 @@ static void eEL_CalcEffectLight_Set(GAME* game) {
         eEC_ctrl_work.light_info.lights.diffuse.color[0] = r;
         eEC_ctrl_work.light_info.lights.diffuse.color[1] = g;
         eEC_ctrl_work.light_info.lights.diffuse.color[2] = b;
+#ifdef TARGET_PC
+        eEL_light_data.ctr += ticks;
+#else
         eEL_light_data.ctr++;
+#endif
     }
 }
 
