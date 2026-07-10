@@ -39,6 +39,7 @@
 
 /* From pc_gx.c — restore game's GL state after NES emulation */
 extern void pc_gx_restore_after_nes(void);
+extern void pc_gx_draw_pending(void);
 
 /* Externed directly (not via headers) to avoid fixNES symbol clashes. */
 extern int g_pc_window_w;
@@ -376,6 +377,7 @@ void pc_fixnes_cleanup(void) {
 }
 
 void pc_fixnes_render_frame(uint16_t *fb) {
+    pc_gx_draw_pending(); /* NES uses its own GL pipeline */
     if (!fixnes_shader) fixnes_init_gl();
 
     /* Upload framebuffer — fixNES outputs RGB565 with COL_TEX_BSWAP

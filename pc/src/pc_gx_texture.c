@@ -626,6 +626,7 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
     {
         GLuint efb_tex = pc_gx_efb_capture_find(o[TEXOBJ_IMAGE_PTR]);
         if (efb_tex) {
+            pc_gx_draw_pending();
             glBindTexture(GL_TEXTURE_2D, efb_tex);
             pc_gx_texture_bind_cache_invalidate();
             GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
@@ -660,6 +661,7 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
 
         /* update wrap/filter if changed */
         if (params_changed) {
+            pc_gx_draw_pending();
             glBindTexture(GL_TEXTURE_2D, tex);
             pc_gx_texture_bind_cache_invalidate();
         }
@@ -691,6 +693,7 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
 
     /* cache miss */
     tex_cache_misses++;
+    pc_gx_draw_pending();
 
     /* try texture pack replacement before decoding */
     if (pc_texture_pack_active()) {

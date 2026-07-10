@@ -152,6 +152,7 @@ void pc_platform_update_window_size(void) {
 }
 
 void pc_platform_swap_buffers(void) {
+    pc_gx_draw_pending();
     SDL_GL_SwapWindow(g_pc_window);
 }
 

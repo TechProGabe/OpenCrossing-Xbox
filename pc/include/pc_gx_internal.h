@@ -94,6 +94,9 @@ typedef struct {
     PCGXVertex vertex_buffer[PC_GX_MAX_VERTS];
     int current_vertex_idx;
     PCGXVertex current_vertex;
+    /* Deferred draw stuff*/
+    int pending_verts;
+    int pending_prim;
 
     /* Vertex descriptor */
     int vtx_desc[PC_GX_MAX_ATTR];
@@ -258,6 +261,7 @@ void pc_gx_init(void);
 void pc_gx_shutdown(void);
 void pc_gx_flush_vertices(void);
 void pc_gx_flush_if_begin_complete(void);
+void pc_gx_draw_pending(void);
 void pc_gx_texture_bind_cache_invalidate(void);
 
 /* TEV shader */
