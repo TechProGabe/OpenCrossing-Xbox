@@ -1031,8 +1031,7 @@ void pc_gx_flush_vertices(void) {
                     ksel[s][1] = ts->k_alpha_sel;
                     ksel[s][2] = s;
                     if (s < g_gx.num_tev_stages) {
-                        int tc = ts->tex_coord;
-                        tc_src[s] = (tc >= 0 && tc < 8) ? tc : s;
+                        tc_src[s] = pc_gx_tc_src_normalize(ts->tex_coord, s);
                     } else {
                         tc_src[s] = 0;
                     }

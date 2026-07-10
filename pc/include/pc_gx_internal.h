@@ -276,6 +276,16 @@ static inline void pc_gx_dirty_set(unsigned int flags) {
 #define PC_GX_DIRTY_SET(flag) pc_gx_dirty_set(flag)
 #define DIRTY(flag) pc_gx_dirty_set(flag)
 
+/* Normalize a TEV stage's texcoord source for the shader's vec2 tc[2]:
+ * NULL/invalid falls back to the stage number, then clamps to channel 1.
+ * Shared by the uber uniform upload and specialized key construction so
+ * the two paths cannot diverge (an OOB tc index is UB in the uber shader). */
+static inline int pc_gx_tc_src_normalize(int tc, int stage) {
+    if (tc < 0 || tc >= 8) tc = stage;
+    if (tc > 1) tc = 1;
+    return tc;
+}
+
 /* Shader specialization */
 
 /* Config-shaped GX state folded into compile-time constants. */

@@ -210,14 +210,7 @@ static void pc_gx_build_shader_key(PCGXShaderKey* k) {
         k->st[s].swap[1] = (u8)ts->tex_swap;
         k->st[s].ksel[0] = (u8)ts->k_color_sel;
         k->st[s].ksel[1] = (u8)ts->k_alpha_sel;
-        /* Mirror the upload path, but the shader indexes vec2 tc[2] with this
-         * so clamp to 0/1: a const OOB index is a compile error */
-        {
-            int tc = ts->tex_coord;
-            if (tc < 0 || tc >= 8) tc = s;
-            if (tc > 1) tc = 1;
-            k->st[s].tc_src = (u8)tc;
-        }
+        k->st[s].tc_src = (u8)pc_gx_tc_src_normalize(ts->tex_coord, s);
         k->st[s].use_tex = (u8)(ts->tex_map >= 0 && ts->tex_map < 8 &&
                                 g_gx.gl_textures[ts->tex_map] != 0);
         if (ni > 0) {
