@@ -107,8 +107,8 @@ extern void aISM_actor_init(ACTOR* actorx, GAME* game) {
  *
  * @param insect Insect actor to animate
  */
-static void aISM_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.5f;
+static void aISM_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += aINS_dt_step(game, 0.5f);
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -225,10 +225,10 @@ static void aISM_avoid(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
     f32 gravity;
 
-    aISM_anime_proc(insect);
+    aISM_anime_proc(insect, game);
     
     gravity = actorx->gravity;
-    gravity *= 1.1f;
+    gravity *= DTCONV_GAME(1.1f, game);
     if (gravity > 12.0f) {
         gravity = 12.0f;
     }

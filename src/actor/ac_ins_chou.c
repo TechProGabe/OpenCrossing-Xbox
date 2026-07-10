@@ -259,11 +259,11 @@ static void aICH_rest_check(aINS_INSECT_ACTOR* insect, GAME* game) {
 }
 
 static void aICH_chou_fuwafuwa(aINS_INSECT_ACTOR* insect) {
+    /* speed stays the per-60Hz-frame sine delta (position_move scales by dt); only the phase advance is dt-scaled */
     f32 saveSpAng = 10.0f * sin_s(insect->flag);
-    f32 curSpAng;
+    f32 curSpAng = 10.0f * sin_s(insect->flag + 0x800);
 
-    insect->flag += 0x800;
-    curSpAng = 10.0f * sin_s(insect->flag);
+    insect->flag += aINS_dt_angle_step((GAME*)gamePT, 0x800);
 
     insect->tools_actor.actor_class.position_speed.y = insect->tools_actor.actor_class.gravity + (curSpAng - saveSpAng);
 }

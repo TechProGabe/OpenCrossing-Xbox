@@ -102,8 +102,8 @@ extern void aIKB_actor_init(ACTOR* actorx, GAME* game) {
     aIKB_setupAction(insect, act, game);
 }
 
-static void aIKB_anime_proc(aINS_INSECT_ACTOR* insect) {
-    insect->_1E0 += 0.5f;
+static void aIKB_anime_proc(aINS_INSECT_ACTOR* insect, GAME* game) {
+    insect->_1E0 += aINS_dt_step(game, 0.5f);
     if (insect->_1E0 >= 2.0f) {
         insect->_1E0 -= 2.0f;
     }
@@ -186,9 +186,9 @@ static void aIKB_avoid(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
     f32 grav;
 
-    aIKB_anime_proc(insect);
+    aIKB_anime_proc(insect, game);
     grav = actorx->gravity;
-    grav *= 1.1f;
+    grav *= DTCONV_GAME(1.1f, game);
 
     if (grav > 12.0f) {
         grav = 12.0f;
