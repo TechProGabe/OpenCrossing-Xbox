@@ -154,16 +154,17 @@ static void Actor_ct(ACTOR* actor, GAME* game) {
     actor->max_velocity_y = -20.0f;
     actor->player_distance = FLT_MAX; //3.4028235E+38;
     if (g_mPlib_wade_disabled) {
-        /* Borderless acres: widen culling so neighbor-acre actors draw. */
-        actor->cull_width = 1600.0f;
-        actor->cull_height = 1600.0f;
-        actor->cull_distance = 1600.0f;
+        /* Reduce the distance otherwise causes crashes */
+        actor->cull_width = 350.0f * 1.5f;
+        actor->cull_height = 700.0f * 1.5f;
+        actor->cull_distance = 1000.0f;
+        actor->cull_radius = 350.0f * 1.5f;
     } else {
         actor->cull_width = 350.0f;
         actor->cull_height = 700.0f;
         actor->cull_distance = 1000.0f;
+        actor->cull_radius = 350.0f;
     }
-    actor->cull_radius = 350.0f;
     actor->talk_distance = 55.0f;
     actor->shape_info.shadow_size_change_rate = 1.0f;
     actor->shape_info.shadow_alpha_change_rate = 1.0f;
