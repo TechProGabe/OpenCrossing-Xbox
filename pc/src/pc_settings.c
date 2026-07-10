@@ -2,6 +2,7 @@
 #include "pc_settings.h"
 #include "pc_platform.h"
 #include "m_player_lib.h"
+#include "ac_birth_control.h"
 
 PCSettings g_pc_settings = {
     .window_width  = PC_SCREEN_WIDTH,
@@ -134,7 +135,12 @@ static void apply_frame_limit_setting(void) {
 }
 
 static void apply_borderless_acres_setting(void) {
-    g_mPlib_wade_disabled = g_pc_settings.borderless_acres != 0;
+    int enabled = g_pc_settings.borderless_acres != 0;
+
+    if (enabled && !g_mPlib_wade_disabled) {
+        aBC_RequestNearbyRefresh();
+    }
+    g_mPlib_wade_disabled = enabled;
 }
 
 static void write_defaults(const char* path) {

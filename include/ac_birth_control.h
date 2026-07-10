@@ -23,6 +23,8 @@ struct birth_control_s {
 
 extern ACTOR_PROFILE Birth_Control_Profile;
 
+void aBC_RequestNearbyRefresh(void);
+
 #ifdef __cplusplus
 }
 #endif

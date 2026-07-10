@@ -350,6 +350,12 @@ static void aBC_spawn_actors_in_nearby_blocks(BIRTH_CONTROL_ACTOR* birth_control
   }
 }
 
+static int aBC_nearby_refresh_request = FALSE;
+
+void aBC_RequestNearbyRefresh(void) {
+  aBC_nearby_refresh_request = TRUE;
+}
+
 static int aBC_check_update_actors_in_nearby_blocks(BIRTH_CONTROL_ACTOR* birth_control, GAME_PLAY* play) {
   int quadrant;
   int block_ux;
@@ -419,6 +425,11 @@ static void aBC_actor_move(ACTOR* actorx, GAME* game) {
                                                             play->block_table.block_x, play->block_table.block_z,
                                                             play->block_table.pos_x, play->block_table.pos_z);
       mFI_SetMoveActorBitData(bx, bz, birth_control->move_actor_bitfield);
+    }
+
+    if (aBC_nearby_refresh_request) {
+      aBC_nearby_refresh_request = FALSE;
+      birth_control->last_quadrant = -1;
     }
 
     if (g_mPlib_wade_disabled && aBC_check_update_actors_in_nearby_blocks(birth_control, play)) {
