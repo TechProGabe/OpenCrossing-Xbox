@@ -22,6 +22,7 @@ enum {
     ITEM_RES,
     ITEM_TEXTURES,
     ITEM_RESETTI,
+    ITEM_SHOP_VISITOR,
     ITEM_BORDERLESS_ACRES,
     ITEM_NES_ASPECT,
     ITEM_MASTER_VOLUME,
@@ -49,6 +50,7 @@ static const Item tab_video_items[] = {
 
 static const Item tab_gameplay_items[] = {
     { "Resetti",          ITEM_RESETTI,          0 },
+    { "Nookington's Upgrade", ITEM_SHOP_VISITOR,     0 },
     { "Borderless acres", ITEM_BORDERLESS_ACRES, 1 },
     { "NES aspect",       ITEM_NES_ASPECT,       0 },
 };
@@ -247,6 +249,7 @@ static void recompute_dirty(void) {
         (s_pending.window_height    != g_pc_settings.window_height) ||
         (s_pending.preload_textures != g_pc_settings.preload_textures) ||
         (s_pending.disable_resetti  != g_pc_settings.disable_resetti) ||
+        (s_pending.disable_shop_visitor_req != g_pc_settings.disable_shop_visitor_req) ||
         (s_pending.borderless_acres != g_pc_settings.borderless_acres) ||
         (s_pending.nes_aspect       != g_pc_settings.nes_aspect) ||
         (s_pending.master_volume    != g_pc_settings.master_volume) ||
@@ -297,6 +300,9 @@ static void item_cycle(int id, int dir) {
         } break;
         case ITEM_RESETTI:
             s_pending.disable_resetti = !s_pending.disable_resetti;
+            break;
+        case ITEM_SHOP_VISITOR:
+            s_pending.disable_shop_visitor_req = !s_pending.disable_shop_visitor_req;
             break;
         case ITEM_BORDERLESS_ACRES:
             s_pending.borderless_acres = !s_pending.borderless_acres;
@@ -361,6 +367,10 @@ static void item_format(int id, char* buf, size_t n) {
             /* disable_resetti flips the polarity - show the user-facing side. */
             snprintf(buf, n, "%s", s_pending.disable_resetti ? "< Disabled >" : "< Enabled >");
             break;
+        case ITEM_SHOP_VISITOR:
+            /* disable_shop_visitor_req flips the polarity - show the user-facing side. */
+            snprintf(buf, n, "%s", s_pending.disable_shop_visitor_req ? "< Singleplayer >" : "< Multiplayer >");
+            break;
         case ITEM_BORDERLESS_ACRES:
             snprintf(buf, n, "%s", s_pending.borderless_acres ? "< On >" : "< Off >");
             break;
@@ -395,6 +405,7 @@ static int item_changed(int id) {
                                      (s_pending.window_height != g_pc_settings.window_height);
         case ITEM_TEXTURES:   return s_pending.preload_textures != g_pc_settings.preload_textures;
         case ITEM_RESETTI:    return s_pending.disable_resetti  != g_pc_settings.disable_resetti;
+        case ITEM_SHOP_VISITOR: return s_pending.disable_shop_visitor_req != g_pc_settings.disable_shop_visitor_req;
         case ITEM_BORDERLESS_ACRES: return s_pending.borderless_acres != g_pc_settings.borderless_acres;
         case ITEM_NES_ASPECT:    return s_pending.nes_aspect    != g_pc_settings.nes_aspect;
         case ITEM_MASTER_VOLUME: return s_pending.master_volume != g_pc_settings.master_volume;

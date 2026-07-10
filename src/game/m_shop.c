@@ -12,6 +12,10 @@
 #include "m_room_type.h"
 #include "m_fg_type.h"
 
+#ifdef TARGET_PC
+#include "pc_settings.h"
+#endif
+
 extern mActor_name_t* mSP_ftr_list[];
 extern mActor_name_t* mSP_binsen_list[];
 extern mActor_name_t* mSP_cloth_list[];
@@ -1311,6 +1315,13 @@ extern int mSP_RenewShopLevel() {
 
 extern int mSP_GetRealShopLevel() {
     u32 sales_sum = mSP_GetSalesSum();
+
+#ifdef TARGET_PC
+    /* Optional toggle: skip the foreign-town shopper requirement for Nookington's. */
+    if (sales_sum >= mSP_DSUPER_SUM && g_pc_settings.disable_shop_visitor_req) {
+        return mSP_SHOP_TYPE_DSUPER;
+    }
+#endif
 
     if (sales_sum >= mSP_DSUPER_SUM && Save_Get(shop).visitor_flag != FALSE) {
         return mSP_SHOP_TYPE_DSUPER;
