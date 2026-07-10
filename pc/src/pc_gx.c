@@ -1990,7 +1990,7 @@ void GXAdjustForOverscan(void* rmin, void* rmout, u16 hor, u16 ver) {
     memcpy(rmout, rmin, sizeof(u32) * 16);
 }
 
-static void pc_gx_copy_tex_execute(void* dest, GXBool clear) {
+static void pc_gx_copy_tex_execute_impl(void* dest, GXBool clear) {
     pc_gx_commit_pending_and_flush();
 
     if (!dest) return;
@@ -2097,6 +2097,13 @@ static void pc_gx_copy_tex_execute(void* dest, GXBool clear) {
 
     free(rgba);
     (void)clear;
+}
+
+/* Times the synchronous glReadPixels stall (called via GXCopyDisp and DL replay) */
+static void pc_gx_copy_tex_execute(void* dest, GXBool clear) {
+    Uint64 prof_start = pc_profiler_begin_timer();
+    pc_gx_copy_tex_execute_impl(dest, clear);
+    pc_profiler_add_time(PC_PROF_TIMER_EFB_COPY, prof_start);
 }
 
 void GXSetTexCopySrc(u16 left, u16 top, u16 wd, u16 ht) {

@@ -182,6 +182,9 @@ static void graph_task_set00(GRAPH* this) {
             ucode[1].type = UCODE_TYPE_SPRITE_TEXT;
             ucode[0].ucode_p = ucode_GetPolyTextStart();
             ucode[1].ucode_p = ucode_GetSpriteTextStart();
+#ifdef TARGET_PC
+            Uint64 pc_prof_jw = pc_profiler_begin_timer();
+#endif
             JW_BeginFrame();
             emu64_init();
             emu64_set_ucode_info(2, ucode);
@@ -206,6 +209,10 @@ static void graph_task_set00(GRAPH* this) {
             }
 #endif
             emu64_cleanup();
+#ifdef TARGET_PC
+            /* Stop before JW_EndFrame: it contains the VI wait (swap/pace) */
+            pc_profiler_add_time(PC_PROF_TIMER_JW_FRAME, pc_prof_jw);
+#endif
             JW_EndFrame();
             frame++;
         }
@@ -387,8 +394,18 @@ static void graph_main(GRAPH* this, GAME* game) {
             skip_frame++;
             this->frame_counter++;
         } else if (game->disable_display == FALSE) {
+            int pc_draw_err;
             skip_frame = 0;
-            if (graph_draw_finish(this) == FALSE) {
+#ifdef TARGET_PC
+            {
+                Uint64 pc_prof_t = pc_profiler_begin_timer();
+                pc_draw_err = graph_draw_finish(this);
+                pc_profiler_add_time(PC_PROF_TIMER_DRAW_FINISH, pc_prof_t);
+            }
+#else
+            pc_draw_err = graph_draw_finish(this);
+#endif
+            if (pc_draw_err == FALSE) {
                 GRAPH_SET_DOING_POINT(this, TASK_SET);
                 graph_task_set00(this);
                 GRAPH_SET_DOING_POINT(this, TASK_SET_FINISHED);
@@ -404,7 +421,13 @@ static void graph_main(GRAPH* this, GAME* game) {
 
     PC_DIAG(10, "graph2: before audio+reset, frame_counter=%d\n", this->frame_counter);
     if (GETREG(SREG, 20) < 2) {
+#ifdef TARGET_PC
+        Uint64 pc_prof_t = pc_profiler_begin_timer();
         graph_audio_gameframe(this, game);
+        pc_profiler_add_time(PC_PROF_TIMER_AUDIO_FRAME, pc_prof_t);
+#else
+        graph_audio_gameframe(this, game);
+#endif
     }
 
     reset_check(this, game);

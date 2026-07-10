@@ -33,12 +33,14 @@ static PCProfilerFrame s_accum;
 static PCProfilerFrame s_peak;
 static int s_frames = 0;
 static int s_have_frame = 0;
+static int s_frame_marked = 0;
 static Uint64 s_freq = 0;
 
 static const char* s_timer_names[PC_PROF_TIMER_COUNT] = {
     "gx_begin", "dl_replay", "gx_flush", "buf_upload", "uniforms", "uniform_lookup",
     "tex_bind", "shader_switch", "gl_state", "draw_submit", "poll", "swap", "pace",
-    "game_logic", "emu64_task", "texobj"
+    "game_logic", "emu64_task", "texobj",
+    "draw_finish", "audio_frame", "jw_frame", "efb_copy"
 };
 
 static const char* s_dirty_names[16] = {
@@ -47,6 +49,9 @@ static const char* s_dirty_names[16] = {
     "cull", "blend"
 };
 
+static void pc_profiler_accum_frame(void);
+static void pc_profiler_print_report(void);
+
 static double pc_profiler_ticks_to_ms(Uint64 ticks) {
     if (!s_freq) s_freq = SDL_GetPerformanceFrequency();
     return (double)ticks * 1000.0 / (double)s_freq;
@@ -54,6 +59,18 @@ static double pc_profiler_ticks_to_ms(Uint64 ticks) {
 
 void pc_profiler_begin_frame(void) {
     if (!g_pc_profile_enabled) return;
+    if (s_frame_marked) {
+        /* flush the previous frame, including its post-VI tail */
+        pc_profiler_accum_frame();
+        s_frames++;
+        s_frame_marked = 0;
+        if (s_frames >= g_pc_profile_interval) {
+            pc_profiler_print_report();
+            memset(&s_accum, 0, sizeof(s_accum));
+            memset(&s_peak, 0, sizeof(s_peak));
+            s_frames = 0;
+        }
+    }
     memset(&s_frame, 0, sizeof(s_frame));
     s_have_frame = 1;
 }
@@ -205,6 +222,9 @@ static void pc_profiler_print_report(void) {
     printf("\n");
 }
 
+/* Marks the frame stats at VIWaitForRetrace but keeps the frame open: work
+   after the VI wait (audio gameframe, JW teardown) still records. The flush
+   happens at the next pc_profiler_begin_frame. */
 void pc_profiler_end_frame(double frame_ms, int audio_fill) {
     if (!g_pc_profile_enabled || !s_have_frame) return;
 
@@ -216,14 +236,5 @@ void pc_profiler_end_frame(double frame_ms, int audio_fill) {
     s_frame.emu64_dl_cmds = pc_emu64_frame_dl_cmds;
     s_frame.cull_visible = pc_emu64_frame_cull_visible;
     s_frame.cull_rejected = pc_emu64_frame_cull_rejected;
-    pc_profiler_accum_frame();
-    s_frames++;
-    s_have_frame = 0;
-
-    if (s_frames >= g_pc_profile_interval) {
-        pc_profiler_print_report();
-        memset(&s_accum, 0, sizeof(s_accum));
-        memset(&s_peak, 0, sizeof(s_peak));
-        s_frames = 0;
-    }
+    s_frame_marked = 1;
 }
