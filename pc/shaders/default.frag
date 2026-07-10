@@ -36,15 +36,9 @@ uniform sampler2D u_texture2;
 uniform int u_use_texture[3];
 
 /* Lighting / color channels */
-uniform int u_lighting_enabled;
-uniform vec4 u_mat_color;
-uniform vec4 u_amb_color;
-uniform int u_chan_mat_src;   /* 0=REG, 1=VTX */
-uniform int u_chan_amb_src;
-uniform int u_num_chans;
-uniform int u_alpha_lighting_enabled;
-uniform int u_alpha_mat_src;
-uniform int u_light_mask;
+uniform ivec4 u_lighting_cfg0; /* x=lighting, y=mat_src, z=amb_src, w=num_chans */
+uniform ivec4 u_lighting_cfg1; /* x=alpha_lighting, y=alpha_mat_src, z=light_mask */
+uniform vec4 u_chan_color[2];  /* 0=mat, 1=amb */
 uniform vec3 u_light_pos[8];
 uniform vec4 u_light_color[8];
 
@@ -311,15 +305,15 @@ void main() {
 
     /* Rasterized color: GX lighting model */
     vec4 rasColor;
-    if (u_num_chans == 0) {
+    if (u_lighting_cfg0.w == 0) {
         rasColor = vec4(1.0);
     } else {
-        vec3 matC = (u_chan_mat_src != 0) ? v_color.rgb : u_mat_color.rgb;
-        vec3 ambC = (u_chan_amb_src != 0) ? v_color.rgb : u_amb_color.rgb;
-        if (u_lighting_enabled != 0) {
+        vec3 matC = (u_lighting_cfg0.y != 0) ? v_color.rgb : u_chan_color[0].rgb;
+        vec3 ambC = (u_lighting_cfg0.z != 0) ? v_color.rgb : u_chan_color[1].rgb;
+        if (u_lighting_cfg0.x != 0) {
             vec3 lightAccum = ambC;
             for (int i = 0; i < 8; i++) {
-                if ((u_light_mask & (1 << i)) != 0) {
+                if ((u_lighting_cfg1.z & (1 << i)) != 0) {
                     vec3 L = normalize(u_light_pos[i]);
                     float diff = clamp(dot(v_normal, L), 0.0, 1.0);
                     lightAccum += diff * u_light_color[i].rgb;
@@ -329,8 +323,8 @@ void main() {
         } else {
             rasColor.rgb = matC;
         }
-        float matA = (u_alpha_mat_src != 0) ? v_color.a : u_mat_color.a;
-        rasColor.a = (u_alpha_lighting_enabled != 0) ? matA * u_amb_color.a : matA;
+        float matA = (u_lighting_cfg1.y != 0) ? v_color.a : u_chan_color[0].a;
+        rasColor.a = (u_lighting_cfg1.x != 0) ? matA * u_chan_color[1].a : matA;
     }
 
     vec4 prev = u_tev_prev;

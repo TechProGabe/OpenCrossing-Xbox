@@ -792,16 +792,16 @@ static void pc_gx_cache_uniform_locations(GLuint shader) {
     g_gx.uloc.alpha_comp1 = -1;
     g_gx.uloc.alpha_ref1  = UL("u_alpha_ref1");
 
-    g_gx.uloc.lighting_enabled = UL("u_lighting_enabled");
-    g_gx.uloc.mat_color  = UL("u_mat_color");
-    g_gx.uloc.amb_color  = UL("u_amb_color");
-    g_gx.uloc.chan_mat_src = UL("u_chan_mat_src");
-    g_gx.uloc.chan_amb_src = UL("u_chan_amb_src");
-    g_gx.uloc.num_chans  = UL("u_num_chans");
-    g_gx.uloc.alpha_lighting_enabled = UL("u_alpha_lighting_enabled");
-    g_gx.uloc.alpha_mat_src = UL("u_alpha_mat_src");
+    g_gx.uloc.lighting_enabled = UL("u_lighting_cfg0");
+    g_gx.uloc.mat_color  = UL("u_chan_color[0]");
+    g_gx.uloc.amb_color  = -1;
+    g_gx.uloc.chan_mat_src = -1;
+    g_gx.uloc.chan_amb_src = -1;
+    g_gx.uloc.num_chans  = -1;
+    g_gx.uloc.alpha_lighting_enabled = UL("u_lighting_cfg1");
+    g_gx.uloc.alpha_mat_src = -1;
 
-    g_gx.uloc.light_mask = UL("u_light_mask");
+    g_gx.uloc.light_mask = -1;
     for (i = 0; i < 8; i++) {
         snprintf(name, sizeof(name), "u_light_pos[%d]", i);
         g_gx.uloc.light_pos[i] = UL(name);
@@ -1017,17 +1017,27 @@ void pc_gx_flush_vertices(void) {
         }
 
         if (dirty & PC_GX_DIRTY_LIGHTING) {
-            loc = UL(lighting_enabled); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_enable[0]);
-            loc = UL(mat_color);  if (loc >= 0) glUniform4fv(loc, 1, g_gx.chan_mat_color[0]);
-            loc = UL(amb_color);  if (loc >= 0) glUniform4fv(loc, 1, g_gx.chan_amb_color[0]);
-            loc = UL(chan_mat_src); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_mat_src[0]);
-            loc = UL(chan_amb_src); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_amb_src[0]);
-            loc = UL(num_chans);  if (loc >= 0) glUniform1i(loc, g_gx.num_chans);
-            loc = UL(alpha_lighting_enabled); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_enable[1]);
-            loc = UL(alpha_mat_src); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_mat_src[1]);
+            GLint lighting_cfg0[4] = {
+                g_gx.chan_ctrl_enable[0],
+                g_gx.chan_ctrl_mat_src[0],
+                g_gx.chan_ctrl_amb_src[0],
+                g_gx.num_chans
+            };
+            GLint lighting_cfg1[4] = {
+                g_gx.chan_ctrl_enable[1],
+                g_gx.chan_ctrl_mat_src[1],
+                g_gx.chan_ctrl_light_mask[0],
+                0
+            };
+            GLfloat chan_color[2][4];
+
+            memcpy(chan_color[0], g_gx.chan_mat_color[0], sizeof(chan_color[0]));
+            memcpy(chan_color[1], g_gx.chan_amb_color[0], sizeof(chan_color[1]));
+
+            loc = UL(lighting_enabled); if (loc >= 0) glUniform4iv(loc, 1, lighting_cfg0);
+            loc = UL(alpha_lighting_enabled); if (loc >= 0) glUniform4iv(loc, 1, lighting_cfg1);
+            loc = UL(mat_color); if (loc >= 0) glUniform4fv(loc, 2, &chan_color[0][0]);
             {
-                int color_light_mask = g_gx.chan_ctrl_light_mask[0];
-                loc = UL(light_mask); if (loc >= 0) glUniform1i(loc, color_light_mask);
                 float lpos[8][3], lcol[8][4];
                 for (int i = 0; i < 8; i++) {
                     memcpy(lpos[i], g_gx.lights[i].pos, sizeof(lpos[i]));
