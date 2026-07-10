@@ -884,6 +884,7 @@ void pc_gx_flush_vertices(void) {
         Uint64 uniform_start = pc_profiler_begin_timer();
         GLint loc;
         unsigned int dirty = g_gx.dirty;
+        pc_profiler_add_dirty_mask(dirty);
         #define UL(field) g_gx.uloc.field
 
         if (dirty & PC_GX_DIRTY_PROJECTION) {
@@ -1272,36 +1273,49 @@ void GXSetProjection(const void* mtx, u32 type) {
 
 void GXLoadPosMtxImm(const void* mtx, u32 id) {
     pc_gx_flush_if_begin_complete();
-    DIRTY(PC_GX_DIRTY_MODELVIEW);
     int slot = id / 3;
-    if (slot < 10) memcpy(g_gx.pos_mtx[slot], mtx, sizeof(float) * 12);
+    if (slot >= 10) return;
+    if (memcmp(g_gx.pos_mtx[slot], mtx, sizeof(float) * 12) == 0) return;
+    DIRTY(PC_GX_DIRTY_MODELVIEW);
+    memcpy(g_gx.pos_mtx[slot], mtx, sizeof(float) * 12);
 }
 
 void GXLoadNrmMtxImm(const void* mtx, u32 id) {
     pc_gx_flush_if_begin_complete();
-    DIRTY(PC_GX_DIRTY_MODELVIEW);
     int slot = id / 3;
-    if (slot < 10) {
-        /* Extract upper-left 3x3 from 3x4 row-major Mtx (stride 4, not contiguous) */
-        const float* src = (const float*)mtx;
-        g_gx.nrm_mtx[slot][0][0] = src[0]; g_gx.nrm_mtx[slot][0][1] = src[1]; g_gx.nrm_mtx[slot][0][2] = src[2];
-        g_gx.nrm_mtx[slot][1][0] = src[4]; g_gx.nrm_mtx[slot][1][1] = src[5]; g_gx.nrm_mtx[slot][1][2] = src[6];
-        g_gx.nrm_mtx[slot][2][0] = src[8]; g_gx.nrm_mtx[slot][2][1] = src[9]; g_gx.nrm_mtx[slot][2][2] = src[10];
+    if (slot >= 10) return;
+
+    /* Extract upper-left 3x3 from 3x4 row-major Mtx (stride 4, not contiguous) */
+    const float* src = (const float*)mtx;
+    if (g_gx.nrm_mtx[slot][0][0] == src[0] && g_gx.nrm_mtx[slot][0][1] == src[1] &&
+        g_gx.nrm_mtx[slot][0][2] == src[2] && g_gx.nrm_mtx[slot][1][0] == src[4] &&
+        g_gx.nrm_mtx[slot][1][1] == src[5] && g_gx.nrm_mtx[slot][1][2] == src[6] &&
+        g_gx.nrm_mtx[slot][2][0] == src[8] && g_gx.nrm_mtx[slot][2][1] == src[9] &&
+        g_gx.nrm_mtx[slot][2][2] == src[10]) {
+        return;
     }
+
+    DIRTY(PC_GX_DIRTY_MODELVIEW);
+    g_gx.nrm_mtx[slot][0][0] = src[0]; g_gx.nrm_mtx[slot][0][1] = src[1]; g_gx.nrm_mtx[slot][0][2] = src[2];
+    g_gx.nrm_mtx[slot][1][0] = src[4]; g_gx.nrm_mtx[slot][1][1] = src[5]; g_gx.nrm_mtx[slot][1][2] = src[6];
+    g_gx.nrm_mtx[slot][2][0] = src[8]; g_gx.nrm_mtx[slot][2][1] = src[9]; g_gx.nrm_mtx[slot][2][2] = src[10];
 }
 
 void GXLoadTexMtxImm(const void* mtx, u32 id, u32 type) {
     pc_gx_flush_if_begin_complete();
-    DIRTY(PC_GX_DIRTY_TEXGEN);
     int slot = pc_tex_mtx_id_to_slot((int)id);
-    if (slot >= 0 && slot < 10) memcpy(g_gx.tex_mtx[slot], mtx, sizeof(float) * 12);
+    if (slot < 0 || slot >= 10) return;
+    if (memcmp(g_gx.tex_mtx[slot], mtx, sizeof(float) * 12) == 0) return;
+    DIRTY(PC_GX_DIRTY_TEXGEN);
+    memcpy(g_gx.tex_mtx[slot], mtx, sizeof(float) * 12);
 }
 
 void GXSetCurrentMtx(u32 id) {
     pc_gx_flush_if_begin_complete();
-    DIRTY(PC_GX_DIRTY_MODELVIEW);
     u32 slot = id / 3;
-    if (slot < 10) g_gx.current_mtx = slot;
+    if (slot >= 10 || g_gx.current_mtx == (int)slot) return;
+    DIRTY(PC_GX_DIRTY_MODELVIEW);
+    g_gx.current_mtx = slot;
 }
 
 void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz) {
@@ -1839,13 +1853,19 @@ void GXGetLightColor(void* lt, void* color) {
 /* --- Texture Coordinate Generation --- */
 void GXSetNumTexGens(u8 n) {
     pc_gx_flush_if_begin_complete();
+    if (g_gx.num_tex_gens == n) return;
     DIRTY(PC_GX_DIRTY_TEXGEN);
     g_gx.num_tex_gens = n;
 }
 void GXSetTexCoordGen2(u32 dst, u32 func, u32 src, u32 mtx, GXBool normalize, u32 postmtx) {
     pc_gx_flush_if_begin_complete();
-    DIRTY(PC_GX_DIRTY_TEXGEN);
     if (dst < 8) {
+        if (g_gx.tex_gen_type[dst] == (int)func &&
+            g_gx.tex_gen_src[dst] == (int)src &&
+            g_gx.tex_gen_mtx[dst] == (int)mtx) {
+            return;
+        }
+        DIRTY(PC_GX_DIRTY_TEXGEN);
         g_gx.tex_gen_type[dst] = func;
         g_gx.tex_gen_src[dst] = src;
         g_gx.tex_gen_mtx[dst] = mtx;

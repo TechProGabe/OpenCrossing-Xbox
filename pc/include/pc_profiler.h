@@ -40,6 +40,7 @@ void pc_profiler_add_count_uniform_lookup(void);
 void pc_profiler_add_count_texture_bind(void);
 void pc_profiler_add_count_buffer_upload(size_t bytes);
 void pc_profiler_add_count_state_change(void);
+void pc_profiler_add_dirty_mask(unsigned int dirty);
 void pc_profiler_end_frame(double frame_ms, int audio_fill);
 
 #ifdef __cplusplus

@@ -15,6 +15,7 @@ typedef struct {
     int buffer_uploads;
     size_t buffer_upload_bytes;
     int state_changes;
+    int dirty_groups[16];
     int vertices;
     int indices;
     int emu64_cmds;
@@ -37,6 +38,12 @@ static Uint64 s_freq = 0;
 static const char* s_timer_names[PC_PROF_TIMER_COUNT] = {
     "gx_begin", "dl_replay", "gx_flush", "buf_upload", "uniforms", "uniform_lookup",
     "tex_bind", "shader_switch", "gl_state", "draw_submit", "poll", "swap", "pace"
+};
+
+static const char* s_dirty_names[16] = {
+    "proj", "modelview", "tev_colors", "tev_stages", "swap", "konst", "alpha",
+    "lighting", "texgen", "textures", "indirect", "fog", "depth", "color_mask",
+    "cull", "blend"
 };
 
 static double pc_profiler_ticks_to_ms(Uint64 ticks) {
@@ -108,6 +115,13 @@ void pc_profiler_add_count_state_change(void) {
     s_frame.state_changes++;
 }
 
+void pc_profiler_add_dirty_mask(unsigned int dirty) {
+    if (!g_pc_profile_enabled || !s_have_frame) return;
+    for (int i = 0; i < 16; i++) {
+        if (dirty & (1u << i)) s_frame.dirty_groups[i]++;
+    }
+}
+
 static void pc_profiler_accum_frame(void) {
     for (int i = 0; i < PC_PROF_TIMER_COUNT; i++) {
         s_accum.timers_ms[i] += s_frame.timers_ms[i];
@@ -122,6 +136,9 @@ static void pc_profiler_accum_frame(void) {
     s_accum.buffer_uploads += s_frame.buffer_uploads;
     s_accum.buffer_upload_bytes += s_frame.buffer_upload_bytes;
     s_accum.state_changes += s_frame.state_changes;
+    for (int i = 0; i < 16; i++) {
+        s_accum.dirty_groups[i] += s_frame.dirty_groups[i];
+    }
     s_accum.vertices += s_frame.vertices;
     s_accum.indices += s_frame.indices;
     s_accum.emu64_cmds += s_frame.emu64_cmds;
@@ -178,6 +195,13 @@ static void pc_profiler_print_report(void) {
            (double)s_accum.emu64_dl_cmds / n,
            (double)s_accum.cull_visible / n,
            (double)s_accum.cull_rejected / n);
+
+    printf("[PROFILE] dirty groups per frame:");
+    for (int i = 0; i < 16; i++) {
+        double count = (double)s_accum.dirty_groups[i] / n;
+        if (count > 0.0) printf(" %s=%.1f", s_dirty_names[i], count);
+    }
+    printf("\n");
 }
 
 void pc_profiler_end_frame(double frame_ms, int audio_fill) {

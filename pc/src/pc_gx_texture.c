@@ -650,10 +650,18 @@ void GXLoadTexObj(void* obj, u32 id) {
     if (cached) {
         tex_cache_hits++;
         GLuint tex = cached->gl_tex;
-        glBindTexture(GL_TEXTURE_2D, tex);
-        pc_gx_texture_bind_cache_invalidate();
+        int slot_changed = g_gx.gl_textures[id] != tex ||
+            g_gx.tex_obj_w[id] != width ||
+            g_gx.tex_obj_h[id] != height ||
+            g_gx.tex_obj_fmt[id] != (int)format;
+        int params_changed = cached->wrap_s != wrap_s || cached->wrap_t != wrap_t ||
+            cached->min_filter != filter_mode;
 
         /* update wrap/filter if changed */
+        if (params_changed) {
+            glBindTexture(GL_TEXTURE_2D, tex);
+            pc_gx_texture_bind_cache_invalidate();
+        }
         if (cached->wrap_s != wrap_s || cached->wrap_t != wrap_t) {
             GLenum gl_ws = (wrap_s == 2) ? GL_MIRRORED_REPEAT :
                            (wrap_s == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
@@ -676,7 +684,7 @@ void GXLoadTexObj(void* obj, u32 id) {
         g_gx.tex_obj_w[id] = width;
         g_gx.tex_obj_h[id] = height;
         g_gx.tex_obj_fmt[id] = (int)format;
-        DIRTY(PC_GX_DIRTY_TEXTURES);
+        if (slot_changed || params_changed) DIRTY(PC_GX_DIRTY_TEXTURES);
         return;
     }
 
