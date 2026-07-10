@@ -877,7 +877,9 @@ int mCD_InitGameStart_bg(int player_no, int card_private_idx, int start_cond, s3
                 mPr_LoadPak_and_SetPrivateInfo2(foreigner, (u8)player_no);
                 mHm_SetNowHome();
 
-                if (Now_Private != NULL) {
+                /* Cond 4 fires on both train rides; write card A only after
+                 * a real home landing (merge left player_no in a home slot). */
+                if (Common_Get(player_no) != mPr_FOREIGNER && Now_Private != NULL) {
                     u16 copy_protect = pc_get_land_copy_protect();
                     pc_set_reset_code(Now_Private);
                     Common_Set(copy_protect, copy_protect);
