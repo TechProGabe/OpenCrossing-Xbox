@@ -31,7 +31,7 @@ ACTOR_PROFILE Arrange_Room_Profile = {
 };
 
 static void* aAR_SecureDmaRam(GAME* game, size_t size) { 
-    zelda_malloc_align(size, 0x20); 
+    return zelda_malloc_align(size, 0x20); 
 }
 
 static void aAR_SetClip(ACTOR* actor, int flag) {
@@ -172,7 +172,7 @@ static void Arrange_Room_Actor_draw(ACTOR* actor, GAME* game) {
     aAR_DrawWall(&arrange_room->actor_class, &play->game);
 }
 
-static void Arrange_Room_Actor_move() {
+static void Arrange_Room_Actor_move(ACTOR* actor, GAME* game) {
 
 }
 
