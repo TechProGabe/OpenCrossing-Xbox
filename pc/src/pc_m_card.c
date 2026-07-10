@@ -885,6 +885,8 @@ int mCD_InitGameStart_bg(int player_no, int card_private_idx, int start_cond, s3
                     Save_Set(travel_hard_time, lbRTC_HardTime());
                     if (!pc_save_write_gci()) {
                         OSReport("[PC] InitGameStart: return-home persist failed\n");
+                        if (mounted_chan) *mounted_chan = mCD_SLOT_A;
+                        return mCD_TRANS_ERR_IOERROR;
                     }
                 }
                 OSReport("[PC] InitGameStart: OUTGOING_FOREIGNER — landed player_no=%d\n",
