@@ -1358,15 +1358,15 @@ static void Camera2_main_Normal_SetEndCenterPos_fromPlayer(GAME_PLAY* play, xyz_
         } else if (end_center_pos->x < border_x1) {
             end_center_pos->x = border_x1;
         }
+    }
 
-        if (!mPlib_IsWadeDisabled()) {
-            if (mFI_GetBlockHeight() < scale * 250.0f || border_z1 < border_z0) {
-                end_center_pos->z = (border_z0 + border_z1) * 0.5f;
-            } else if (end_center_pos->z < border_z0) {
-                end_center_pos->z = border_z0;
-            } else if (end_center_pos->z > border_z1) {
-                end_center_pos->z = border_z1;
-            }
+    if (!mPlib_IsWadeDisabled()) {
+        if (mFI_GetBlockHeight() < scale * 250.0f || border_z1 < border_z0) {
+            end_center_pos->z = (border_z0 + border_z1) * 0.5f;
+        } else if (end_center_pos->z < border_z0) {
+            end_center_pos->z = border_z0;
+        } else if (end_center_pos->z > border_z1) {
+            end_center_pos->z = border_z1;
         }
     }
 

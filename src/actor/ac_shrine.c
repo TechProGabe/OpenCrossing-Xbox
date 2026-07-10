@@ -105,11 +105,8 @@ static void aSHR_actor_ct(ACTOR* actorx, GAME* game) {
   actorx->world.position.z = actorx->world.position.z - 19.0f;
   actorx->talk_distance = 100.0f;
   aSHR_setup_action(shrine, play, aSHR_ACTION_WAIT);
-  if (!g_mPlib_wade_disabled) {
-    /* original cull override; borderless uses the wide Actor_ct default */
-    actorx->cull_radius = 900.0f;
-    actorx->cull_height = 1400.0f;
-  }
+  actorx->cull_radius = 900.0f;
+  actorx->cull_height = 1400.0f;
   shrine->structure_class.arg0_f = aSHR_ctrl_light() ? 1.0f : 0.0f;
 }
 

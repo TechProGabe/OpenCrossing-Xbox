@@ -88,11 +88,8 @@ static void aMsm_actor_ct(ACTOR* actor, GAME* game) {
 
     aMsm_set_bgOffset(museum);
 
-    if (!g_mPlib_wade_disabled) {
-        /* original cull override; borderless uses the wide Actor_ct default */
-        actor->cull_width = 1000.0f;
-        actor->cull_radius = 1600.0f;
-    }
+    actor->cull_width = 1000.0f;
+    actor->cull_radius = 1600.0f;
 
     museum->arg0_f = aMsm_ctrl_light() ? 1.0f : 0.0f;
 }
