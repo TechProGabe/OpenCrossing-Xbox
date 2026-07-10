@@ -926,9 +926,8 @@ void pc_gx_flush_vertices(void) {
     PCGXShaderVariant* var = pc_gx_tev_get_variant();
     GLuint shader = var->prog;
     int prim = g_gx.current_primitive;
-    /* Strips/fans would join across batches; SUBTRACT keeps draw-then-reset */
-    int deferrable = (prim == GX_TRIANGLES || prim == GX_QUADS) &&
-                     g_gx.blend_mode != GX_BM_SUBTRACT;
+    /* Strips/fans would join across batches */
+    int deferrable = (prim == GX_TRIANGLES || prim == GX_QUADS);
 
     /* Same GL state as the deferred run: absorb the verts, no GL work */
     if (g_gx.pending_verts > 0 && g_gx.dirty == 0 && deferrable &&
@@ -1272,6 +1271,10 @@ void pc_gx_flush_vertices(void) {
 
     if (g_gx.dirty & PC_GX_DIRTY_BLEND) {
         pc_profiler_add_count_state_change();
+        /* Equation is state-driven: no hidden post-draw reset, so an
+         * early-out on unchanged blend state stays correct */
+        glBlendEquation(g_gx.blend_mode == GX_BM_SUBTRACT ? GL_FUNC_REVERSE_SUBTRACT
+                                                          : GL_FUNC_ADD);
         switch (g_gx.blend_mode) {
             case GX_BM_NONE:
                 glDisable(GL_BLEND);
@@ -1315,7 +1318,6 @@ void pc_gx_flush_vertices(void) {
                 break;
             case GX_BM_SUBTRACT:
                 glEnable(GL_BLEND);
-                glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
                 glBlendFunc(GL_ONE, GL_ONE);
                 break;
         }
@@ -1348,9 +1350,6 @@ void pc_gx_flush_vertices(void) {
     }
     pc_gx_draw_call_count++;
     pc_profiler_add_time(PC_PROF_TIMER_DRAW_SUBMIT, draw_start);
-
-    if (g_gx.blend_mode == GX_BM_SUBTRACT)
-        glBlendEquation(GL_FUNC_ADD);
 
     g_gx.current_vertex_idx = 0;
     pc_profiler_add_time(PC_PROF_TIMER_GX_FLUSH, flush_start);
