@@ -157,6 +157,16 @@ static void eHanabiSet_mv(eEC_Effect_c* effect, GAME* game) {
             mFI_CheckBlockKind_OR(bx, bz, mRF_BLOCKKIND_SLOPE | mRF_BLOCKKIND_CLIFF)) {
             effect_id = eEC_EFFECT_HANABI_DUMMY;
         }
+#ifdef TARGET_PC
+        {
+            extern int g_pc_verbose;
+            if (g_pc_verbose) {
+                printf("[HANABI] set mv: burst id=%d dummy=%d pos=(%.1f, %.1f, %.1f) t=%.1f\n", effect_id,
+                       effect_id == eEC_EFFECT_HANABI_DUMMY, effect_position.x, effect_position.y, effect_position.z,
+                       t);
+            }
+        }
+#endif
         eEC_CLIP->effect_make_proc(effect_id, effect_position, effect->prio, 0, game,
                                    (mActor_name_t)effect->item_name, arg, 0);
         next++;

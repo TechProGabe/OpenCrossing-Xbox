@@ -1849,6 +1849,12 @@ static void make_effect(int type) {
     if (mFI_GET_TYPE(mFI_GetFieldId()) == mFI_FIELDTYPE2_FG) {
         eEC_CLIP->effect_make_proc(type, playerx->world.position, 3, 0, gamePT, RSV_NO, 0, 0);
     }
+#ifdef TARGET_PC
+    else {
+        extern int g_pc_verbose;
+        if (g_pc_verbose) printf("[EVENT] make_effect(%d) skipped: not in FG field\n", type);
+    }
+#endif
 }
 
 static void delete_effect(int type) {
@@ -2894,6 +2900,15 @@ static int countdown_in(EVENT_MANAGER_ACTOR* evmgr, aEvMgr_event_ctrl_c* ctrl) {
 static int firework_start(EVENT_MANAGER_ACTOR* evmgr, aEvMgr_event_ctrl_c* ctrl) {
     int ret = 2;
 
+#ifdef TARGET_PC
+    {
+        extern int g_pc_verbose;
+        if (g_pc_verbose) {
+            printf("[EVENT] firework_start: pool_block_exists=%d keep=%d pool_blk=(%d, %d)\n",
+                   evmgr->pool_block_exists, mEv_check_keep(ctrl->type), evmgr->pool_block.x, evmgr->pool_block.z);
+        }
+    }
+#endif
     if (evmgr->pool_block_exists == FALSE) {
         mEv_clear_status(ctrl->type, mEv_STATUS_ACTIVE);
         mEv_set_status(ctrl->type, mEv_STATUS_ERROR);

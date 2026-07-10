@@ -650,6 +650,13 @@ static ACTOR* aNPC_get_actor_area_proc(size_t size, const char* actor_name, int 
     int i;
 
     if (size > aNPC_ACTOR_CLASS_SLOT_SIZE) {
+#ifdef TARGET_PC
+        extern int g_pc_verbose;
+        if (g_pc_verbose) {
+            printf("[NPC] actor slot REJECTED: size=0x%x > slot=0x%x (%s:%d)\n", (unsigned)size,
+                   aNPC_ACTOR_CLASS_SLOT_SIZE, actor_name, line);
+        }
+#endif
         return NULL;
     }
 
