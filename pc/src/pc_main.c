@@ -27,6 +27,9 @@ int           g_pc_verbose = 0;
 int           g_pc_time_override = -1; /* -1=system clock, 0-23=override hour */
 int           g_pc_min_override = -1; /* -1=system clock, 0-59=override minute */
 int           g_pc_sec_override = -1; /* -1=system clock, 0-59=override second */
+int           g_pc_date_month = -1; /* -1=system clock, 1-12=override month */
+int           g_pc_date_day = -1; /* -1=system clock, 1-31=override day */
+int           g_pc_date_year = -1; /* -1=system clock, else override year */
 int           g_pc_weather_override = -1;
 int           g_pc_weather_intensity_override = mEnv_WEATHER_INTENSITY_HEAVY;
 int           g_pc_window_w = PC_SCREEN_WIDTH;
@@ -264,6 +267,7 @@ int main(int argc, char* argv[]) {
             printf("  --profile [N]       Print frame profiler summary every N frames (default 120)\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
+            printf("  --date M/D[/Y]      Override in-game date (e.g. 7/4, 12/24/2026)\n");
             printf("  --rain [intensity]  Force rainy weather; intensity is light, normal, or heavy\n");
             printf("  --uber-shader       Disable shader specialization (single uber shader)\n");
             printf("  --help, -h          Show this help message\n");
@@ -304,6 +308,15 @@ int main(int argc, char* argv[]) {
             if (h >= 0 && h <= 23) g_pc_time_override = h;
             if (m >= 0 && m <= 59) g_pc_min_override = m;
             if (s >= 0 && s <= 59) g_pc_sec_override = s;
+            i++;
+        } else if (strcmp(argv[i], "--date") == 0 && i + 1 < argc) {
+            int mo = -1, d = -1, y = -1;
+            sscanf(argv[i + 1], "%d/%d/%d", &mo, &d, &y);
+            if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+                g_pc_date_month = mo;
+                g_pc_date_day = d;
+                if (y >= 2000) g_pc_date_year = y;
+            }
             i++;
         } else if (strcmp(argv[i], "--rain") == 0) {
             g_pc_weather_override = mEnv_WEATHER_RAIN;

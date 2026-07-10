@@ -259,15 +259,22 @@ void OSInit(void) {
         time_t utc_as_local = mktime(&utc_tm);
         s64 tz_offset_secs = (s64)difftime(unix_now, utc_as_local);
 
-        if (g_pc_time_override >= 0) {
-            /* --time H[:M[:S]] override */
+        if (g_pc_time_override >= 0 || g_pc_date_month > 0) {
+            /* --time H[:M[:S]] / --date M/D[/Y] overrides */
             struct tm* lt = localtime(&unix_now);
             if (lt) {
-                unix_now += (g_pc_time_override - lt->tm_hour) * 3600;
-                if (g_pc_min_override >= 0)
-                    unix_now += (g_pc_min_override - lt->tm_min) * 60;
-                if (g_pc_sec_override >= 0)
-                    unix_now += (g_pc_sec_override - lt->tm_sec);
+                struct tm ovr = *lt;
+                if (g_pc_date_month > 0) {
+                    ovr.tm_mon = g_pc_date_month - 1;
+                    ovr.tm_mday = g_pc_date_day;
+                    if (g_pc_date_year > 0) ovr.tm_year = g_pc_date_year - 1900;
+                }
+                if (g_pc_time_override >= 0) ovr.tm_hour = g_pc_time_override;
+                if (g_pc_min_override >= 0) ovr.tm_min = g_pc_min_override;
+                if (g_pc_sec_override >= 0) ovr.tm_sec = g_pc_sec_override;
+                ovr.tm_isdst = -1;
+                time_t ovr_time = mktime(&ovr);
+                if (ovr_time != (time_t)-1) unix_now = ovr_time;
             }
         }
 
