@@ -757,124 +757,121 @@ void GXTexCoord1x16(u16 index) {
 void GXTexCoord1x8(u8 index) { GXTexCoord1x16(index); }
 
 /* --- Uniform Location Cache --- */
-static void pc_gx_cache_uniform_locations(GLuint shader) {
+void pc_gx_cache_uniform_locations(GLuint shader, PCGXUloc* u) {
     char name[48];
     int i;
     #define UL(n) pc_gx_get_uniform_location_profiled(shader, n)
 
-    g_gx.uloc.projection = UL("u_projection");
-    g_gx.uloc.modelview  = UL("u_modelview");
-    g_gx.uloc.normal_mtx = UL("u_normal_mtx");
+    u->projection = UL("u_projection");
+    u->modelview  = UL("u_modelview");
+    u->normal_mtx = UL("u_normal_mtx");
 
-    g_gx.uloc.tev_prev = UL("u_tev_prev");
-    g_gx.uloc.tev_reg0 = UL("u_tev_reg0");
-    g_gx.uloc.tev_reg1 = UL("u_tev_reg1");
-    g_gx.uloc.tev_reg2 = UL("u_tev_reg2");
+    u->tev_prev = UL("u_tev_prev");
+    u->tev_reg0 = UL("u_tev_reg0");
+    u->tev_reg1 = UL("u_tev_reg1");
+    u->tev_reg2 = UL("u_tev_reg2");
 
-    g_gx.uloc.num_tev_stages = UL("u_num_tev_stages");
+    u->num_tev_stages = UL("u_num_tev_stages");
     for (i = 0; i < PC_GX_MAX_TEV_STAGES; i++) {
         snprintf(name, sizeof(name), "u_tev_color_in[%d]", i);
-        g_gx.uloc.tev_color_in[i] = UL(name);
+        u->tev_color_in[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_alpha_in[%d]", i);
-        g_gx.uloc.tev_alpha_in[i] = UL(name);
+        u->tev_alpha_in[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_color_op[%d]", i);
-        g_gx.uloc.tev_color_op[i] = UL(name);
+        u->tev_color_op[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_alpha_op[%d]", i);
-        g_gx.uloc.tev_alpha_op[i] = UL(name);
+        u->tev_alpha_op[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_tc_src[%d]", i);
-        g_gx.uloc.tev_tc_src[i] = UL(name);
+        u->tev_tc_src[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_ind_cfg[%d]", i);
-        g_gx.uloc.tev_ind_cfg[i] = UL(name);
+        u->tev_ind_cfg[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_ind_wrap[%d]", i);
-        g_gx.uloc.tev_ind_wrap[i] = UL(name);
+        u->tev_ind_wrap[i] = UL(name);
     }
 
-    g_gx.uloc.kcolor   = UL("u_kcolor");
-    g_gx.uloc.tev_ksel = UL("u_tev_ksel");
+    u->kcolor   = UL("u_kcolor");
+    u->tev_ksel = UL("u_tev_ksel");
 
-    g_gx.uloc.alpha_comp0 = UL("u_alpha_cmp");
-    g_gx.uloc.alpha_ref0  = -1;
-    g_gx.uloc.alpha_op    = -1;
-    g_gx.uloc.alpha_comp1 = -1;
-    g_gx.uloc.alpha_ref1  = UL("u_alpha_ref1");
+    u->alpha_comp0 = UL("u_alpha_cmp");
+    u->alpha_ref0  = -1;
+    u->alpha_op    = -1;
+    u->alpha_comp1 = -1;
+    u->alpha_ref1  = UL("u_alpha_ref1");
 
-    g_gx.uloc.lighting_enabled = UL("u_lighting_cfg0");
-    g_gx.uloc.mat_color  = UL("u_chan_color[0]");
-    g_gx.uloc.amb_color  = -1;
-    g_gx.uloc.chan_mat_src = -1;
-    g_gx.uloc.chan_amb_src = -1;
-    g_gx.uloc.num_chans  = -1;
-    g_gx.uloc.alpha_lighting_enabled = UL("u_lighting_cfg1");
-    g_gx.uloc.alpha_mat_src = -1;
+    u->lighting_enabled = UL("u_lighting_cfg0");
+    u->mat_color  = UL("u_chan_color[0]");
+    u->amb_color  = -1;
+    u->chan_mat_src = -1;
+    u->chan_amb_src = -1;
+    u->num_chans  = -1;
+    u->alpha_lighting_enabled = UL("u_lighting_cfg1");
+    u->alpha_mat_src = -1;
 
-    g_gx.uloc.light_mask = -1;
+    u->light_mask = -1;
     for (i = 0; i < 8; i++) {
         snprintf(name, sizeof(name), "u_light_pos[%d]", i);
-        g_gx.uloc.light_pos[i] = UL(name);
+        u->light_pos[i] = UL(name);
         snprintf(name, sizeof(name), "u_light_color[%d]", i);
-        g_gx.uloc.light_color[i] = UL(name);
+        u->light_color[i] = UL(name);
     }
 
-    g_gx.uloc.texmtx_enable[0] = UL("u_texmtx_enable[0]");
-    g_gx.uloc.texmtx_row0[0]  = UL("u_texmtx_row0[0]");
-    g_gx.uloc.texmtx_row1[0]  = UL("u_texmtx_row1[0]");
-    g_gx.uloc.texgen_src[0]   = UL("u_texgen_src[0]");
-    g_gx.uloc.texmtx_enable[1] = -1;
-    g_gx.uloc.texmtx_row0[1]  = -1;
-    g_gx.uloc.texmtx_row1[1]  = -1;
-    g_gx.uloc.texgen_src[1]   = -1;
+    u->texmtx_enable[0] = UL("u_texmtx_enable[0]");
+    u->texmtx_row0[0]  = UL("u_texmtx_row0[0]");
+    u->texmtx_row1[0]  = UL("u_texmtx_row1[0]");
+    u->texgen_src[0]   = UL("u_texgen_src[0]");
+    u->texmtx_enable[1] = -1;
+    u->texmtx_row0[1]  = -1;
+    u->texmtx_row1[1]  = -1;
+    u->texgen_src[1]   = -1;
 
-    g_gx.uloc.use_texture0 = UL("u_use_texture[0]");
-    g_gx.uloc.use_texture1 = -1;
-    g_gx.uloc.use_texture2 = -1;
-    g_gx.uloc.texture0 = UL("u_texture0");
-    g_gx.uloc.texture1 = UL("u_texture1");
-    g_gx.uloc.texture2 = UL("u_texture2");
+    u->use_texture0 = UL("u_use_texture[0]");
+    u->use_texture1 = -1;
+    u->use_texture2 = -1;
+    u->texture0 = UL("u_texture0");
+    u->texture1 = UL("u_texture1");
+    u->texture2 = UL("u_texture2");
 
-    g_gx.uloc.num_ind_stages = UL("u_num_ind_stages");
+    u->num_ind_stages = UL("u_num_ind_stages");
     for (i = 0; i < 4; i++) {
         snprintf(name, sizeof(name), "u_ind_tex%d", i);
-        g_gx.uloc.ind_tex[i] = UL(name);
+        u->ind_tex[i] = UL(name);
         snprintf(name, sizeof(name), "u_ind_scale[%d]", i);
-        g_gx.uloc.ind_scale[i] = UL(name);
+        u->ind_scale[i] = UL(name);
     }
     for (i = 0; i < PC_GX_MAX_TEV_STAGES; i++) {
         snprintf(name, sizeof(name), "u_ind_mtx_r0[%d]", i);
-        g_gx.uloc.ind_mtx_r0[i] = UL(name);
+        u->ind_mtx_r0[i] = UL(name);
         snprintf(name, sizeof(name), "u_ind_mtx_r1[%d]", i);
-        g_gx.uloc.ind_mtx_r1[i] = UL(name);
+        u->ind_mtx_r1[i] = UL(name);
     }
 
-    g_gx.uloc.fog_type  = UL("u_fog_params");
-    g_gx.uloc.fog_start = -1;
-    g_gx.uloc.fog_end   = -1;
-    g_gx.uloc.fog_color = UL("u_fog_color");
+    u->fog_type   = UL("u_fog_params");
+    u->fog_enable = UL("u_fog_enable");
+    u->fog_start  = -1;
+    u->fog_end    = -1;
+    u->fog_color  = UL("u_fog_color");
 
     /* Per-stage bias/scale/clamp/output */
     for (i = 0; i < PC_GX_MAX_TEV_STAGES; i++) {
         snprintf(name, sizeof(name), "u_tev_bsc[%d]", i);
-        g_gx.uloc.tev_bsc[i] = UL(name);
+        u->tev_bsc[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_out[%d]", i);
-        g_gx.uloc.tev_out[i] = UL(name);
+        u->tev_out[i] = UL(name);
         snprintf(name, sizeof(name), "u_tev_swap[%d]", i);
-        g_gx.uloc.tev_swap[i] = UL(name);
+        u->tev_swap[i] = UL(name);
     }
-    g_gx.uloc.swap_table = UL("u_swap_table");
+    u->swap_table = UL("u_swap_table");
 
     #undef UL
 }
 
-static void pc_gx_upload_static_sampler_uniforms(void) {
-    GLint loc;
-
-    loc = g_gx.uloc.texture0; if (loc >= 0) glUniform1i(loc, 0);
-    loc = g_gx.uloc.texture1; if (loc >= 0) glUniform1i(loc, 1);
-    loc = g_gx.uloc.texture2; if (loc >= 0) glUniform1i(loc, 2);
-
-    for (int i = 0; i < 4; i++) {
-        loc = g_gx.uloc.ind_tex[i];
-        if (loc >= 0) glUniform1i(loc, 3 + i);
+/* Uniform groups this program hasn't seen the latest values of */
+static unsigned int pc_gx_variant_stale_groups(const PCGXShaderVariant* v) {
+    unsigned int stale = 0;
+    for (int b = 0; (1u << b) <= PC_GX_DIRTY_UNIFORM_GROUPS; b++) {
+        if (v->uploaded_seq[b] != g_gx.group_seq[b]) stale |= (1u << b);
     }
+    return stale;
 }
 
 /* --- Vertex Flush --- */
@@ -924,7 +921,8 @@ void pc_gx_flush_vertices(void) {
     Uint64 flush_start = pc_profiler_begin_timer();
     pc_profiler_add_count_flush();
 
-    GLuint shader = pc_gx_tev_get_shader(&g_gx);
+    PCGXShaderVariant* var = pc_gx_tev_get_variant();
+    GLuint shader = var->prog;
     int prim = g_gx.current_primitive;
     /* Strips/fans would join across batches; SUBTRACT keeps draw-then-reset */
     int deferrable = (prim == GX_TRIANGLES || prim == GX_QUADS) &&
@@ -948,9 +946,10 @@ void pc_gx_flush_vertices(void) {
 #if PC_GX_ENABLE_UNIFORM_VALUE_CACHE
         pc_gx_uniform_cache_reset();
 #endif
-        pc_gx_cache_uniform_locations(shader);
-        pc_gx_upload_static_sampler_uniforms();
-        g_gx.dirty = PC_GX_DIRTY_ALL;
+        g_gx.uloc = var->uloc;
+        /* Uniform values persist per program: re-upload only groups that
+         * changed while another program was bound */
+        g_gx.dirty |= pc_gx_variant_stale_groups(var);
     }
 
     glBindVertexArray(g_gx.vao);
@@ -1196,12 +1195,21 @@ void pc_gx_flush_vertices(void) {
             GLfloat fog_params[4] = {
                 (GLfloat)g_gx.fog_type, g_gx.fog_start, g_gx.fog_end, 0.0f
             };
-            loc = UL(fog_type);  if (loc >= 0) glUniform4fv(loc, 1, fog_params);
+            loc = UL(fog_type);   if (loc >= 0) glUniform4fv(loc, 1, fog_params);
+            loc = UL(fog_enable); if (loc >= 0) glUniform1i(loc, g_gx.fog_type != 0);
             loc = UL(fog_color);  if (loc >= 0) glUniform4fv(loc, 1, g_gx.fog_color);
         }
 
         #undef UL
         pc_profiler_add_time(PC_PROF_TIMER_UNIFORM_UPLOAD, uniform_start);
+
+        /* Record what this program has now seen for stale tracking */
+        {
+            unsigned int groups = dirty & PC_GX_DIRTY_UNIFORM_GROUPS;
+            for (int b = 0; groups; b++, groups >>= 1) {
+                if (groups & 1) var->uploaded_seq[b] = g_gx.group_seq[b];
+            }
+        }
     }
 
     GLenum gl_prim;

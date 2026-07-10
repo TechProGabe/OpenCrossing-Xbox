@@ -37,8 +37,11 @@ extern "C" {
 #define PC_GX_DIRTY_CULL        (1u << 14)
 #define PC_GX_DIRTY_BLEND       (1u << 15)
 #define PC_GX_DIRTY_ALL         0xFFFFu
-#define PC_GX_DIRTY_SET(flag) (g_gx.dirty |= (flag))
-#define DIRTY(flag) PC_GX_DIRTY_SET(flag)
+/* Groups that map to per-program uniforms (bits 0-11). DEPTH..BLEND are
+ * global GL state and need no per-program stale tracking. */
+#define PC_GX_DIRTY_UNIFORM_GROUPS 0x0FFFu
+#define PC_GX_NUM_DIRTY_GROUPS 16
+/* DIRTY() is defined below g_gx - it also bumps per-group sequence counters */
 
 /* --- Vertex buffer --- */
 #define PC_GX_MAX_VERTS       65536
@@ -83,6 +86,33 @@ typedef struct {
 typedef struct {
     int r, g, b, a;  /* channel indices: 0=R, 1=G, 2=B, 3=A */
 } PCGXTevSwapTable;
+
+/* Uniform locations for one GL program */
+typedef struct {
+    GLint projection, modelview, normal_mtx;
+    GLint tev_prev, tev_reg0, tev_reg1, tev_reg2;
+    GLint num_tev_stages;
+    GLint tev_color_in[PC_GX_MAX_TEV_STAGES], tev_alpha_in[PC_GX_MAX_TEV_STAGES];
+    GLint tev_color_op[PC_GX_MAX_TEV_STAGES], tev_alpha_op[PC_GX_MAX_TEV_STAGES];
+    GLint kcolor, tev_ksel;
+    GLint alpha_comp0, alpha_ref0, alpha_op, alpha_comp1, alpha_ref1;
+    GLint lighting_enabled, mat_color, amb_color;
+    GLint chan_mat_src, chan_amb_src, num_chans;
+    GLint alpha_lighting_enabled, alpha_mat_src;
+    GLint light_mask, light_pos[8], light_color[8];
+    GLint texmtx_enable[2], texmtx_row0[2], texmtx_row1[2], texgen_src[2];
+    GLint use_texture0, use_texture1, use_texture2;
+    GLint texture0, texture1, texture2;
+    GLint tev_tc_src[PC_GX_MAX_TEV_STAGES];
+    GLint num_ind_stages;
+    GLint ind_tex[4], ind_scale[4];
+    GLint ind_mtx_r0[PC_GX_MAX_TEV_STAGES], ind_mtx_r1[PC_GX_MAX_TEV_STAGES];
+    GLint tev_ind_cfg[PC_GX_MAX_TEV_STAGES], tev_ind_wrap[PC_GX_MAX_TEV_STAGES];
+    GLint fog_type, fog_enable, fog_start, fog_end, fog_color;
+    GLint tev_bsc[PC_GX_MAX_TEV_STAGES], tev_out[PC_GX_MAX_TEV_STAGES];
+    GLint swap_table;
+    GLint tev_swap[PC_GX_MAX_TEV_STAGES];
+} PCGXUloc;
 
 typedef struct {
     /* Primitive assembly */
@@ -203,32 +233,8 @@ typedef struct {
     GLuint ebo;
     GLuint current_shader;
 
-    /* Uniform locations (looked up once per shader change) */
-    struct {
-        GLint projection, modelview, normal_mtx;
-        GLint tev_prev, tev_reg0, tev_reg1, tev_reg2;
-        GLint num_tev_stages;
-        GLint tev_color_in[PC_GX_MAX_TEV_STAGES], tev_alpha_in[PC_GX_MAX_TEV_STAGES];
-        GLint tev_color_op[PC_GX_MAX_TEV_STAGES], tev_alpha_op[PC_GX_MAX_TEV_STAGES];
-        GLint kcolor, tev_ksel;
-        GLint alpha_comp0, alpha_ref0, alpha_op, alpha_comp1, alpha_ref1;
-        GLint lighting_enabled, mat_color, amb_color;
-        GLint chan_mat_src, chan_amb_src, num_chans;
-        GLint alpha_lighting_enabled, alpha_mat_src;
-        GLint light_mask, light_pos[8], light_color[8];
-        GLint texmtx_enable[2], texmtx_row0[2], texmtx_row1[2], texgen_src[2];
-        GLint use_texture0, use_texture1, use_texture2;
-        GLint texture0, texture1, texture2;
-        GLint tev_tc_src[PC_GX_MAX_TEV_STAGES];
-        GLint num_ind_stages;
-        GLint ind_tex[4], ind_scale[4];
-        GLint ind_mtx_r0[PC_GX_MAX_TEV_STAGES], ind_mtx_r1[PC_GX_MAX_TEV_STAGES];
-        GLint tev_ind_cfg[PC_GX_MAX_TEV_STAGES], tev_ind_wrap[PC_GX_MAX_TEV_STAGES];
-        GLint fog_type, fog_start, fog_end, fog_color;
-        GLint tev_bsc[PC_GX_MAX_TEV_STAGES], tev_out[PC_GX_MAX_TEV_STAGES];
-        GLint swap_table;
-        GLint tev_swap[PC_GX_MAX_TEV_STAGES];
-    } uloc;
+    /* Uniform locations (looked up once per program at link time) */
+    PCGXUloc uloc;
 
     float clear_color[4];
     float clear_depth;
@@ -247,14 +253,61 @@ typedef struct {
 
     unsigned int dirty;
 
+    /* Per-group dirty sequence: bumped by DIRTY(), used to detect uniforms
+     * that went stale in a program while another program was bound */
+    unsigned int group_seq[PC_GX_NUM_DIRTY_GROUPS];
+    unsigned int seq_counter;
+
 } PCGXState;
 
 extern PCGXState g_gx;
 
-typedef struct PCGXShaderCacheEntry {
-    uint64_t key;
-    GLuint program;
-} PCGXShaderCacheEntry;
+static inline void pc_gx_dirty_set(unsigned int flags) {
+    unsigned int f = flags & PC_GX_DIRTY_UNIFORM_GROUPS;
+    g_gx.dirty |= flags;
+    if (f) {
+        unsigned int seq = ++g_gx.seq_counter;
+        do {
+            g_gx.group_seq[__builtin_ctz(f)] = seq;
+            f &= f - 1;
+        } while (f);
+    }
+}
+#define PC_GX_DIRTY_SET(flag) pc_gx_dirty_set(flag)
+#define DIRTY(flag) pc_gx_dirty_set(flag)
+
+/* Shader specialization */
+
+/* Config-shaped GX state folded into compile-time constants. */
+typedef struct {
+    u8 num_stages;
+    u8 num_ind;
+    u8 fog_enable;
+    u8 alpha[5];      /* comp0, ref0, op, comp1, ref1 */
+    u8 light[7];      /* en0, mat_src0, amb_src0, num_chans, en1, mat_src1, mask */
+    u8 swap_tbl[16];  /* 4 tables x rgba channel indices */
+    struct {
+        u8 cin[4], ain[4];
+        u8 cop, aop;
+        u8 bsc[4];    /* color bias/scale, alpha bias/scale */
+        u8 outc[4];   /* color clamp, alpha clamp, color out, alpha out */
+        u8 swap[2];   /* ras, tex */
+        u8 ksel[2];
+        u8 tc_src;
+        u8 use_tex;
+        u8 ind[7];    /* stage, mtx, bias, alpha, wrap_s, wrap_t, add_prev */
+    } st[PC_GX_MAX_TEV_STAGES];
+} PCGXShaderKey;
+
+typedef struct {
+    int used;
+    PCGXShaderKey key;
+    GLuint prog;
+    PCGXUloc uloc;
+    /* group_seq value at last upload of each group to this program;
+     * 0xFFFFFFFF = never uploaded */
+    unsigned int uploaded_seq[PC_GX_NUM_DIRTY_GROUPS];
+} PCGXShaderVariant;
 
 /* --- Internal functions --- */
 void pc_gx_init(void);
@@ -265,9 +318,10 @@ void pc_gx_draw_pending(void);
 void pc_gx_texture_bind_cache_invalidate(void);
 
 /* TEV shader */
-GLuint pc_gx_tev_get_shader(PCGXState* state);
+PCGXShaderVariant* pc_gx_tev_get_variant(void);
 void   pc_gx_tev_init(void);
 void   pc_gx_tev_shutdown(void);
+void   pc_gx_cache_uniform_locations(GLuint shader, PCGXUloc* out);
 
 /* Texture cache */
 GLuint pc_gx_texture_upload(void* data, int width, int height, int format, int ci_format,

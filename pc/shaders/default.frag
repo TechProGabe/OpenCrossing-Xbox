@@ -5,7 +5,10 @@ in vec2 v_texcoord1;
 in vec3 v_normal;
 in float v_fog_z;
 
-uniform vec4 u_fog_params;  /* x=type, y=start, z=end */
+/* Fog on/off is separate from the range params so shader specialization can
+   fold the branch while start/end stay dynamic */
+uniform int u_fog_enable;
+uniform vec4 u_fog_params;  /* y=start, z=end (x unused) */
 uniform vec4 u_fog_color;
 
 /* TEV registers: PREV, REG0, REG1(=PRIM), REG2(=ENV) */
@@ -365,7 +368,7 @@ void main() {
     fragColor = prev;
 
     /* Fog */
-    if (int(u_fog_params.x) != 0) {
+    if (u_fog_enable != 0) {
         float fog_denom = max(u_fog_params.z - u_fog_params.y, 1e-6);
         float fog_factor = clamp((v_fog_z - u_fog_params.y) / fog_denom, 0.0, 1.0);
         fragColor.rgb = mix(fragColor.rgb, u_fog_color.rgb, fog_factor);

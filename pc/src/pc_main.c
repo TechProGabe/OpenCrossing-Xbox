@@ -230,6 +230,7 @@ int main(int argc, char* argv[]) {
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
             printf("  --rain [intensity]  Force rainy weather; intensity is light, normal, or heavy\n");
+            printf("  --uber-shader       Disable shader specialization (single uber shader)\n");
             printf("  --help, -h          Show this help message\n");
             return 0;
         } else if (strcmp(argv[i], "--framelimit") == 0) {
@@ -244,6 +245,9 @@ int main(int argc, char* argv[]) {
             }
         } else if (strcmp(argv[i], "--no-framelimit") == 0) {
             g_pc_frame_limit_override = 0;
+        } else if (strcmp(argv[i], "--uber-shader") == 0) {
+            extern int g_pc_uber_shader_only;
+            g_pc_uber_shader_only = 1;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             g_pc_verbose = 1;
         } else if (strcmp(argv[i], "--profile") == 0) {
