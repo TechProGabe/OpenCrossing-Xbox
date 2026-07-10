@@ -95,7 +95,7 @@ typedef struct {
     GLint tev_color_in[PC_GX_MAX_TEV_STAGES], tev_alpha_in[PC_GX_MAX_TEV_STAGES];
     GLint tev_color_op[PC_GX_MAX_TEV_STAGES], tev_alpha_op[PC_GX_MAX_TEV_STAGES];
     GLint kcolor, tev_ksel;
-    GLint alpha_comp0, alpha_ref0, alpha_op, alpha_comp1, alpha_ref1;
+    GLint alpha_ctrl, alpha_refs;
     GLint lighting_enabled, mat_color, amb_color;
     GLint chan_mat_src, chan_amb_src, num_chans;
     GLint alpha_lighting_enabled, alpha_mat_src;
@@ -300,7 +300,7 @@ typedef struct {
     u8 num_stages;
     u8 num_ind;
     u8 fog_enable;
-    u8 alpha[5];      /* comp0, ref0, op, comp1, ref1 */
+    u8 alpha[3];      /* comp0, op, comp1 - refs stay uniforms (runtime values) */
     u8 light[7];      /* en0, mat_src0, amb_src0, num_chans, en1, mat_src1, mask */
     u8 swap_tbl[16];  /* 4 tables x rgba channel indices */
     struct {

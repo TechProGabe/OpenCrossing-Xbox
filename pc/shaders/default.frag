@@ -52,9 +52,10 @@ uniform ivec3 u_tev_ksel[3];   /* x=kcolor_sel, y=kalpha_sel */
 /* Swap tables (channel remapping) */
 uniform ivec4 u_swap_table[4];
 
-/* Alpha compare */
-uniform ivec4 u_alpha_cmp;  /* x=comp0, y=ref0, z=op, w=comp1 */
-uniform int u_alpha_ref1;
+/* Alpha compare: control folds into specialized variants; refs are runtime
+   values and must stay uniforms so they don't fragment the variant cache */
+uniform ivec3 u_alpha_ctrl; /* x=comp0, y=op, z=comp1 */
+uniform ivec2 u_alpha_refs; /* x=ref0, y=ref1 */
 
 /* Indirect textures */
 uniform int u_num_ind_stages;
@@ -350,13 +351,13 @@ void main() {
     }
 
     /* Alpha compare */
-    if (u_alpha_cmp.x != 7 || u_alpha_cmp.w != 7) {
-        float ref0 = float(u_alpha_cmp.y) / 255.0;
-        float ref1 = float(u_alpha_ref1) / 255.0;
-        bool pass0 = alphaTest(u_alpha_cmp.x, prev.a, ref0);
-        bool pass1 = alphaTest(u_alpha_cmp.w, prev.a, ref1);
+    if (u_alpha_ctrl.x != 7 || u_alpha_ctrl.z != 7) {
+        float ref0 = float(u_alpha_refs.x) / 255.0;
+        float ref1 = float(u_alpha_refs.y) / 255.0;
+        bool pass0 = alphaTest(u_alpha_ctrl.x, prev.a, ref0);
+        bool pass1 = alphaTest(u_alpha_ctrl.z, prev.a, ref1);
         bool pass;
-        switch (u_alpha_cmp.z) {
+        switch (u_alpha_ctrl.y) {
             case 0:  pass = pass0 && pass1; break;
             case 1:  pass = pass0 || pass1; break;
             case 2:  pass = pass0 != pass1; break;

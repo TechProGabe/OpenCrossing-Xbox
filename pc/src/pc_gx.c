@@ -794,11 +794,8 @@ void pc_gx_cache_uniform_locations(GLuint shader, PCGXUloc* u) {
     u->kcolor   = UL("u_kcolor");
     u->tev_ksel = UL("u_tev_ksel");
 
-    u->alpha_comp0 = UL("u_alpha_cmp");
-    u->alpha_ref0  = -1;
-    u->alpha_op    = -1;
-    u->alpha_comp1 = -1;
-    u->alpha_ref1  = UL("u_alpha_ref1");
+    u->alpha_ctrl = UL("u_alpha_ctrl");
+    u->alpha_refs = UL("u_alpha_refs");
 
     u->lighting_enabled = UL("u_lighting_cfg0");
     u->mat_color  = UL("u_chan_color[0]");
@@ -1067,9 +1064,10 @@ void pc_gx_flush_vertices(void) {
         }
 
         if (dirty & PC_GX_DIRTY_ALPHA_CMP) {
-            GLint alpha_cmp[4] = { g_gx.alpha_comp0, g_gx.alpha_ref0, g_gx.alpha_op, g_gx.alpha_comp1 };
-            loc = UL(alpha_comp0); if (loc >= 0) glUniform4iv(loc, 1, alpha_cmp);
-            loc = UL(alpha_ref1);  if (loc >= 0) glUniform1i(loc, g_gx.alpha_ref1);
+            GLint ctrl[3] = { g_gx.alpha_comp0, g_gx.alpha_op, g_gx.alpha_comp1 };
+            GLint refs[2] = { g_gx.alpha_ref0, g_gx.alpha_ref1 };
+            loc = UL(alpha_ctrl); if (loc >= 0) glUniform3iv(loc, 1, ctrl);
+            loc = UL(alpha_refs); if (loc >= 0) glUniform2iv(loc, 1, refs);
         }
 
         if (dirty & PC_GX_DIRTY_LIGHTING) {

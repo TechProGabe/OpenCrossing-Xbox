@@ -175,10 +175,8 @@ static void pc_gx_build_shader_key(PCGXShaderKey* k) {
     k->fog_enable = g_gx.fog_type != 0;
 
     k->alpha[0] = (u8)g_gx.alpha_comp0;
-    k->alpha[1] = (u8)g_gx.alpha_ref0;
-    k->alpha[2] = (u8)g_gx.alpha_op;
-    k->alpha[3] = (u8)g_gx.alpha_comp1;
-    k->alpha[4] = (u8)g_gx.alpha_ref1;
+    k->alpha[1] = (u8)g_gx.alpha_op;
+    k->alpha[2] = (u8)g_gx.alpha_comp1;
 
     k->light[0] = (u8)(g_gx.chan_ctrl_enable[0] != 0);
     k->light[1] = (u8)g_gx.chan_ctrl_mat_src[0];
@@ -241,8 +239,8 @@ static const char* const s_folded_uniforms[] = {
     "u_num_tev_stages", "u_tev_color_in", "u_tev_alpha_in", "u_tev_color_op",
     "u_tev_alpha_op", "u_tev_tc_src", "u_tev_bsc", "u_tev_out", "u_tev_swap",
     "u_tev_ksel", "u_tev_ind_cfg", "u_tev_ind_wrap", "u_use_texture",
-    "u_lighting_cfg0", "u_lighting_cfg1", "u_swap_table", "u_alpha_cmp",
-    "u_alpha_ref1", "u_num_ind_stages", "u_fog_enable", NULL
+    "u_lighting_cfg0", "u_lighting_cfg1", "u_swap_table", "u_alpha_ctrl",
+    "u_num_ind_stages", "u_fog_enable", NULL
 };
 
 static int is_ident_char(char c) {
@@ -342,9 +340,8 @@ static int emit_const_block(char* buf, size_t cap, const PCGXShaderKey* k) {
         EMIT("ivec4(%d,%d,%d,%d)%s", k->swap_tbl[t*4+0], k->swap_tbl[t*4+1],
              k->swap_tbl[t*4+2], k->swap_tbl[t*4+3], t < 3 ? "," : ");\n");
 
-    EMIT("const ivec4 u_alpha_cmp = ivec4(%d,%d,%d,%d);\n",
-         k->alpha[0], k->alpha[1], k->alpha[2], k->alpha[3]);
-    EMIT("const int u_alpha_ref1 = %d;\n", k->alpha[4]);
+    EMIT("const ivec3 u_alpha_ctrl = ivec3(%d,%d,%d);\n",
+         k->alpha[0], k->alpha[1], k->alpha[2]);
     EMIT("const int u_num_ind_stages = %d;\n", k->num_ind);
     EMIT("const int u_fog_enable = %d;\n", k->fog_enable);
 
@@ -475,6 +472,7 @@ static int precompile_key(const PCGXShaderKey* key) {
 static int key_is_sane(const PCGXShaderKey* k) {
     if (k->num_stages > PC_GX_MAX_TEV_STAGES || k->num_ind > 4) return 0;
     if (k->fog_enable > 1 || k->light[0] > 1 || k->light[4] > 1) return 0;
+    if (k->alpha[0] > 7 || k->alpha[1] > 3 || k->alpha[2] > 7) return 0;
     for (int i = 0; i < 16; i++) {
         if (k->swap_tbl[i] > 3) return 0;
     }
