@@ -98,6 +98,11 @@ static void aSHOP_actor_ct(ACTOR* actor, GAME* game) {
     actor->world.position.x = actor->world.position.x + -20.0f;
     actor->world.position.z = actor->world.position.z + 20.0f;
     actor->talk_distance = 80.0f;
+    if (!g_mPlib_wade_disabled) {
+        /* original cull override; borderless uses the wide Actor_ct default */
+        actor->cull_width = 550.0f;
+        actor->cull_radius = 550.0f;
+    }
     if (mSP_ShopOpen() != 2) {
         action = aSHOP_ACTION_CLOSE_WAIT;
     }

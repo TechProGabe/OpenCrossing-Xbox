@@ -225,8 +225,10 @@ static void aSNMgr_renewal_player_next_block(SET_NPC_MANAGER_ACTOR* manager) {
 static void aSNMgr_renewal_set_scope(SET_NPC_MANAGER_ACTOR* manager) {
     static int block_wh[] = { mFI_BK_WORLDSIZE_X, mFI_BK_WORLDSIZE_Z };
     static f32 half_block_wh[] = { mFI_BK_WORLDSIZE_HALF_X_F, mFI_BK_WORLDSIZE_HALF_Z_F };
-    static f32 r_add[] = { -mFI_BK_WORLDSIZE_X_F, mFI_BK_WORLDSIZE_Z_F };
+    static f32 r_add_borderless[] = { -mFI_BK_WORLDSIZE_X_F, mFI_BK_WORLDSIZE_Z_F };
+    static f32 r_add_original[] = { -mFI_BK_WORLDSIZE_HALF_X_F, mFI_BK_WORLDSIZE_HALF_Z_F };
     static f32 gr_add[] = { -mFI_UT_WORLDSIZE_X_F, mFI_UT_WORLDSIZE_Z_F };
+    f32* r_add = g_mPlib_wade_disabled ? r_add_borderless : r_add_original;
     int* next_block_p = manager->player_pos.next_block;
     aSNMgr_scope_c* scope_p = &manager->scope;
     aSNMgr_scope_c* guest_scope_p = &manager->guest_scope;
@@ -306,7 +308,9 @@ static int aSNMgr_set_appear_info_regular(SET_NPC_MANAGER_ACTOR* manager, int bx
     int player_bz = manager->player_pos.next_block[1];
     int ret = FALSE;
 
-    if (ABS(bx - player_bx) <= 1 && ABS(bz - player_bz) <= 1) {
+    int appear_range = g_mPlib_wade_disabled ? 1 : 0;
+
+    if (ABS(bx - player_bx) <= appear_range && ABS(bz - player_bz) <= appear_range) {
         mNpcW_info_c* info_p = manager->npc_info.winfo_p[idx];
 
         if (info_p != NULL) {

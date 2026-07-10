@@ -43,6 +43,9 @@ static f32 aBC_pos_table[UT_BASE_NUM] = {
 };
 
 static void aBC_deleteActor_part(GAME_PLAY* play, int part) {
+  mFI_block_tbl_c* last_block_table = &play->last_block_table;
+  s8 last_bx = last_block_table->block_x;
+  s8 last_bz = last_block_table->block_z;
   s8 now_bx = play->block_table.block_x;
   s8 now_bz = play->block_table.block_z;
   s8 check_bx;
@@ -55,15 +58,26 @@ static void aBC_deleteActor_part(GAME_PLAY* play, int part) {
     if (actor == NULL) {
       break;
     }
-    
+
     check_bx = actor->block_x;
     check_bz = actor->block_z;
-    dx = ABS(check_bx - now_bx);
-    dz = ABS(check_bz - now_bz);
 
-    /* Keep actors in adjacent acres alive so borderless camera movement does not cause pop-in. */
-    if (check_bx >= 0 && check_bz >= 0) {
-      if (dx > 1 || dz > 1) {
+    if (g_mPlib_wade_disabled) {
+      dx = ABS(check_bx - now_bx);
+      dz = ABS(check_bz - now_bz);
+
+      /* Keep actors in adjacent acres alive so borderless camera movement does not cause pop-in. */
+      if (check_bx >= 0 && check_bz >= 0) {
+        if (dx > 1 || dz > 1) {
+          Actor_delete(actor);
+        }
+      }
+    } else {
+      /* Delete any actors which aren't in the current block or the last block */
+      if (
+        (check_bx >= 0 && check_bx != last_bx && check_bx != now_bx) &&
+        (check_bz >= 0 && check_bz != last_bz && check_bz != now_bz)
+      ) {
         Actor_delete(actor);
       }
     }
@@ -407,7 +421,7 @@ static void aBC_actor_move(ACTOR* actorx, GAME* game) {
       mFI_SetMoveActorBitData(bx, bz, birth_control->move_actor_bitfield);
     }
 
-    if (aBC_check_update_actors_in_nearby_blocks(birth_control, play)) {
+    if (g_mPlib_wade_disabled && aBC_check_update_actors_in_nearby_blocks(birth_control, play)) {
       aBC_spawn_actors_in_nearby_blocks(birth_control, play);
     }
   }

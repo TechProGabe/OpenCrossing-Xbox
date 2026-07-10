@@ -45,7 +45,7 @@ static const char* DEFAULT_SETTINGS =
     "# Disable Mr. Resetti: 0 = normal, 1 = disable\n"
     "disable_resetti = 0\n"
     "\n"
-    "# Borderless acres: 0 = original acre transitions, 1 = continuous movement/camera\n"
+    "# Borderless acres: 0 = original acre transitions (faster, draws less), 1 = continuous movement/camera\n"
     "borderless_acres = 1\n"
     "\n"
     "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n"
@@ -159,7 +159,7 @@ void pc_settings_save(void) {
     fprintf(f, "# Disable Mr. Resetti: 0 = normal, 1 = disable\n");
     fprintf(f, "disable_resetti = %d\n", g_pc_settings.disable_resetti);
     fprintf(f, "\n");
-    fprintf(f, "# Borderless acres: 0 = original acre transitions, 1 = continuous movement/camera\n");
+    fprintf(f, "# Borderless acres: 0 = original acre transitions (faster, draws less), 1 = continuous movement/camera\n");
     fprintf(f, "borderless_acres = %d\n", g_pc_settings.borderless_acres);
     fprintf(f, "\n");
     fprintf(f, "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n");

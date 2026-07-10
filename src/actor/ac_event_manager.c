@@ -85,6 +85,11 @@ static int aEvMgr_check_in_nearby_area(const BlockOrUnit_c* near_block, const Bl
         return TRUE;
     }
 
+    /* Neighbor blocks only count when borderless acres is enabled. */
+    if (!g_mPlib_wade_disabled) {
+        return FALSE;
+    }
+
     ofs_p = l_near_block_lookup_table[quadrant];
     for (i = 0; i < 3; i++) {
         int bx = center_block->x + ofs_p[i].x;
@@ -4738,7 +4743,7 @@ static void schedule_main(ACTOR* actorx) {
         return;
     }
     if (mFI_GET_TYPE(mFI_GetFieldId()) == mFI_FIELDTYPE2_FG) {
-        if (aEvMgr_get_nearby_area_info(&nearby_center_block, &nearby_quadrant) != FALSE) {
+        if (g_mPlib_wade_disabled && aEvMgr_get_nearby_area_info(&nearby_center_block, &nearby_quadrant) != FALSE) {
             nearby_info_valid = TRUE;
             if (nearby_center_block.x != l_last_nearby_center_block.x ||
                 nearby_center_block.z != l_last_nearby_center_block.z ||

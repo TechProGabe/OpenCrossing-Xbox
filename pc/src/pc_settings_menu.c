@@ -44,7 +44,7 @@ static const Item tab_video_items[] = {
 
 static const Item tab_gameplay_items[] = {
     { "Resetti",          ITEM_RESETTI,          0 },
-    { "Borderless acres", ITEM_BORDERLESS_ACRES, 0 },
+    { "Borderless acres", ITEM_BORDERLESS_ACRES, 1 },
     { "NES aspect",       ITEM_NES_ASPECT,       0 },
 };
 

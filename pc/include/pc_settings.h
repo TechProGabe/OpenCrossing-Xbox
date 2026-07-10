@@ -14,7 +14,7 @@ typedef struct {
     int msaa;             /* 0=off, 2/4/8=samples */
     int preload_textures; /* 0=off (load on demand), 1=on (load all at startup), 2=on + cache file */
     int disable_resetti;  /* 0=normal (Resetti appears on reset), 1=disable reset penalty */
-    int borderless_acres; /* 0=original acre transitions, 1=continuous acre camera/movement */
+    int borderless_acres; /* 0=original acre transitions (faster, draws less), 1=continuous camera/movement */
     int nes_aspect;       /* NES emulator aspect: 0=fullscreen stretch, 1=4:3 pillarbox (default) */
     int master_volume;    /* Applied at the PC audio output, 0-100 (default 100) */
 } PCSettings;

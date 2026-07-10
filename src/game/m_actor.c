@@ -153,9 +153,16 @@ static void Actor_ct(ACTOR* actor, GAME* game) {
     actor->scale.z = 0.01f;
     actor->max_velocity_y = -20.0f;
     actor->player_distance = FLT_MAX; //3.4028235E+38;
-    actor->cull_width = 1600.0f;
-    actor->cull_height = 1600.0f;
-    actor->cull_distance = 1600.0f;
+    if (g_mPlib_wade_disabled) {
+        /* Borderless acres: widen culling so neighbor-acre actors draw. */
+        actor->cull_width = 1600.0f;
+        actor->cull_height = 1600.0f;
+        actor->cull_distance = 1600.0f;
+    } else {
+        actor->cull_width = 350.0f;
+        actor->cull_height = 700.0f;
+        actor->cull_distance = 1000.0f;
+    }
     actor->cull_radius = 350.0f;
     actor->talk_distance = 55.0f;
     actor->shape_info.shadow_size_change_rate = 1.0f;
@@ -320,8 +327,9 @@ static void Actor_delete_check(ACTOR* actor, GAME* game) {
             if (actor->block_x >= 0 && actor->block_z >= 0) {
                 int dx = ABS(actor->block_x - play->block_table.block_x);
                 int dz = ABS(actor->block_z - play->block_table.block_z);
+                int keep_range = g_mPlib_wade_disabled ? 1 : 0;
 
-                if (dx > 1 || dz > 1) {
+                if (dx > keep_range || dz > keep_range) {
                     Actor_delete(actor);
                 }
             }
