@@ -5,9 +5,7 @@ in vec2 v_texcoord1;
 in vec3 v_normal;
 in float v_fog_z;
 
-uniform int u_fog_type;
-uniform float u_fog_start;
-uniform float u_fog_end;
+uniform vec4 u_fog_params;  /* x=type, y=start, z=end */
 uniform vec4 u_fog_color;
 
 /* TEV registers: PREV, REG0, REG1(=PRIM), REG2(=ENV) */
@@ -30,15 +28,12 @@ uniform ivec2 u_tev_swap[3];      /* x=ras swap idx, y=tex swap idx */
 uniform ivec4 u_tev_ind_cfg[3];   /* x=ind_stage, y=ind_mtx, z=ind_bias, w=ind_alpha */
 uniform ivec3 u_tev_ind_wrap[3];  /* x=wrap_s, y=wrap_t, z=add_prev */
 
-/* Textures: stage N samples u_textureN. Kept as separate uniforms so the
-   C-side binding code doesn't have to deal with sampler arrays; the main
-   loop reads pre-sampled results from a local vec4[3]. */
+/* Textures: stage N samples u_textureN; sampler uniforms stay separate,
+   while enable flags are packed into one int array upload. */
 uniform sampler2D u_texture0;
 uniform sampler2D u_texture1;
 uniform sampler2D u_texture2;
-uniform int u_use_texture0;
-uniform int u_use_texture1;
-uniform int u_use_texture2;
+uniform int u_use_texture[3];
 
 /* Lighting / color channels */
 uniform int u_lighting_enabled;
@@ -61,10 +56,7 @@ uniform ivec3 u_tev_ksel[3];   /* x=kcolor_sel, y=kalpha_sel */
 uniform ivec4 u_swap_table[4];
 
 /* Alpha compare */
-uniform int u_alpha_comp0;
-uniform int u_alpha_ref0;
-uniform int u_alpha_op;
-uniform int u_alpha_comp1;
+uniform ivec4 u_alpha_cmp;  /* x=comp0, y=ref0, z=op, w=comp1 */
 uniform int u_alpha_ref1;
 
 /* Indirect textures */
@@ -313,9 +305,9 @@ void main() {
     /* Texture samples. Kept as an explicit 3-way dispatch rather than a
        sampler array so the C side doesn't need to change. */
     vec4 texColor[3];
-    texColor[0] = (u_use_texture0 != 0) ? texture(u_texture0, stc[0]) : vec4(1.0);
-    texColor[1] = (u_use_texture1 != 0) ? texture(u_texture1, stc[1]) : vec4(1.0);
-    texColor[2] = (u_use_texture2 != 0) ? texture(u_texture2, stc[2]) : vec4(1.0);
+    texColor[0] = (u_use_texture[0] != 0) ? texture(u_texture0, stc[0]) : vec4(1.0);
+    texColor[1] = (u_use_texture[1] != 0) ? texture(u_texture1, stc[1]) : vec4(1.0);
+    texColor[2] = (u_use_texture[2] != 0) ? texture(u_texture2, stc[2]) : vec4(1.0);
 
     /* Rasterized color: GX lighting model */
     vec4 rasColor;
@@ -361,13 +353,13 @@ void main() {
     }
 
     /* Alpha compare */
-    if (u_alpha_comp0 != 7 || u_alpha_comp1 != 7) {
-        float ref0 = float(u_alpha_ref0) / 255.0;
+    if (u_alpha_cmp.x != 7 || u_alpha_cmp.w != 7) {
+        float ref0 = float(u_alpha_cmp.y) / 255.0;
         float ref1 = float(u_alpha_ref1) / 255.0;
-        bool pass0 = alphaTest(u_alpha_comp0, prev.a, ref0);
-        bool pass1 = alphaTest(u_alpha_comp1, prev.a, ref1);
+        bool pass0 = alphaTest(u_alpha_cmp.x, prev.a, ref0);
+        bool pass1 = alphaTest(u_alpha_cmp.w, prev.a, ref1);
         bool pass;
-        switch (u_alpha_op) {
+        switch (u_alpha_cmp.z) {
             case 0:  pass = pass0 && pass1; break;
             case 1:  pass = pass0 || pass1; break;
             case 2:  pass = pass0 != pass1; break;
@@ -379,9 +371,9 @@ void main() {
     fragColor = prev;
 
     /* Fog */
-    if (u_fog_type != 0) {
-        float fog_denom = max(u_fog_end - u_fog_start, 1e-6);
-        float fog_factor = clamp((v_fog_z - u_fog_start) / fog_denom, 0.0, 1.0);
+    if (int(u_fog_params.x) != 0) {
+        float fog_denom = max(u_fog_params.z - u_fog_params.y, 1e-6);
+        float fog_factor = clamp((v_fog_z - u_fog_params.y) / fog_denom, 0.0, 1.0);
         fragColor.rgb = mix(fragColor.rgb, u_fog_color.rgb, fog_factor);
     }
 }
