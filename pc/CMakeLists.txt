@@ -4,10 +4,10 @@ project(ac_pc C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-# Do NOT set a default build type. Any optimization level (-O1, -O2) exposes
-# undefined behavior in decomp code causing crashes. An empty build type gives
-# GCC's default (-O0) which works correctly. The NDEBUG define below ensures
-# asserts stay disabled regardless of build type.
+# Do NOT set a default build type. Optimization is controlled by the common
+# flags below: -O2 with -fno-strict-aliasing and -fwrapv, which neutralize the
+# decomp UB classes (type punning, signed overflow) that broke plain -O2.
+# The NDEBUG define below ensures asserts stay disabled regardless of build type.
 
 # Options
 option(PC_CONSOLE "Show console window (disables -mwindows, useful for debugging)" OFF)
@@ -47,6 +47,7 @@ if(MSVC)
     add_compile_options(/W0)
 else()
     add_compile_options(
+        -O2
         -fno-strict-aliasing
         -fwrapv
     )

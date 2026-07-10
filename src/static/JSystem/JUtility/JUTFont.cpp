@@ -1,6 +1,10 @@
 #include "JSystem/JUtility/JUTFont.h"
 #include "JSystem/JUtility/JUTAssertion.h"
 
+/* Static member has no definition in the decomp; -O0 never emitted a
+   reference to it but -O2 does (JFWSystem.cpp). */
+OSFontHeader* JUTRomFont::spFontHeader_;
+
 JUTFont::JUTFont() : mColor1(), mColor2(), mColor3(), mColor4() {
     mValid = false;
 }
