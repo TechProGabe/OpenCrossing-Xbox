@@ -244,8 +244,23 @@ static u16 pc_get_land_copy_protect(void) {
     return (u16)(code + 1);
 }
 
-/* Money rock / Wisp / Copy Protect*/
-static void pc_save_pre_write_side_effects(void) {
+/* mCD_CheckResetCode: TRUE if no reset code armed (birthday clears it) */
+static int pc_check_reset_code(Private_c* priv) {
+    if (priv->state_flags & mPr_FLAG_BIRTHDAY_ACTIVE) {
+        priv->reset_code = 0;
+    }
+    return priv->reset_code == 0;
+}
+
+/* mCD_SetResetCode: arm a nonzero code; still set at next load = reset */
+static void pc_set_reset_code(Private_c* priv) {
+    priv->reset_code = (u32)RANDOM_F(USHT_MAX_S);
+    priv->reset_code++;
+}
+
+/* Money rock / Wisp / Copy Protect. save_mode mirrors GC SaveHome _04:
+ * 0 = full save (clears reset code), nonzero = door save (keeps it armed) */
+static void pc_save_pre_write_side_effects(int save_mode) {
     Private_c* priv = Now_Private;
     u16 copy_protect;
     int i;
@@ -253,16 +268,22 @@ static void pc_save_pre_write_side_effects(void) {
     mCkRh_SavePlayTime(Common_Get(player_no));
 
     if (priv != NULL) {
-        priv->reset_code = 0;
+        if (save_mode == 0) {
+            priv->reset_code = 0;
 
-        for (i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) {
-            if (ITEM_IS_WISP(priv->inventory.pockets[i])) {
-                mPr_SetPossessionItem(priv, i, EMPTY_NO, mPr_ITEM_COND_NORMAL);
+            for (i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) {
+                if (ITEM_IS_WISP(priv->inventory.pockets[i])) {
+                    mPr_SetPossessionItem(priv, i, EMPTY_NO, mPr_ITEM_COND_NORMAL);
+                }
             }
+        } else if (pc_check_reset_code(priv)) {
+            pc_set_reset_code(priv);
         }
     }
 
-    mAGrw_ClearMoneyStoneShineGround();
+    if (save_mode == 0) {
+        mAGrw_ClearMoneyStoneShineGround();
+    }
 
     copy_protect = pc_get_land_copy_protect();
     Common_Set(copy_protect, copy_protect);
@@ -823,8 +844,21 @@ int mCD_InitGameStart_bg(int player_no, int card_private_idx, int start_cond, s3
                     }
                 }
                 /* Arm reset code: if player quits without saving, next load detects it */
-                Now_Private->reset_code = (u32)RANDOM_F(USHT_MAX_S);
-                Now_Private->reset_code++;
+                pc_set_reset_code(Now_Private);
+
+                /* GC writes the save (armed code included) back to the card
+                 * here (bg_write_main/bg_write_bk). Persist to disk or the
+                 * armed code never survives a quit and Resetti can't trigger.
+                 * Cond 1 only - matches GC (new players aren't saved yet). */
+                if (start_cond == mCD_START_COND_1) {
+                    u16 copy_protect = pc_get_land_copy_protect();
+                    Common_Set(copy_protect, copy_protect);
+                    Save_Set(copy_protect, copy_protect);
+                    Save_Set(travel_hard_time, lbRTC_HardTime());
+                    if (!pc_save_write_gci()) {
+                        OSReport("[PC] InitGameStart: reset-code persist failed\n");
+                    }
+                }
             }
 
             /* Handle foreigner start conditions */
@@ -864,7 +898,7 @@ int mCD_SaveHome_bg(int param_1, int* chan) {
     int result;
 
 
-    pc_save_pre_write_side_effects();
+    pc_save_pre_write_side_effects(param_1);
 
     if (slot == mCD_SLOT_B && l_card_b_gci_path[0] != '\0') {
         /* Visiting Card B's town — save to Card B GCI */
@@ -880,13 +914,6 @@ int mCD_SaveHome_bg(int param_1, int* chan) {
     if (!result) {
         OSReport("[PC] mCD_SaveHome_bg: save failed!\n");
         return mCD_TRANS_ERR_IOERROR;
-    }
-
-    /* Re-arm reset code after successful save — if player quits without
-     * saving again, we'll detect it next load */
-    if (Now_Private != NULL) {
-        Now_Private->reset_code = (u32)RANDOM_F(USHT_MAX_S);
-        Now_Private->reset_code++;
     }
 
     return mCD_TRANS_ERR_NONE;
