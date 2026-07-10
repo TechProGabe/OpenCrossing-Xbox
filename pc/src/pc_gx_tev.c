@@ -1,4 +1,5 @@
 #include "pc_gx_internal.h"
+#include "pc_shader_seed.h"
 
 int g_pc_uber_shader_only = 0; /* --uber-shader: disable specialization */
 
@@ -453,39 +454,58 @@ PCGXShaderVariant* pc_gx_tev_get_variant(void) {
     return s_current;
 }
 
+/* Compiles the key unless already cached. Returns 1 if compiled. */
+static int precompile_key(const PCGXShaderKey* key) {
+    if (s_variant_count >= PC_GX_SHADER_CACHE_SIZE) return 0;
+    for (int i = 0; i < s_variant_count; i++) {
+        if (memcmp(key, &s_variants[i].key, sizeof(*key)) == 0) return 0;
+    }
+    compile_variant(key);
+    return 1;
+}
+
 static void pc_gx_tev_precompile_cached(void) {
     if (g_pc_uber_shader_only) return;
 
-    FILE* f = fopen(PC_GX_KEY_CACHE_FILE, "rb");
-    if (!f) return;
-
-    u32 hdr[2] = { 0, 0 };
-    if (fread(hdr, sizeof(hdr), 1, f) != 1 ||
-        hdr[0] != PC_GX_KEY_CACHE_MAGIC || hdr[1] != (u32)sizeof(PCGXShaderKey)) {
-        /* Stale format (key struct changed): drop the file */
-        fclose(f);
-        remove(PC_GX_KEY_CACHE_FILE);
-        printf("[PC/TEV] shader key cache format changed, discarded\n");
-        return;
-    }
-
-    s_precompiling = 1;
-    PCGXShaderKey key;
     int loaded = 0;
-    while (s_variant_count < PC_GX_SHADER_CACHE_SIZE &&
-           fread(&key, sizeof(key), 1, f) == 1) {
-        int known = 0;
-        for (int i = 0; i < s_variant_count; i++) {
-            if (memcmp(&key, &s_variants[i].key, sizeof(key)) == 0) { known = 1; break; }
+    Uint32 t0 = SDL_GetTicks();
+    s_precompiling = 1;
+
+    /* Built-in seed: configs seen during development, so a fresh install
+     * gets no first-encounter compile hitches either */
+    if (PC_SHADER_SEED_KEY_SIZE == (int)sizeof(PCGXShaderKey)) {
+        for (int i = 0; i < PC_SHADER_SEED_COUNT; i++) {
+            PCGXShaderKey key;
+            memcpy(&key, pc_shader_seed_keys[i], sizeof(key));
+            loaded += precompile_key(&key);
         }
-        if (!known) {
-            compile_variant(&key);
-            loaded++;
+    } else {
+        fprintf(stderr, "WARNING: pc_shader_seed.h key size mismatch, regenerate with gen_shader_seed.py\n");
+    }
+
+    /* Local cache: configs this machine discovered beyond the seed */
+    FILE* f = fopen(PC_GX_KEY_CACHE_FILE, "rb");
+    if (f) {
+        u32 hdr[2] = { 0, 0 };
+        if (fread(hdr, sizeof(hdr), 1, f) != 1 ||
+            hdr[0] != PC_GX_KEY_CACHE_MAGIC || hdr[1] != (u32)sizeof(PCGXShaderKey)) {
+            /* Stale format (key struct changed): drop the file */
+            fclose(f);
+            f = NULL;
+            remove(PC_GX_KEY_CACHE_FILE);
+            printf("[PC/TEV] shader key cache format changed, discarded\n");
+        } else {
+            PCGXShaderKey key;
+            while (fread(&key, sizeof(key), 1, f) == 1) {
+                loaded += precompile_key(&key);
+            }
+            fclose(f);
         }
     }
+
     s_precompiling = 0;
-    fclose(f);
-    if (loaded) printf("[PC/TEV] precompiled %d shader variants from %s\n", loaded, PC_GX_KEY_CACHE_FILE);
+    if (loaded) printf("[PC/TEV] precompiled %d shader variants in %lums\n",
+                       loaded, (unsigned long)(SDL_GetTicks() - t0));
 }
 
 /* --- init / shutdown --- */
