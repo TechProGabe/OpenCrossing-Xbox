@@ -348,11 +348,61 @@ static void pc_gx_use_program_profiled(GLuint shader) {
     pc_profiler_add_count_shader_switch();
 }
 
+#ifndef PC_GX_ENABLE_TEXTURE_BIND_CACHE
+#define PC_GX_ENABLE_TEXTURE_BIND_CACHE 0
+#endif
+
+#if PC_GX_ENABLE_TEXTURE_BIND_CACHE
+#define PC_GX_MAX_TEXTURE_UNITS 8
+static int s_active_texture_unit = -1;
+static GLuint s_bound_texture_2d[PC_GX_MAX_TEXTURE_UNITS];
+#endif
+
+void pc_gx_texture_bind_cache_invalidate(void) {
+#if PC_GX_ENABLE_TEXTURE_BIND_CACHE
+    s_active_texture_unit = -1;
+    memset(s_bound_texture_2d, 0, sizeof(s_bound_texture_2d));
+#endif
+}
+
+static void pc_gx_active_texture_cached(GLenum texture) {
+#if PC_GX_ENABLE_TEXTURE_BIND_CACHE
+    int unit = (int)(texture - GL_TEXTURE0);
+    if (unit < 0 || unit >= PC_GX_MAX_TEXTURE_UNITS) {
+        glActiveTexture(texture);
+        s_active_texture_unit = -1;
+        return;
+    }
+    if (s_active_texture_unit == unit) return;
+    glActiveTexture(texture);
+    s_active_texture_unit = unit;
+#else
+    glActiveTexture(texture);
+#endif
+}
+
 static void pc_gx_bind_texture_profiled(GLenum target, GLuint texture) {
+#if PC_GX_ENABLE_TEXTURE_BIND_CACHE
+    int unit = s_active_texture_unit;
+    if (target == GL_TEXTURE_2D && unit >= 0 && unit < PC_GX_MAX_TEXTURE_UNITS &&
+        s_bound_texture_2d[unit] == texture) {
+        return;
+    }
+
     Uint64 t = pc_profiler_begin_timer();
     glBindTexture(target, texture);
     pc_profiler_add_time(PC_PROF_TIMER_TEXTURE_BIND, t);
     pc_profiler_add_count_texture_bind();
+
+    if (target == GL_TEXTURE_2D && unit >= 0 && unit < PC_GX_MAX_TEXTURE_UNITS) {
+        s_bound_texture_2d[unit] = texture;
+    }
+#else
+    Uint64 t = pc_profiler_begin_timer();
+    glBindTexture(target, texture);
+    pc_profiler_add_time(PC_PROF_TIMER_TEXTURE_BIND, t);
+    pc_profiler_add_count_texture_bind();
+#endif
 }
 
 static void pc_gx_buffer_data_profiled(GLenum target, GLsizeiptr size, const void* data, GLenum usage) {
@@ -478,6 +528,7 @@ void pc_gx_init(void) {
 
     pc_gx_tev_init();
     pc_gx_texture_init();
+    pc_gx_texture_bind_cache_invalidate();
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -521,6 +572,7 @@ void pc_gx_restore_after_nes(void) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_gx.ebo);
     g_gx.dirty = PC_GX_DIRTY_ALL;
     g_gx.current_shader = 0; /* Force shader rebind on next draw */
+    pc_gx_texture_bind_cache_invalidate();
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_BLEND);
@@ -786,6 +838,19 @@ static void pc_gx_cache_uniform_locations(GLuint shader) {
     #undef UL
 }
 
+static void pc_gx_upload_static_sampler_uniforms(void) {
+    GLint loc;
+
+    loc = g_gx.uloc.texture0; if (loc >= 0) glUniform1i(loc, 0);
+    loc = g_gx.uloc.texture1; if (loc >= 0) glUniform1i(loc, 1);
+    loc = g_gx.uloc.texture2; if (loc >= 0) glUniform1i(loc, 2);
+
+    for (int i = 0; i < 4; i++) {
+        loc = g_gx.uloc.ind_tex[i];
+        if (loc >= 0) glUniform1i(loc, 3 + i);
+    }
+}
+
 /* --- Vertex Flush --- */
 int pc_gx_draw_call_count = 0;
 
@@ -806,6 +871,7 @@ void pc_gx_flush_vertices(void) {
         pc_gx_uniform_cache_reset();
 #endif
         pc_gx_cache_uniform_locations(shader);
+        pc_gx_upload_static_sampler_uniforms();
         g_gx.dirty = PC_GX_DIRTY_ALL;
     }
 
@@ -954,16 +1020,13 @@ void pc_gx_flush_vertices(void) {
                 }
                 if (tex_obj_stage[s] != 0) {
                     use_tex_stage[s] = 1;
-                    glActiveTexture(GL_TEXTURE0 + s);
+                    pc_gx_active_texture_cached(GL_TEXTURE0 + s);
                     pc_gx_bind_texture_profiled(GL_TEXTURE_2D, tex_obj_stage[s]);
                 }
             }
             loc = UL(use_texture0); if (loc >= 0) glUniform1i(loc, use_tex_stage[0]);
             loc = UL(use_texture1); if (loc >= 0) glUniform1i(loc, use_tex_stage[1]);
             loc = UL(use_texture2); if (loc >= 0) glUniform1i(loc, use_tex_stage[2]);
-            loc = UL(texture0); if (loc >= 0) glUniform1i(loc, 0);
-            loc = UL(texture1); if (loc >= 0) glUniform1i(loc, 1);
-            loc = UL(texture2); if (loc >= 0) glUniform1i(loc, 2);
         }
 
         /* Indirect textures on units 3-6 */
@@ -974,11 +1037,10 @@ void pc_gx_flush_vertices(void) {
                 if (ind_tex_map >= 0 && ind_tex_map < 8) {
                     GLuint ind_tex = g_gx.gl_textures[ind_tex_map];
                     if (ind_tex) {
-                        glActiveTexture(GL_TEXTURE3 + i);
+                        pc_gx_active_texture_cached(GL_TEXTURE3 + i);
                         pc_gx_bind_texture_profiled(GL_TEXTURE_2D, ind_tex);
                     }
                 }
-                loc = UL(ind_tex[i]); if (loc >= 0) glUniform1i(loc, 3 + i);
                 loc = UL(ind_scale[i]);
                 if (loc >= 0) {
                     float s_scale = 1.0f / (float)(1 << g_gx.ind_order[i].scale_s);
@@ -1002,7 +1064,7 @@ void pc_gx_flush_vertices(void) {
                 if (loc >= 0) glUniform3i(loc, ts->ind_wrap_s, ts->ind_wrap_t, ts->ind_add_prev);
             }
         }
-        glActiveTexture(GL_TEXTURE0);
+        pc_gx_active_texture_cached(GL_TEXTURE0);
 
         if (dirty & PC_GX_DIRTY_FOG) {
             loc = UL(fog_type);  if (loc >= 0) glUniform1i(loc, g_gx.fog_type);
@@ -1898,6 +1960,7 @@ static void pc_gx_copy_tex_execute(void* dest, GXBool clear) {
         GLuint efb_tex;
         glGenTextures(1, &efb_tex);
         glBindTexture(GL_TEXTURE_2D, efb_tex);
+        pc_gx_texture_bind_cache_invalidate();
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, read_wd, read_ht, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, rgba);
@@ -1907,6 +1970,7 @@ static void pc_gx_copy_tex_execute(void* dest, GXBool clear) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         pc_gx_efb_capture_store((u32)(uintptr_t)dest, efb_tex);
         glBindTexture(GL_TEXTURE_2D, 0);
+        pc_gx_texture_bind_cache_invalidate();
     }
 #else
     if (g_gx.tex_copy_fmt == 0x4) {

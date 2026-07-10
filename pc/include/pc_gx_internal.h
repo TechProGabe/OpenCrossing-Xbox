@@ -258,6 +258,7 @@ void pc_gx_init(void);
 void pc_gx_shutdown(void);
 void pc_gx_flush_vertices(void);
 void pc_gx_flush_if_begin_complete(void);
+void pc_gx_texture_bind_cache_invalidate(void);
 
 /* TEV shader */
 GLuint pc_gx_tev_get_shader(PCGXState* state);

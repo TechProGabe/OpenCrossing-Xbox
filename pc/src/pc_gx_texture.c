@@ -626,6 +626,7 @@ void GXLoadTexObj(void* obj, u32 id) {
         GLuint efb_tex = pc_gx_efb_capture_find(o[TEXOBJ_IMAGE_PTR]);
         if (efb_tex) {
             glBindTexture(GL_TEXTURE_2D, efb_tex);
+            pc_gx_texture_bind_cache_invalidate();
             GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
@@ -650,6 +651,7 @@ void GXLoadTexObj(void* obj, u32 id) {
         tex_cache_hits++;
         GLuint tex = cached->gl_tex;
         glBindTexture(GL_TEXTURE_2D, tex);
+        pc_gx_texture_bind_cache_invalidate();
 
         /* update wrap/filter if changed */
         if (cached->wrap_s != wrap_s || cached->wrap_t != wrap_t) {
@@ -702,6 +704,7 @@ void GXLoadTexObj(void* obj, u32 id) {
                                                &hd_w, &hd_h);
         if (hd_tex) {
             glBindTexture(GL_TEXTURE_2D, hd_tex);
+            pc_gx_texture_bind_cache_invalidate();
             GLenum gl_ws = (wrap_s == 2) ? GL_MIRRORED_REPEAT :
                            (wrap_s == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
             GLenum gl_wt = (wrap_t == 2) ? GL_MIRRORED_REPEAT :
@@ -729,6 +732,7 @@ void GXLoadTexObj(void* obj, u32 id) {
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
+    pc_gx_texture_bind_cache_invalidate();
 
     if (image_ptr && width > 0 && height > 0 && width <= 1024 && height <= 1024) {
         u8* rgba = (u8*)malloc(width * height * 4);
