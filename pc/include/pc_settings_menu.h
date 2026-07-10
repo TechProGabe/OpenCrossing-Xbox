@@ -31,6 +31,16 @@ int  pc_settings_menu_cancel(void); /* Esc/B - reverts on res-confirm, else clos
 /* Call once per frame while the revert menu is active. Auto-reverts if the 15s expires. */
 void pc_settings_menu_tick(void);
 
+/* Keybinding capture (bindings editor page). While capture is active the
+ * host must feed raw SDL events here instead of translating them to nav
+ * calls; pc_main routes key/mouse/controller events based on _active. */
+int  pc_settings_menu_capture_active(void);
+int  pc_settings_menu_handle_capture_event(const SDL_Event* e); /* 1 = consumed */
+
+/* Like _active but stays up a few frames after a capture completes, so
+ * pad-polling hosts (title menu) don't react to the just-pressed input. */
+int  pc_settings_menu_capture_blocking(void);
+
 /* Draw into NOW_FONT_DISP. with_dim_backdrop=1 dims the full screen behind
  * the menu (pause-menu style); =0 draws directly on top (title-screen
  * style). Font projection must already be loaded by the caller. */

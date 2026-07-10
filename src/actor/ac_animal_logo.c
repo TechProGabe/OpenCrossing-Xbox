@@ -360,6 +360,12 @@ static void aAL_pc_game_start_wait(ANIMAL_LOGO_ACTOR* actor, GAME* game) {
   if (actor->pc_options_open) {
     s8 stick_x = gamePT->pads[PAD0].now.stick_x;
 
+    /* Keybinding capture is fed raw SDL events by pc_main; pad-derived nav
+     * must stand down until the just-pressed input is released. */
+    if (pc_settings_menu_capture_blocking()) {
+      return;
+    }
+
     /* Drive the shared settings menu. It returns 0 when the user picks
      * Back from the main settings page, which we treat as "close". */
     if (actor->pc_cursor_cooldown <= 0.0f) {
