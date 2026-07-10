@@ -8,6 +8,7 @@
 #include "pc_disc.h"
 #include "pc_typing.h"
 #include "pc_pause_menu.h"
+#include "pc_profiler.h"
 #include "m_kankyo.h"
 
 /* prefer discrete GPU on laptops */
@@ -224,6 +225,7 @@ int main(int argc, char* argv[]) {
             printf("  --verbose, -v       Enable diagnostic output\n");
             printf("  --no-framelimit     Alias for --framelimit 0 (uncapped)\n");
             printf("  --framelimit N      Set the target frame rate (default 60, 0 = uncapped)\n");
+            printf("  --profile [N]       Print frame profiler summary every N frames (default 120)\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
             printf("  --rain [intensity]  Force rainy weather; intensity is light, normal, or heavy\n");
@@ -243,6 +245,13 @@ int main(int argc, char* argv[]) {
             g_pc_frame_limit_override = 0;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             g_pc_verbose = 1;
+        } else if (strcmp(argv[i], "--profile") == 0) {
+            g_pc_profile_enabled = 1;
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                int interval = atoi(argv[i + 1]);
+                if (interval > 0) g_pc_profile_interval = interval;
+                i++;
+            }
         } else if (strcmp(argv[i], "--model-viewer") == 0) {
             g_pc_model_viewer = 1;
             if (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -271,7 +280,7 @@ int main(int argc, char* argv[]) {
 
     /* Redirect stdout/stderr to NUL unless verbose — unbuffered terminal writes
      * are extremely slow on Windows and tank FPS. */
-    if (!g_pc_verbose) {
+    if (!g_pc_verbose && !g_pc_profile_enabled) {
 #ifdef _WIN32
         freopen("NUL", "w", stdout);
         freopen("NUL", "w", stderr);

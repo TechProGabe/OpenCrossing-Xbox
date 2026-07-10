@@ -1,5 +1,6 @@
 /* pc_gx.c - GX API → OpenGL 3.3: state management, vertex submission, draw dispatch */
 #include "pc_gx_internal.h"
+#include "pc_profiler.h"
 #include <stddef.h>
 static GLushort quad_index_buf[(PC_GX_MAX_VERTS / 4) * 6];
 #include <math.h>
@@ -12,6 +13,204 @@ void GXSetTevColorOp(u32 stage, u32 op, u32 bias, u32 scale, GXBool clamp, u32 o
 void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scale, GXBool clamp, u32 out_reg);
 
 typedef struct { u8 r, g, b, a; } GXColor;
+
+#undef glUniform1i
+#undef glUniform2i
+#undef glUniform3i
+#undef glUniform4i
+#undef glUniform1f
+#undef glUniform2f
+#undef glUniform3f
+#undef glUniform4f
+#undef glUniform3iv
+#undef glUniform4iv
+#undef glUniform4fv
+#undef glUniform3fv
+#undef glUniformMatrix3fv
+#undef glUniformMatrix4fv
+
+#ifndef PC_GX_ENABLE_UNIFORM_VALUE_CACHE
+#define PC_GX_ENABLE_UNIFORM_VALUE_CACHE 0
+#endif
+
+#if PC_GX_ENABLE_UNIFORM_VALUE_CACHE
+// Experimental
+#define PC_GX_UNIFORM_CACHE_MAX   2048
+#define PC_GX_UNIFORM_CACHE_BYTES 128
+
+typedef struct {
+    int valid;
+    size_t bytes;
+    unsigned char data[PC_GX_UNIFORM_CACHE_BYTES];
+} PCGXUniformCacheEntry;
+
+static PCGXUniformCacheEntry s_uniform_cache[PC_GX_UNIFORM_CACHE_MAX];
+
+static void pc_gx_uniform_cache_reset(void) {
+    memset(s_uniform_cache, 0, sizeof(s_uniform_cache));
+}
+
+static int pc_gx_uniform_cache_changed(GLint loc, const void* data, size_t bytes) {
+    if (loc < 0) return 0;
+    if (loc >= PC_GX_UNIFORM_CACHE_MAX) return 1;
+    if (bytes > PC_GX_UNIFORM_CACHE_BYTES) return 1;
+
+    PCGXUniformCacheEntry* entry = &s_uniform_cache[loc];
+    if (entry->valid && entry->bytes == bytes && memcmp(entry->data, data, bytes) == 0) {
+        pc_profiler_add_count_uniform_skip();
+        return 0;
+    }
+
+    entry->valid = 1;
+    entry->bytes = bytes;
+    memcpy(entry->data, data, bytes);
+    return 1;
+}
+
+static void pc_gx_uniform1i(GLint loc, GLint v0) {
+    GLint data[1] = { v0 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform1i(loc, v0);
+}
+
+static void pc_gx_uniform2i(GLint loc, GLint v0, GLint v1) {
+    GLint data[2] = { v0, v1 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform2i(loc, v0, v1);
+}
+
+static void pc_gx_uniform3i(GLint loc, GLint v0, GLint v1, GLint v2) {
+    GLint data[3] = { v0, v1, v2 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform3i(loc, v0, v1, v2);
+}
+
+static void pc_gx_uniform4i(GLint loc, GLint v0, GLint v1, GLint v2, GLint v3) {
+    GLint data[4] = { v0, v1, v2, v3 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform4i(loc, v0, v1, v2, v3);
+}
+
+static void pc_gx_uniform1f(GLint loc, GLfloat v0) {
+    GLfloat data[1] = { v0 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform1f(loc, v0);
+}
+
+static void pc_gx_uniform2f(GLint loc, GLfloat v0, GLfloat v1) {
+    GLfloat data[2] = { v0, v1 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform2f(loc, v0, v1);
+}
+
+static void pc_gx_uniform3f(GLint loc, GLfloat v0, GLfloat v1, GLfloat v2) {
+    GLfloat data[3] = { v0, v1, v2 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform3f(loc, v0, v1, v2);
+}
+
+static void pc_gx_uniform4f(GLint loc, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3) {
+    GLfloat data[4] = { v0, v1, v2, v3 };
+    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform4f(loc, v0, v1, v2, v3);
+}
+
+static void pc_gx_uniform3iv(GLint loc, GLsizei count, const GLint* value) {
+    size_t bytes = (size_t)count * 3 * sizeof(GLint);
+    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform3iv(loc, count, value);
+}
+
+static void pc_gx_uniform4iv(GLint loc, GLsizei count, const GLint* value) {
+    size_t bytes = (size_t)count * 4 * sizeof(GLint);
+    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform4iv(loc, count, value);
+}
+
+static void pc_gx_uniform3fv(GLint loc, GLsizei count, const GLfloat* value) {
+    size_t bytes = (size_t)count * 3 * sizeof(GLfloat);
+    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform3fv(loc, count, value);
+}
+
+static void pc_gx_uniform4fv(GLint loc, GLsizei count, const GLfloat* value) {
+    size_t bytes = (size_t)count * 4 * sizeof(GLfloat);
+    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniform4fv(loc, count, value);
+}
+
+static void pc_gx_uniform_matrix3fv(GLint loc, GLsizei count, GLboolean transpose, const GLfloat* value) {
+    unsigned char data[1 + 9 * sizeof(GLfloat)];
+    size_t value_bytes = (size_t)count * 9 * sizeof(GLfloat);
+    if (count != 1 || value_bytes + 1 > sizeof(data)) {
+        pc_profiler_add_count_uniform();
+        glad_glUniformMatrix3fv(loc, count, transpose, value);
+        return;
+    }
+    data[0] = (unsigned char)transpose;
+    memcpy(data + 1, value, value_bytes);
+    if (!pc_gx_uniform_cache_changed(loc, data, value_bytes + 1)) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniformMatrix3fv(loc, count, transpose, value);
+}
+
+static void pc_gx_uniform_matrix4fv(GLint loc, GLsizei count, GLboolean transpose, const GLfloat* value) {
+    unsigned char data[1 + 16 * sizeof(GLfloat)];
+    size_t value_bytes = (size_t)count * 16 * sizeof(GLfloat);
+    if (count != 1 || value_bytes + 1 > sizeof(data)) {
+        pc_profiler_add_count_uniform();
+        glad_glUniformMatrix4fv(loc, count, transpose, value);
+        return;
+    }
+    data[0] = (unsigned char)transpose;
+    memcpy(data + 1, value, value_bytes);
+    if (!pc_gx_uniform_cache_changed(loc, data, value_bytes + 1)) return;
+    pc_profiler_add_count_uniform();
+    glad_glUniformMatrix4fv(loc, count, transpose, value);
+}
+
+#define glUniform1i        pc_gx_uniform1i
+#define glUniform2i        pc_gx_uniform2i
+#define glUniform3i        pc_gx_uniform3i
+#define glUniform4i        pc_gx_uniform4i
+#define glUniform1f        pc_gx_uniform1f
+#define glUniform2f        pc_gx_uniform2f
+#define glUniform3f        pc_gx_uniform3f
+#define glUniform4f        pc_gx_uniform4f
+#define glUniform3iv       pc_gx_uniform3iv
+#define glUniform4iv       pc_gx_uniform4iv
+#define glUniform4fv       pc_gx_uniform4fv
+#define glUniform3fv       pc_gx_uniform3fv
+#define glUniformMatrix3fv pc_gx_uniform_matrix3fv
+#define glUniformMatrix4fv pc_gx_uniform_matrix4fv
+#else
+#define glUniform1i(...)        (pc_profiler_add_count_uniform(), glad_glUniform1i(__VA_ARGS__))
+#define glUniform2i(...)        (pc_profiler_add_count_uniform(), glad_glUniform2i(__VA_ARGS__))
+#define glUniform3i(...)        (pc_profiler_add_count_uniform(), glad_glUniform3i(__VA_ARGS__))
+#define glUniform4i(...)        (pc_profiler_add_count_uniform(), glad_glUniform4i(__VA_ARGS__))
+#define glUniform1f(...)        (pc_profiler_add_count_uniform(), glad_glUniform1f(__VA_ARGS__))
+#define glUniform2f(...)        (pc_profiler_add_count_uniform(), glad_glUniform2f(__VA_ARGS__))
+#define glUniform3f(...)        (pc_profiler_add_count_uniform(), glad_glUniform3f(__VA_ARGS__))
+#define glUniform4f(...)        (pc_profiler_add_count_uniform(), glad_glUniform4f(__VA_ARGS__))
+#define glUniform3iv(...)       (pc_profiler_add_count_uniform(), glad_glUniform3iv(__VA_ARGS__))
+#define glUniform4iv(...)       (pc_profiler_add_count_uniform(), glad_glUniform4iv(__VA_ARGS__))
+#define glUniform4fv(...)       (pc_profiler_add_count_uniform(), glad_glUniform4fv(__VA_ARGS__))
+#define glUniform3fv(...)       (pc_profiler_add_count_uniform(), glad_glUniform3fv(__VA_ARGS__))
+#define glUniformMatrix3fv(...) (pc_profiler_add_count_uniform(), glad_glUniformMatrix3fv(__VA_ARGS__))
+#define glUniformMatrix4fv(...) (pc_profiler_add_count_uniform(), glad_glUniformMatrix4fv(__VA_ARGS__))
+#endif
 
 /* --- Global GX State --- */
 PCGXState g_gx;
@@ -132,6 +331,35 @@ static int pc_tex_mtx_id_to_slot(int id) {
     if (id >= 0 && id < 10) return id;
     if (id >= GX_TEXMTX0 && id < GX_IDENTITY) return (id - GX_TEXMTX0) / 3;
     return -1;
+}
+
+static GLint pc_gx_get_uniform_location_profiled(GLuint shader, const char* name) {
+    Uint64 t = pc_profiler_begin_timer();
+    GLint loc = glGetUniformLocation(shader, name);
+    pc_profiler_add_time(PC_PROF_TIMER_UNIFORM_LOOKUP, t);
+    pc_profiler_add_count_uniform_lookup();
+    return loc;
+}
+
+static void pc_gx_use_program_profiled(GLuint shader) {
+    Uint64 t = pc_profiler_begin_timer();
+    glUseProgram(shader);
+    pc_profiler_add_time(PC_PROF_TIMER_SHADER_SWITCH, t);
+    pc_profiler_add_count_shader_switch();
+}
+
+static void pc_gx_bind_texture_profiled(GLenum target, GLuint texture) {
+    Uint64 t = pc_profiler_begin_timer();
+    glBindTexture(target, texture);
+    pc_profiler_add_time(PC_PROF_TIMER_TEXTURE_BIND, t);
+    pc_profiler_add_count_texture_bind();
+}
+
+static void pc_gx_buffer_data_profiled(GLenum target, GLsizeiptr size, const void* data, GLenum usage) {
+    Uint64 t = pc_profiler_begin_timer();
+    glBufferData(target, size, data, usage);
+    pc_profiler_add_time(PC_PROF_TIMER_BUFFER_UPLOAD, t);
+    pc_profiler_add_count_buffer_upload((size_t)size);
 }
 
 /* Commit pending vertex + flush batch to GL. Used by GXBegin/GXEnd/GXCopyDisp/etc. */
@@ -260,6 +488,8 @@ void pc_gx_init(void) {
 }
 
 void pc_gx_begin_frame(void) {
+    pc_profiler_begin_frame();
+    Uint64 prof_start = pc_profiler_begin_timer();
     pc_emu64_frame_cmds = 0;
     pc_emu64_frame_noop_cmds = 0;
     pc_emu64_frame_tri_cmds = 0;
@@ -280,6 +510,7 @@ void pc_gx_begin_frame(void) {
     glClearDepth(g_gx.clear_depth);
     glClearColor(g_gx.clear_color[0], g_gx.clear_color[1], g_gx.clear_color[2], g_gx.clear_color[3]);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    pc_profiler_add_time(PC_PROF_TIMER_GX_BEGIN, prof_start);
 }
 
 void pc_gx_restore_after_nes(void) {
@@ -451,7 +682,7 @@ void GXTexCoord1x8(u8 index) { GXTexCoord1x16(index); }
 static void pc_gx_cache_uniform_locations(GLuint shader) {
     char name[48];
     int i;
-    #define UL(n) glGetUniformLocation(shader, n)
+    #define UL(n) pc_gx_get_uniform_location_profiled(shader, n)
 
     g_gx.uloc.projection = UL("u_projection");
     g_gx.uloc.modelview  = UL("u_modelview");
@@ -562,23 +793,29 @@ void pc_gx_flush_vertices(void) {
     int count = g_gx.current_vertex_idx;
     if (count == 0) return;
 
+    Uint64 flush_start = pc_profiler_begin_timer();
+    pc_profiler_add_count_flush();
     pc_gx_draw_call_count++;
 
     GLuint shader = pc_gx_tev_get_shader(&g_gx);
     if (shader && shader != g_gx.current_shader) {
-        glUseProgram(shader);
+        pc_gx_use_program_profiled(shader);
         PC_GL_CHECK("glUseProgram");
         g_gx.current_shader = shader;
+#if PC_GX_ENABLE_UNIFORM_VALUE_CACHE
+        pc_gx_uniform_cache_reset();
+#endif
         pc_gx_cache_uniform_locations(shader);
         g_gx.dirty = PC_GX_DIRTY_ALL;
     }
 
     glBindVertexArray(g_gx.vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_gx.vbo);
-    glBufferData(GL_ARRAY_BUFFER, count * sizeof(PCGXVertex), g_gx.vertex_buffer, GL_STREAM_DRAW);
+    pc_gx_buffer_data_profiled(GL_ARRAY_BUFFER, count * sizeof(PCGXVertex), g_gx.vertex_buffer, GL_STREAM_DRAW);
 
     /* Upload only dirty state groups */
     if (shader) {
+        Uint64 uniform_start = pc_profiler_begin_timer();
         GLint loc;
         unsigned int dirty = g_gx.dirty;
         #define UL(field) g_gx.uloc.field
@@ -718,7 +955,7 @@ void pc_gx_flush_vertices(void) {
                 if (tex_obj_stage[s] != 0) {
                     use_tex_stage[s] = 1;
                     glActiveTexture(GL_TEXTURE0 + s);
-                    glBindTexture(GL_TEXTURE_2D, tex_obj_stage[s]);
+                    pc_gx_bind_texture_profiled(GL_TEXTURE_2D, tex_obj_stage[s]);
                 }
             }
             loc = UL(use_texture0); if (loc >= 0) glUniform1i(loc, use_tex_stage[0]);
@@ -738,7 +975,7 @@ void pc_gx_flush_vertices(void) {
                     GLuint ind_tex = g_gx.gl_textures[ind_tex_map];
                     if (ind_tex) {
                         glActiveTexture(GL_TEXTURE3 + i);
-                        glBindTexture(GL_TEXTURE_2D, ind_tex);
+                        pc_gx_bind_texture_profiled(GL_TEXTURE_2D, ind_tex);
                     }
                 }
                 loc = UL(ind_tex[i]); if (loc >= 0) glUniform1i(loc, 3 + i);
@@ -775,6 +1012,7 @@ void pc_gx_flush_vertices(void) {
         }
 
         #undef UL
+        pc_profiler_add_time(PC_PROF_TIMER_UNIFORM_UPLOAD, uniform_start);
     }
 
     GLenum gl_prim;
@@ -789,7 +1027,10 @@ void pc_gx_flush_vertices(void) {
         default:               gl_prim = GL_TRIANGLES; break;
     }
 
+    Uint64 state_start = pc_profiler_begin_timer();
+
     if (g_gx.dirty & PC_GX_DIRTY_DEPTH) {
+        pc_profiler_add_count_state_change();
         if (g_gx.z_compare_enable) {
             glEnable(GL_DEPTH_TEST);
             GLenum zfunc;
@@ -812,6 +1053,7 @@ void pc_gx_flush_vertices(void) {
     }
 
     if (g_gx.dirty & PC_GX_DIRTY_COLOR_MASK) {
+        pc_profiler_add_count_state_change();
         glColorMask(
             g_gx.color_update_enable ? GL_TRUE : GL_FALSE,
             g_gx.color_update_enable ? GL_TRUE : GL_FALSE,
@@ -821,6 +1063,7 @@ void pc_gx_flush_vertices(void) {
     }
 
     if (g_gx.dirty & PC_GX_DIRTY_CULL) {
+        pc_profiler_add_count_state_change();
         switch (g_gx.cull_mode) {
             case GX_CULL_NONE:  glDisable(GL_CULL_FACE); break;
             case GX_CULL_FRONT: glEnable(GL_CULL_FACE); glCullFace(GL_FRONT); break;
@@ -830,6 +1073,7 @@ void pc_gx_flush_vertices(void) {
     }
 
     if (g_gx.dirty & PC_GX_DIRTY_BLEND) {
+        pc_profiler_add_count_state_change();
         switch (g_gx.blend_mode) {
             case GX_BM_NONE:
                 glDisable(GL_BLEND);
@@ -878,21 +1122,27 @@ void pc_gx_flush_vertices(void) {
                 break;
         }
     }
+    pc_profiler_add_time(PC_PROF_TIMER_GL_STATE, state_start);
 
+    Uint64 draw_start = pc_profiler_begin_timer();
     if (g_gx.current_primitive == GX_QUADS) {
         int num_quads = count / 4;
         int num_indices = num_quads * 6;
         glDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, 0);
+        pc_profiler_add_count_draw(count, num_indices);
         PC_GL_CHECK("glDrawElements");
     } else {
         glDrawArrays(gl_prim, 0, count);
+        pc_profiler_add_count_draw(count, 0);
         PC_GL_CHECK("glDrawArrays");
     }
+    pc_profiler_add_time(PC_PROF_TIMER_DRAW_SUBMIT, draw_start);
 
     if (g_gx.blend_mode == GX_BM_SUBTRACT)
         glBlendEquation(GL_FUNC_ADD);
 
     g_gx.dirty = 0;
+    pc_profiler_add_time(PC_PROF_TIMER_GX_FLUSH, flush_start);
 }
 
 /* --- Vertex Descriptor / Format --- */
@@ -1816,6 +2066,9 @@ u32 GXEndDisplayList(void) {
 void GXCallDisplayList(void* list, u32 nbytes) {
     if (!list || nbytes == 0) return;
 
+    Uint64 prof_start = pc_profiler_begin_timer();
+#define PC_GX_DL_RETURN() do { pc_profiler_add_time(PC_PROF_TIMER_DISPLAY_LIST, prof_start); return; } while (0)
+
     const u8* p = (const u8*)list;
     u32 off = 0;
 
@@ -1827,7 +2080,7 @@ void GXCallDisplayList(void* list, u32 nbytes) {
         switch (op) {
             case PCGX_DL_OP_TEXCOPY_SRC: {
                 u32 v[4];
-                if (off + sizeof(v) > nbytes) return;
+                if (off + sizeof(v) > nbytes) PC_GX_DL_RETURN();
                 memcpy(v, p + off, sizeof(v));
                 off += sizeof(v);
                 GXSetTexCopySrc((u16)v[0], (u16)v[1], (u16)v[2], (u16)v[3]);
@@ -1835,7 +2088,7 @@ void GXCallDisplayList(void* list, u32 nbytes) {
             }
             case PCGX_DL_OP_TEXCOPY_DST: {
                 u32 v[4];
-                if (off + sizeof(v) > nbytes) return;
+                if (off + sizeof(v) > nbytes) PC_GX_DL_RETURN();
                 memcpy(v, p + off, sizeof(v));
                 off += sizeof(v);
                 GXSetTexCopyDst((u16)v[0], (u16)v[1], v[2], (GXBool)(v[3] ? 1 : 0));
@@ -1846,7 +2099,7 @@ void GXCallDisplayList(void* list, u32 nbytes) {
             case PCGX_DL_OP_COPY_TEX: {
                 u64 dest64 = 0;
                 u32 clear = 0;
-                if (off + sizeof(dest64) + sizeof(clear) > nbytes) return;
+                if (off + sizeof(dest64) + sizeof(clear) > nbytes) PC_GX_DL_RETURN();
                 memcpy(&dest64, p + off, sizeof(dest64));
                 off += sizeof(dest64);
                 memcpy(&clear, p + off, sizeof(clear));
@@ -1855,9 +2108,12 @@ void GXCallDisplayList(void* list, u32 nbytes) {
                 break;
             }
             default:
-                return;
+                PC_GX_DL_RETURN();
         }
     }
+
+    pc_profiler_add_time(PC_PROF_TIMER_DISPLAY_LIST, prof_start);
+#undef PC_GX_DL_RETURN
 }
 
 /* --- Indirect Texture --- */

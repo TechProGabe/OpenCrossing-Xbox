@@ -1,5 +1,6 @@
 /* pc_vi.c - video interface → SDL window swap + frame pacing */
 #include "pc_platform.h"
+#include "pc_profiler.h"
 
 #define VI_TVMODE_NTSC_INT    0
 #define VI_TVMODE_NTSC_DS     1
@@ -19,7 +20,7 @@ static void (*vi_post_callback)(u32) = NULL;
 
 void VIInit(void) {
     if (g_frame_limiter > 0) {
-        printf("[VI] frame limit=%dus (%lu Hz)\n",
+        printf("[VI] frame limit=%luus (%lu Hz)\n",
                (u32)((1.0 / (double)g_frame_limiter) * 1000000), (unsigned long)g_frame_limiter);
     } else {
         printf("[VI] frame limit=disabled\n");
@@ -42,16 +43,21 @@ void VIWaitForRetrace(void) {
         frame_ms = (double)(vi_enter - frame_start_time) * 1000.0 / (double)perf_freq;
     }
 
+    Uint64 t_before_poll = pc_profiler_begin_timer();
     if (!pc_platform_poll_events()) {
         g_pc_running = 0;
         return;
     }
+    pc_profiler_add_time(PC_PROF_TIMER_POLL_EVENTS, t_before_poll);
 
     Uint64 t_before_swap = SDL_GetPerformanceCounter();
+    Uint64 t_before_swap_prof = pc_profiler_begin_timer();
     pc_platform_swap_buffers();
+    pc_profiler_add_time(PC_PROF_TIMER_SWAP, t_before_swap_prof);
     Uint64 t_after_swap = SDL_GetPerformanceCounter();
 
     Uint64 t_before_pace = SDL_GetPerformanceCounter();
+    Uint64 t_before_pace_prof = pc_profiler_begin_timer();
     {
         extern int g_pc_nes_active;
         int pace_frame = g_pc_nes_active || g_frame_limiter > 0;
@@ -82,7 +88,12 @@ void VIWaitForRetrace(void) {
             }
         }
     }
+    pc_profiler_add_time(PC_PROF_TIMER_PACE, t_before_pace_prof);
     Uint64 t_after_pace = SDL_GetPerformanceCounter();
+    double profile_frame_ms = frame_ms;
+    if (frame_start_time) {
+        profile_frame_ms = (double)(t_after_pace - frame_start_time) * 1000.0 / (double)perf_freq;
+    }
 
     /* report slow frames (>20ms = missed 60fps by >4ms) */
     if (frame_ms > 20.0 && g_pc_verbose) {
@@ -93,6 +104,8 @@ void VIWaitForRetrace(void) {
         printf("[STUTTER] frame %lu: total=%.1fms work=%.1fms swap=%.1fms pace=%.1fms audio_fill=%d\n",
                (unsigned long)pc_frame_counter, frame_ms, work_ms - swap_ms - pace_ms, swap_ms, pace_ms, audio_fill);
     }
+
+    pc_profiler_end_frame(profile_frame_ms, pc_audio_get_buffer_fill());
 
     {
         static Uint64 fps_start = 0;

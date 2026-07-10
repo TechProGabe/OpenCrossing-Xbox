@@ -18,8 +18,6 @@ typedef struct {
     int master_volume;    /* Applied at the PC audio output, 0-100 (default 100) */
 } PCSettings;
 
-#define PC_MAX_FPS_CAP 960
-
 extern PCSettings g_pc_settings;
 
 void pc_settings_load(void);

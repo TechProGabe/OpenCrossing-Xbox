@@ -130,7 +130,7 @@ static void item_cycle(int id, int dir) {
             s_pending.vsync = !s_pending.vsync;
             break;
         case ITEM_MAX_FPS: {
-            static const int steps[] = { 60, 120, 180, 240, 300, 360, PC_MAX_FPS_CAP };
+            static const int steps[] = { 0, 60, 120, 180, 240, 300, 360 };
             int idx = 0;
             int count = sizeof(steps) / sizeof(steps[0]);
             for (int i = 0; i < count; i++) if (s_pending.max_fps == steps[i]) { idx = i; break; }
@@ -182,7 +182,7 @@ static void item_format(int id, char* buf, size_t n) {
             break;
         case ITEM_MAX_FPS:
             if (s_pending.max_fps > 0) snprintf(buf, n, "< %d >", s_pending.max_fps);
-            else                       snprintf(buf, n, "< %d >", PC_MAX_FPS_CAP);
+            else                       snprintf(buf, n, "< Uncapped >");
             break;
         case ITEM_MSAA:
             if (s_pending.msaa > 0) snprintf(buf, n, "< %dx >", s_pending.msaa);
