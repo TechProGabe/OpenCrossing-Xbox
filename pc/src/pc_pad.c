@@ -2,15 +2,31 @@
 #include "pc_platform.h"
 #include "pc_typing.h"
 #include "pc_keybindings.h"
+#include "pc_settings.h"
 #include <dolphin/pad.h>
 
 /* analog stick constants */
 #define STICK_MAGNITUDE     80
-#define AXIS_DEADZONE       4000
-#define TRIGGER_THRESHOLD   100
 #define RUMBLE_DURATION_MS  200
 
 static SDL_GameController* g_controller = NULL;
+
+/* deadzone percent (0-40) -> raw SDL axis threshold */
+static int deadzone_threshold(int percent) {
+    if (percent < 0)  percent = 0;
+    if (percent > 90) percent = 90;
+    return percent * 32767 / 100;
+}
+
+/* is a remappable pad binding currently held? */
+static int pad_code_pressed(PCPadCode code) {
+    if (code < 0) return 0;
+    if (code & PC_PAD_AXIS_BIT) {
+        return SDL_GameControllerGetAxis(g_controller,
+            (SDL_GameControllerAxis)(code & 0xFF)) > PC_PAD_AXIS_PRESS;
+    }
+    return SDL_GameControllerGetButton(g_controller, (SDL_GameControllerButton)code);
+}
 
 BOOL PADInit(void) {
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
@@ -90,27 +106,31 @@ u32 PADRead(PADStatus* status) {
         }
     }
     if (g_controller) {
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_A)) buttons |= PAD_BUTTON_A;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_B)) buttons |= PAD_BUTTON_B;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_X)) buttons |= PAD_BUTTON_X;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_Y)) buttons |= PAD_BUTTON_Y;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_START)) buttons |= PAD_BUTTON_START;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_BACK))  buttons |= PAD_BUTTON_START;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER))  buttons |= PAD_TRIGGER_L;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) buttons |= PAD_TRIGGER_Z;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_UP))    buttons |= PAD_BUTTON_UP;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN))  buttons |= PAD_BUTTON_DOWN;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT))  buttons |= PAD_BUTTON_LEFT;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) buttons |= PAD_BUTTON_RIGHT;
+        PCPadBindings* pb = &g_pc_padbindings;
+        if (pad_code_pressed(pb->a))     buttons |= PAD_BUTTON_A;
+        if (pad_code_pressed(pb->b))     buttons |= PAD_BUTTON_B;
+        if (pad_code_pressed(pb->x))     buttons |= PAD_BUTTON_X;
+        if (pad_code_pressed(pb->y))     buttons |= PAD_BUTTON_Y;
+        if (pad_code_pressed(pb->start)) buttons |= PAD_BUTTON_START;
+        if (pad_code_pressed(pb->z))     buttons |= PAD_TRIGGER_Z;
+        if (pad_code_pressed(pb->l))     buttons |= PAD_TRIGGER_L;
+        if (pad_code_pressed(pb->r))     buttons |= PAD_TRIGGER_R;
+        if (pad_code_pressed(pb->dpad_up))    buttons |= PAD_BUTTON_UP;
+        if (pad_code_pressed(pb->dpad_down))  buttons |= PAD_BUTTON_DOWN;
+        if (pad_code_pressed(pb->dpad_left))  buttons |= PAD_BUTTON_LEFT;
+        if (pad_code_pressed(pb->dpad_right)) buttons |= PAD_BUTTON_RIGHT;
+
+        int stick_dz  = deadzone_threshold(g_pc_settings.stick_deadzone);
+        int cstick_dz = deadzone_threshold(g_pc_settings.cstick_deadzone);
 
         s16 lx = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_LEFTX);
         s16 ly = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_LEFTY);
-        if (abs(lx) > AXIS_DEADZONE) {
+        if (abs(lx) > stick_dz) {
             int sx = lx >> 8;
             if (sx > 127) sx = 127; else if (sx < -128) sx = -128;
             stickX = (s8)sx;
         }
-        if (abs(ly) > AXIS_DEADZONE) {
+        if (abs(ly) > stick_dz) {
             int sy = -(ly >> 8);
             if (sy > 127) sy = 127; else if (sy < -128) sy = -128;
             stickY = (s8)sy;
@@ -118,21 +138,20 @@ u32 PADRead(PADStatus* status) {
 
         s16 rx = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_RIGHTX);
         s16 ry = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_RIGHTY);
-        if (abs(rx) > AXIS_DEADZONE) {
+        if (abs(rx) > cstick_dz) {
             int srx = rx >> 8;
             if (srx > 127) srx = 127; else if (srx < -128) srx = -128;
             cstickX = (s8)srx;
         }
-        if (abs(ry) > AXIS_DEADZONE) {
+        if (abs(ry) > cstick_dz) {
             int sry = -(ry >> 8);
             if (sry > 127) sry = 127; else if (sry < -128) sry = -128;
             cstickY = (s8)sry;
         }
 
+        /* analog trigger values always come from the physical triggers */
         u8 lt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >> 7);
         u8 rt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >> 7);
-        if (lt > TRIGGER_THRESHOLD) buttons |= PAD_TRIGGER_L;
-        if (rt > TRIGGER_THRESHOLD) buttons |= PAD_TRIGGER_R;
         status[0].triggerLeft = lt;
         status[0].triggerRight = rt;
     }

@@ -1,7 +1,7 @@
 #include "pc_keybindings.h"
 #include "pc_platform.h"
 
-PCKeybindings g_pc_keybindings = {
+static const PCKeybindings s_kb_defaults = {
     /* buttons */
     .a     = SDL_SCANCODE_SPACE,
     .b     = SDL_SCANCODE_LSHIFT,
@@ -30,6 +30,26 @@ PCKeybindings g_pc_keybindings = {
     .dpad_left  = SDL_SCANCODE_J,
     .dpad_right = SDL_SCANCODE_L,
 };
+
+/* Back/Select is reserved for opening the PC pause menu, so it is not a
+ * default here. Triggers: LB=L, RB=Z, RT=R (GC Z is a digital button). */
+static const PCPadBindings s_pad_defaults = {
+    .a     = SDL_CONTROLLER_BUTTON_A,
+    .b     = SDL_CONTROLLER_BUTTON_B,
+    .x     = SDL_CONTROLLER_BUTTON_X,
+    .y     = SDL_CONTROLLER_BUTTON_Y,
+    .start = SDL_CONTROLLER_BUTTON_START,
+    .z     = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+    .l     = SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+    .r     = PC_PAD_AXIS_BIT | SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
+    .dpad_up    = SDL_CONTROLLER_BUTTON_DPAD_UP,
+    .dpad_down  = SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+    .dpad_left  = SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+    .dpad_right = SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
+};
+
+PCKeybindings g_pc_keybindings;
+PCPadBindings g_pc_padbindings;
 
 static const char* KEYBINDINGS_FILE = "keybindings.ini";
 
@@ -66,6 +86,26 @@ static const KeybindEntry s_entries[] = {
 
 #define NUM_ENTRIES (sizeof(s_entries) / sizeof(s_entries[0]))
 
+/* mapping table: ini key name -> offset into PCPadBindings */
+#define PAD_ENTRY(name, field) { name, offsetof(PCPadBindings, field) }
+
+static const KeybindEntry s_pad_entries[] = {
+    PAD_ENTRY("Pad_A",          a),
+    PAD_ENTRY("Pad_B",          b),
+    PAD_ENTRY("Pad_X",          x),
+    PAD_ENTRY("Pad_Y",          y),
+    PAD_ENTRY("Pad_Start",      start),
+    PAD_ENTRY("Pad_Z",          z),
+    PAD_ENTRY("Pad_L",          l),
+    PAD_ENTRY("Pad_R",          r),
+    PAD_ENTRY("Pad_DPad_Up",    dpad_up),
+    PAD_ENTRY("Pad_DPad_Down",  dpad_down),
+    PAD_ENTRY("Pad_DPad_Left",  dpad_left),
+    PAD_ENTRY("Pad_DPad_Right", dpad_right),
+};
+
+#define NUM_PAD_ENTRIES (sizeof(s_pad_entries) / sizeof(s_pad_entries[0]))
+
 /* mouse button name table */
 typedef struct {
     const char* name;
@@ -93,7 +133,7 @@ static void trim_end(char* s) {
 }
 
 /* get display name for an input code */
-static const char* input_code_name(PCInputCode code) {
+const char* pc_input_code_name(PCInputCode code) {
     if (code & PC_INPUT_MOUSE_BIT) {
         for (int i = 0; i < (int)NUM_MOUSE_BUTTONS; i++) {
             if (s_mouse_buttons[i].code == code)
@@ -102,6 +142,52 @@ static const char* input_code_name(PCInputCode code) {
         return "Unknown";
     }
     return SDL_GetScancodeName((SDL_Scancode)code);
+}
+
+/* short display name for a pad code (UI cells) */
+const char* pc_pad_code_name(PCPadCode code) {
+    if (code < 0) return "-";
+    if (code & PC_PAD_AXIS_BIT) {
+        switch (code & 0xFF) {
+            case SDL_CONTROLLER_AXIS_TRIGGERLEFT:  return "LT";
+            case SDL_CONTROLLER_AXIS_TRIGGERRIGHT: return "RT";
+        }
+        return "Axis?";
+    }
+    switch (code) {
+        case SDL_CONTROLLER_BUTTON_A:             return "A";
+        case SDL_CONTROLLER_BUTTON_B:             return "B";
+        case SDL_CONTROLLER_BUTTON_X:             return "X";
+        case SDL_CONTROLLER_BUTTON_Y:             return "Y";
+        case SDL_CONTROLLER_BUTTON_BACK:          return "Back";
+        case SDL_CONTROLLER_BUTTON_GUIDE:         return "Guide";
+        case SDL_CONTROLLER_BUTTON_START:         return "Start";
+        case SDL_CONTROLLER_BUTTON_LEFTSTICK:     return "LS";
+        case SDL_CONTROLLER_BUTTON_RIGHTSTICK:    return "RS";
+        case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:  return "LB";
+        case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return "RB";
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:       return "D-Up";
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:     return "D-Down";
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:     return "D-Left";
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:    return "D-Right";
+    }
+    {
+        const char* s = SDL_GameControllerGetStringForButton((SDL_GameControllerButton)code);
+        return s ? s : "Unknown";
+    }
+}
+
+/* ini name for a pad code (SDL string names, "none" for unbound) */
+static const char* pad_code_ini_name(PCPadCode code) {
+    if (code < 0) return "none";
+    if (code & PC_PAD_AXIS_BIT) {
+        const char* s = SDL_GameControllerGetStringForAxis((SDL_GameControllerAxis)(code & 0xFF));
+        return s ? s : "none";
+    }
+    {
+        const char* s = SDL_GameControllerGetStringForButton((SDL_GameControllerButton)code);
+        return s ? s : "none";
+    }
 }
 
 /* parse an input value string to a PCInputCode */
@@ -122,15 +208,43 @@ static PCInputCode parse_input_code(const char* value) {
     return -1; /* invalid */
 }
 
-static void apply_keybind(const char* key, const char* value) {
-    PCInputCode code = parse_input_code(value);
-    if (code < 0) {
-        printf("[Keybindings] WARNING: unknown key name '%s' for '%s'\n", value, key);
-        return;
+/* parse a pad value string; returns -2 on parse failure (-1 means unbound) */
+static PCPadCode parse_pad_code(const char* value) {
+    if (SDL_strcasecmp(value, "none") == 0) return PC_PAD_NONE;
+
+    SDL_GameControllerButton b = SDL_GameControllerGetButtonFromString(value);
+    if (b != SDL_CONTROLLER_BUTTON_INVALID) return (PCPadCode)b;
+
+    SDL_GameControllerAxis ax = SDL_GameControllerGetAxisFromString(value);
+    if (ax == SDL_CONTROLLER_AXIS_TRIGGERLEFT || ax == SDL_CONTROLLER_AXIS_TRIGGERRIGHT) {
+        return PC_PAD_AXIS_BIT | (PCPadCode)ax;
     }
 
+    return -2; /* invalid */
+}
+
+static void apply_keybind(const char* key, const char* value) {
+    /* gamepad entries (Pad_ prefix) */
+    for (int i = 0; i < (int)NUM_PAD_ENTRIES; i++) {
+        if (strcmp(key, s_pad_entries[i].ini_key) == 0) {
+            PCPadCode code = parse_pad_code(value);
+            if (code < -1) {
+                printf("[Keybindings] WARNING: unknown pad input '%s' for '%s'\n", value, key);
+                return;
+            }
+            *(PCPadCode*)((char*)&g_pc_padbindings + s_pad_entries[i].offset) = code;
+            return;
+        }
+    }
+
+    /* keyboard entries */
     for (int i = 0; i < (int)NUM_ENTRIES; i++) {
         if (strcmp(key, s_entries[i].ini_key) == 0) {
+            PCInputCode code = parse_input_code(value);
+            if (code < 0) {
+                printf("[Keybindings] WARNING: unknown key name '%s' for '%s'\n", value, key);
+                return;
+            }
             *(PCInputCode*)((char*)&g_pc_keybindings + s_entries[i].offset) = code;
             return;
         }
@@ -138,9 +252,17 @@ static void apply_keybind(const char* key, const char* value) {
     printf("[Keybindings] WARNING: unknown binding '%s'\n", key);
 }
 
-static void write_defaults(const char* path) {
-    FILE* f = fopen(path, "w");
-    if (!f) return;
+void pc_keybindings_reset_defaults(void) {
+    g_pc_keybindings = s_kb_defaults;
+    g_pc_padbindings = s_pad_defaults;
+}
+
+void pc_keybindings_save(void) {
+    FILE* f = fopen(KEYBINDINGS_FILE, "w");
+    if (!f) {
+        printf("[Keybindings] Failed to write %s\n", KEYBINDINGS_FILE);
+        return;
+    }
 
     fprintf(f, "[Keyboard]\n");
     fprintf(f, "# Key names use SDL2 scancode names.\n");
@@ -154,8 +276,7 @@ static void write_defaults(const char* path) {
 
     for (int i = 0; i < (int)NUM_ENTRIES; i++) {
         PCInputCode code = *(PCInputCode*)((char*)&g_pc_keybindings + s_entries[i].offset);
-        const char* name = input_code_name(code);
-        fprintf(f, "%s = %s\n", s_entries[i].ini_key, name);
+        fprintf(f, "%s = %s\n", s_entries[i].ini_key, pc_input_code_name(code));
 
         /* blank line separators between sections */
         if (i == 7)  fprintf(f, "\n# Main Stick\n");
@@ -163,13 +284,28 @@ static void write_defaults(const char* path) {
         if (i == 15) fprintf(f, "\n# D-Pad\n");
     }
 
+    fprintf(f, "\n[Gamepad]\n");
+    fprintf(f, "# SDL2 game controller names: a, b, x, y, start, leftshoulder,\n");
+    fprintf(f, "#   rightshoulder, lefttrigger, righttrigger, leftstick, rightstick,\n");
+    fprintf(f, "#   dpup, dpdown, dpleft, dpright. Use 'none' to unbind.\n");
+    fprintf(f, "# Sticks are fixed: left stick = movement, right stick = C-stick.\n");
+    fprintf(f, "# The Back/Select button is reserved: it opens the pause menu.\n");
+
+    for (int i = 0; i < (int)NUM_PAD_ENTRIES; i++) {
+        PCPadCode code = *(PCPadCode*)((char*)&g_pc_padbindings + s_pad_entries[i].offset);
+        fprintf(f, "%s = %s\n", s_pad_entries[i].ini_key, pad_code_ini_name(code));
+    }
+
     fclose(f);
+    printf("[Keybindings] Saved %s\n", KEYBINDINGS_FILE);
 }
 
 void pc_keybindings_load(void) {
+    pc_keybindings_reset_defaults();
+
     FILE* f = fopen(KEYBINDINGS_FILE, "r");
     if (!f) {
-        write_defaults(KEYBINDINGS_FILE);
+        pc_keybindings_save();
         printf("[Keybindings] Created default %s\n", KEYBINDINGS_FILE);
         return;
     }
