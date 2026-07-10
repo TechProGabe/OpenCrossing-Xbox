@@ -80,6 +80,9 @@ static int cKF_FrameControl_passCheck(cKF_FrameControl_c* fc, f32 current, f32* 
     }
 
     speed = (fc->start_frame < fc->end_frame) ? fc->speed : -fc->speed;
+#ifdef TARGET_PC
+    speed *= (f32)gamePT->graph->dt_num_60fps_frames;
+#endif
 
     // Check if current frame within target range considering speed
     if ((speed >= 0.0f && cur < current && cur + speed >= current) ||
