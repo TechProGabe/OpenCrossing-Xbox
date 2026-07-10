@@ -8,6 +8,7 @@
 #include "pc_disc.h"
 #include "pc_typing.h"
 #include "pc_pause_menu.h"
+#include "pc_settings_menu.h"
 #include "pc_profiler.h"
 #include "m_kankyo.h"
 
@@ -172,6 +173,12 @@ int pc_platform_poll_events(void) {
                 }
                 break;
             case SDL_KEYDOWN:
+                /* Keybinding capture eats all input first (works from both
+                 * the pause menu and the title Options menu). */
+                if (pc_settings_menu_capture_active()) {
+                    pc_settings_menu_handle_capture_event(&event);
+                    break;
+                }
                 if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat) {
                     pc_speedhack_toggle();
                     break;
@@ -189,6 +196,34 @@ int pc_platform_poll_events(void) {
                     break; /* swallow all keys while paused */
                 }
                 pc_typing_handle_event(&event);
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                if (pc_settings_menu_capture_active()) {
+                    pc_settings_menu_handle_capture_event(&event);
+                }
+                break;
+            case SDL_CONTROLLERBUTTONDOWN:
+                if (pc_settings_menu_capture_active()) {
+                    pc_settings_menu_handle_capture_event(&event);
+                    break;
+                }
+                if (g_pc_paused) {
+                    pc_pause_menu_handle_event(&event);
+                    break;
+                }
+                /* Back/Select opens the pause menu (controller Esc). */
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
+                    pc_pause_menu_toggle();
+                }
+                break;
+            case SDL_CONTROLLERAXISMOTION:
+                if (pc_settings_menu_capture_active()) {
+                    pc_settings_menu_handle_capture_event(&event);
+                    break;
+                }
+                if (g_pc_paused) {
+                    pc_pause_menu_handle_event(&event);
+                }
                 break;
             case SDL_TEXTINPUT:
                 if (g_pc_paused) break;

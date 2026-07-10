@@ -76,66 +76,133 @@ static void confirm_activate(void) {
     }
 }
 
-int pc_pause_menu_handle_event(const SDL_Event* e) {
-    if (!g_pc_paused) return 0;
-    if (e->type != SDL_KEYDOWN) return 0;
-    if (e->key.repeat) return 1;
+/* Device-independent menu actions; keyboard and gamepad both map here. */
+typedef enum {
+    ACT_NONE = 0,
+    ACT_UP,
+    ACT_DOWN,
+    ACT_LEFT,
+    ACT_RIGHT,
+    ACT_CONFIRM,
+    ACT_CANCEL,
+} MenuAction;
 
-    SDL_Keycode k = e->key.keysym.sym;
-
+static void handle_action(MenuAction act) {
     /* Settings page is driven by pc_settings_menu. */
     if (cur_page == PAGE_SETTINGS) {
-        switch (k) {
-            case SDLK_UP:
-            case SDLK_w:     pc_settings_menu_nav_up();   return 1;
-            case SDLK_DOWN:
-            case SDLK_s:     pc_settings_menu_nav_down(); return 1;
-            case SDLK_LEFT:
-            case SDLK_a:     pc_settings_menu_nav_left(); return 1;
-            case SDLK_RIGHT:
-            case SDLK_d:     pc_settings_menu_nav_right(); return 1;
-            case SDLK_RETURN:
-            case SDLK_KP_ENTER:
-            case SDLK_SPACE:
+        switch (act) {
+            case ACT_UP:    pc_settings_menu_nav_up();    break;
+            case ACT_DOWN:  pc_settings_menu_nav_down();  break;
+            case ACT_LEFT:  pc_settings_menu_nav_left();  break;
+            case ACT_RIGHT: pc_settings_menu_nav_right(); break;
+            case ACT_CONFIRM:
                 if (!pc_settings_menu_confirm()) cur_page = PAGE_MAIN;
-                return 1;
-            case SDLK_ESCAPE:
+                break;
+            case ACT_CANCEL:
                 if (!pc_settings_menu_cancel()) cur_page = PAGE_MAIN;
-                return 1;
-            default: return 1;
+                break;
+            default: break;
         }
+        return;
     }
 
     /* Pages owned here (Main, Quit-confirm). */
-    int item_count = (cur_page == PAGE_MAIN) ? MAIN_ITEM_COUNT : CONFIRM_ITEM_COUNT;
-    int* sel       = (cur_page == PAGE_MAIN) ? &main_sel : &confirm_sel;
+    {
+        int item_count = (cur_page == PAGE_MAIN) ? MAIN_ITEM_COUNT : CONFIRM_ITEM_COUNT;
+        int* sel       = (cur_page == PAGE_MAIN) ? &main_sel : &confirm_sel;
 
+        switch (act) {
+            case ACT_UP:
+            case ACT_LEFT:
+                *sel = (*sel + item_count - 1) % item_count;
+                break;
+            case ACT_DOWN:
+            case ACT_RIGHT:
+                *sel = (*sel + 1) % item_count;
+                break;
+            case ACT_CONFIRM:
+                if (cur_page == PAGE_MAIN)              main_activate();
+                else if (cur_page == PAGE_CONFIRM_QUIT) confirm_activate();
+                break;
+            case ACT_CANCEL:
+                if (cur_page == PAGE_CONFIRM_QUIT) cur_page = PAGE_MAIN;
+                else                               pc_pause_menu_toggle();
+                break;
+            default: break;
+        }
+    }
+}
+
+static MenuAction translate_key(SDL_Keycode k) {
     switch (k) {
         case SDLK_UP:
-        case SDLK_w:
-        case SDLK_LEFT:
-        case SDLK_a:
-            *sel = (*sel + item_count - 1) % item_count;
-            return 1;
+        case SDLK_w:        return ACT_UP;
         case SDLK_DOWN:
-        case SDLK_s:
+        case SDLK_s:        return ACT_DOWN;
+        case SDLK_LEFT:
+        case SDLK_a:        return ACT_LEFT;
         case SDLK_RIGHT:
-        case SDLK_d:
-            *sel = (*sel + 1) % item_count;
-            return 1;
+        case SDLK_d:        return ACT_RIGHT;
         case SDLK_RETURN:
         case SDLK_KP_ENTER:
-        case SDLK_SPACE:
-            if (cur_page == PAGE_MAIN)            main_activate();
-            else if (cur_page == PAGE_CONFIRM_QUIT) confirm_activate();
-            return 1;
-        case SDLK_ESCAPE:
-            if (cur_page == PAGE_CONFIRM_QUIT) cur_page = PAGE_MAIN;
-            else                                pc_pause_menu_toggle();
-            return 1;
-        default:
-            return 1; /* swallow all keys while paused */
+        case SDLK_SPACE:    return ACT_CONFIRM;
+        case SDLK_ESCAPE:   return ACT_CANCEL;
     }
+    return ACT_NONE;
+}
+
+static MenuAction translate_pad_button(int button) {
+    switch (button) {
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:    return ACT_UP;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  return ACT_DOWN;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  return ACT_LEFT;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return ACT_RIGHT;
+        case SDL_CONTROLLER_BUTTON_A:          return ACT_CONFIRM;
+        case SDL_CONTROLLER_BUTTON_B:
+        case SDL_CONTROLLER_BUTTON_BACK:
+        case SDL_CONTROLLER_BUTTON_START:      return ACT_CANCEL;
+    }
+    return ACT_NONE;
+}
+
+/* Left-stick nav with a per-axis latch so one push = one step. */
+#define STICK_NAV_PRESS   18000
+#define STICK_NAV_RELEASE 12000
+
+static MenuAction translate_pad_axis(int axis, int value) {
+    static int latch_x = 0, latch_y = 0;
+    int* latch;
+    MenuAction neg, pos;
+
+    if (axis == SDL_CONTROLLER_AXIS_LEFTX)      { latch = &latch_x; neg = ACT_LEFT; pos = ACT_RIGHT; }
+    else if (axis == SDL_CONTROLLER_AXIS_LEFTY) { latch = &latch_y; neg = ACT_UP;   pos = ACT_DOWN; }
+    else return ACT_NONE;
+
+    if (*latch != 0) {
+        if (value > -STICK_NAV_RELEASE && value < STICK_NAV_RELEASE) *latch = 0;
+        return ACT_NONE;
+    }
+    if (value <= -STICK_NAV_PRESS) { *latch = -1; return neg; }
+    if (value >=  STICK_NAV_PRESS) { *latch =  1; return pos; }
+    return ACT_NONE;
+}
+
+int pc_pause_menu_handle_event(const SDL_Event* e) {
+    if (!g_pc_paused) return 0;
+
+    switch (e->type) {
+        case SDL_KEYDOWN:
+            if (e->key.repeat) return 1;
+            handle_action(translate_key(e->key.keysym.sym));
+            return 1; /* swallow all keys while paused */
+        case SDL_CONTROLLERBUTTONDOWN:
+            handle_action(translate_pad_button(e->cbutton.button));
+            return 1;
+        case SDL_CONTROLLERAXISMOTION:
+            handle_action(translate_pad_axis(e->caxis.axis, e->caxis.value));
+            return 1;
+    }
+    return 0;
 }
 
 /* Drawing */
