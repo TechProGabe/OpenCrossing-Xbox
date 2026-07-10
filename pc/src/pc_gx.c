@@ -580,6 +580,7 @@ void pc_gx_begin_frame(void) {
     pc_gx_update_aspect();
     glDisable(GL_SCISSOR_TEST);
     glViewport(0, 0, g_pc_window_w, g_pc_window_h);
+    pc_gx_viewport_state_invalidate();
 #endif
     glClearDepth(g_gx.clear_depth);
     glClearColor(g_gx.clear_color[0], g_gx.clear_color[1], g_gx.clear_color[2], g_gx.clear_color[3]);
@@ -596,6 +597,7 @@ void pc_gx_restore_after_nes(void) {
     g_gx.dirty = PC_GX_DIRTY_ALL;
     g_gx.current_shader = 0; /* Force shader rebind on next draw */
     pc_gx_texture_bind_cache_invalidate();
+    pc_gx_viewport_state_invalidate();
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_BLEND);
@@ -1488,8 +1490,21 @@ void GXSetCurrentMtx(u32 id) {
     g_gx.current_mtx = slot;
 }
 
+/* Last GL viewport/scissor actually applied. J2D setPort re-sends both every
+ * frame with unchanged values; comparing applied GL state (which folds in
+ * window size and aspect mode) lets those calls skip the batch drain.
+ * Invalidated wherever raw GL calls bypass the setters. */
+static struct { int valid, x, y, w, h; double n, f; } s_gl_viewport;
+static struct { int valid, x, y, w, h; } s_gl_scissor;
+
+void pc_gx_viewport_state_invalidate(void) {
+    s_gl_viewport.valid = 0;
+    s_gl_scissor.valid = 0;
+}
+
 void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz) {
-    pc_gx_draw_pending(); /* glViewport is not dirty-tracked */
+    int gl_x, gl_y, gl_w, gl_h;
+
     g_gx.viewport[0] = left;
     g_gx.viewport[1] = top;
     g_gx.viewport[2] = wd;
@@ -1514,17 +1529,34 @@ void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz) {
             }
         }
 
-        int gl_x = (int)(adj_left * sx);
-        int gl_w = (int)(adj_wd * sx);
-        int gl_h = (int)(ht * sy);
-        int gl_y = g_pc_window_h - (int)(top * sy) - gl_h;
-        glViewport(gl_x, gl_y, gl_w, gl_h);
+        gl_x = (int)(adj_left * sx);
+        gl_w = (int)(adj_wd * sx);
+        gl_h = (int)(ht * sy);
+        gl_y = g_pc_window_h - (int)(top * sy) - gl_h;
     }
 #else
     /* GX is Y-down, GL is Y-up */
-    glViewport((int)left, PC_GC_HEIGHT - (int)top - (int)ht, (int)wd, (int)ht);
+    gl_x = (int)left;
+    gl_w = (int)wd;
+    gl_h = (int)ht;
+    gl_y = PC_GC_HEIGHT - (int)top - gl_h;
 #endif
+
+    if (s_gl_viewport.valid && gl_x == s_gl_viewport.x && gl_y == s_gl_viewport.y &&
+        gl_w == s_gl_viewport.w && gl_h == s_gl_viewport.h &&
+        (double)nearz == s_gl_viewport.n && (double)farz == s_gl_viewport.f)
+        return;
+
+    pc_gx_draw_pending(); /* glViewport is not dirty-tracked */
+    glViewport(gl_x, gl_y, gl_w, gl_h);
     glDepthRange((double)nearz, (double)farz);
+    s_gl_viewport.valid = 1;
+    s_gl_viewport.x = gl_x;
+    s_gl_viewport.y = gl_y;
+    s_gl_viewport.w = gl_w;
+    s_gl_viewport.h = gl_h;
+    s_gl_viewport.n = (double)nearz;
+    s_gl_viewport.f = (double)farz;
 }
 
 void GXSetViewportJitter(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz, u32 field) {
@@ -1532,26 +1564,42 @@ void GXSetViewportJitter(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz,
 }
 
 void GXSetScissor(u32 left, u32 top, u32 wd, u32 ht) {
-    pc_gx_draw_pending(); /* glScissor is not dirty-tracked */
+    int gl_x, gl_y, gl_w, gl_h;
+
     g_gx.scissor[0] = left;
     g_gx.scissor[1] = top;
     g_gx.scissor[2] = wd;
     g_gx.scissor[3] = ht;
-    glEnable(GL_SCISSOR_TEST);
 #ifdef PC_ENHANCEMENTS
     {
         float sx = (float)g_pc_window_w / (float)PC_GC_WIDTH;
         float sy = (float)g_pc_window_h / (float)PC_GC_HEIGHT;
-        int gl_x = (int)(left * sx);
-        int gl_w = (int)(wd * sx);
-        int gl_h = (int)(ht * sy);
-        int gl_y = g_pc_window_h - (int)(top * sy) - gl_h;
-        glScissor(gl_x, gl_y, gl_w, gl_h);
+        gl_x = (int)(left * sx);
+        gl_w = (int)(wd * sx);
+        gl_h = (int)(ht * sy);
+        gl_y = g_pc_window_h - (int)(top * sy) - gl_h;
     }
 #else
     /* GX is Y-down, GL is Y-up */
-    glScissor(left, PC_GC_HEIGHT - top - ht, wd, ht);
+    gl_x = (int)left;
+    gl_w = (int)wd;
+    gl_h = (int)ht;
+    gl_y = PC_GC_HEIGHT - (int)top - (int)ht;
 #endif
+
+    /* Cache validity implies GL_SCISSOR_TEST is enabled */
+    if (s_gl_scissor.valid && gl_x == s_gl_scissor.x && gl_y == s_gl_scissor.y &&
+        gl_w == s_gl_scissor.w && gl_h == s_gl_scissor.h)
+        return;
+
+    pc_gx_draw_pending(); /* glScissor is not dirty-tracked */
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(gl_x, gl_y, gl_w, gl_h);
+    s_gl_scissor.valid = 1;
+    s_gl_scissor.x = gl_x;
+    s_gl_scissor.y = gl_y;
+    s_gl_scissor.w = gl_w;
+    s_gl_scissor.h = gl_h;
 }
 
 void GXSetScissorBoxOffset(s32 x, s32 y) { (void)x; (void)y; }

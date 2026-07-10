@@ -316,6 +316,7 @@ void pc_gx_flush_vertices(void);
 void pc_gx_flush_if_begin_complete(void);
 void pc_gx_draw_pending(void);
 void pc_gx_texture_bind_cache_invalidate(void);
+void pc_gx_viewport_state_invalidate(void);
 
 /* TEV shader */
 PCGXShaderVariant* pc_gx_tev_get_variant(void);
