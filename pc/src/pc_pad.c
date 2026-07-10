@@ -28,6 +28,17 @@ static int pad_code_pressed(PCPadCode code) {
     return SDL_GameControllerGetButton(g_controller, (SDL_GameControllerButton)code);
 }
 
+/* analog trigger value for the L/R binding (digital bindings read as full press) */
+static u8 pad_trigger_value(PCPadCode code) {
+    if (code < 0) return 0;
+    if (code & PC_PAD_AXIS_BIT) {
+        s16 v = SDL_GameControllerGetAxis(g_controller, (SDL_GameControllerAxis)(code & 0xFF));
+        if (v < 0) v = 0;
+        return (u8)(v >> 7);
+    }
+    return SDL_GameControllerGetButton(g_controller, (SDL_GameControllerButton)code) ? 255 : 0;
+}
+
 BOOL PADInit(void) {
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
@@ -149,11 +160,8 @@ u32 PADRead(PADStatus* status) {
             cstickY = (s8)sry;
         }
 
-        /* analog trigger values always come from the physical triggers */
-        u8 lt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >> 7);
-        u8 rt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >> 7);
-        status[0].triggerLeft = lt;
-        status[0].triggerRight = rt;
+        status[0].triggerLeft  = pad_trigger_value(pb->l);
+        status[0].triggerRight = pad_trigger_value(pb->r);
     }
 
     status[0].button = buttons;

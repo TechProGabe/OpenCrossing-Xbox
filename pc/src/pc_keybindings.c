@@ -32,7 +32,7 @@ static const PCKeybindings s_kb_defaults = {
 };
 
 /* Back/Select is reserved for opening the PC pause menu, so it is not a
- * default here. Triggers: LB=L, RB=Z, RT=R (GC Z is a digital button). */
+ * default here. Triggers: LT=L, RT=R, RB=Z (GC Z is a digital button). */
 static const PCPadBindings s_pad_defaults = {
     .a     = SDL_CONTROLLER_BUTTON_A,
     .b     = SDL_CONTROLLER_BUTTON_B,
@@ -40,7 +40,7 @@ static const PCPadBindings s_pad_defaults = {
     .y     = SDL_CONTROLLER_BUTTON_Y,
     .start = SDL_CONTROLLER_BUTTON_START,
     .z     = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
-    .l     = SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+    .l     = PC_PAD_AXIS_BIT | SDL_CONTROLLER_AXIS_TRIGGERLEFT,
     .r     = PC_PAD_AXIS_BIT | SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
     .dpad_up    = SDL_CONTROLLER_BUTTON_DPAD_UP,
     .dpad_down  = SDL_CONTROLLER_BUTTON_DPAD_DOWN,

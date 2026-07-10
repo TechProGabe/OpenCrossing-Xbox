@@ -18,6 +18,18 @@ static PADClampRegion ClampRegion = {
 	30,
 	180,
 
+#ifdef TARGET_PC
+	// Stick deadzone comes from the configurable setting in pc_pad.c
+	// Left stick
+	0,
+	72,
+	40,
+
+	// Right stick
+	0,
+	59,
+	31,
+#else
 	// Left stick
 	15,
 	72,
@@ -27,6 +39,7 @@ static PADClampRegion ClampRegion = {
 	15,
 	59,
 	31,
+#endif
 };
 
 // functions
