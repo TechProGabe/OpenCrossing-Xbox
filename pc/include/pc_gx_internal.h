@@ -262,11 +262,18 @@ typedef struct {
 
 extern PCGXState g_gx;
 
+void pc_gx_tev_seq_reset(void);
+
 static inline void pc_gx_dirty_set(unsigned int flags) {
     unsigned int f = flags & PC_GX_DIRTY_UNIFORM_GROUPS;
     g_gx.dirty |= flags;
     if (f) {
         unsigned int seq = ++g_gx.seq_counter;
+        /* 0xFFFFFFFF is the never-uploaded sentinel: on wrap restart the epoch */
+        if (seq == 0xFFFFFFFFu) {
+            pc_gx_tev_seq_reset();
+            seq = g_gx.seq_counter = 1;
+        }
         do {
             g_gx.group_seq[__builtin_ctz(f)] = seq;
             f &= f - 1;

@@ -109,7 +109,8 @@ static void set_sampler_uniforms(GLuint prog, const PCGXUloc* u) {
 
 /* --- variant cache --- */
 
-#define PC_GX_SHADER_CACHE_SIZE 128
+/* Well above the ~116-key seed so new configs never exhaust the cache */
+#define PC_GX_SHADER_CACHE_SIZE 256
 
 /* Dirty groups whose values feed the shader key */
 #define PC_GX_SHADER_CONFIG_DIRTY \
@@ -148,6 +149,14 @@ static void variant_init(PCGXShaderVariant* v, GLuint prog) {
     pc_gx_cache_uniform_locations(prog, &v->uloc);
     memset(v->uploaded_seq, 0xFF, sizeof(v->uploaded_seq));
     set_sampler_uniforms(prog, &v->uloc);
+}
+
+/* Seq counter wrapped: forget upload history so no stale seq aliases a new one */
+void pc_gx_tev_seq_reset(void) {
+    memset(s_uber.uploaded_seq, 0xFF, sizeof(s_uber.uploaded_seq));
+    for (int i = 0; i < s_variant_count; i++)
+        memset(s_variants[i].uploaded_seq, 0xFF, sizeof(s_variants[i].uploaded_seq));
+    memset(g_gx.group_seq, 0, sizeof(g_gx.group_seq));
 }
 
 static void pc_gx_build_shader_key(PCGXShaderKey* k) {
@@ -447,13 +456,32 @@ PCGXShaderVariant* pc_gx_tev_get_variant(void) {
     return s_current;
 }
 
-/* Compiles the key unless already cached. Returns 1 if compiled. */
+/* Returns 1 if compiled, 0 if already known or cache full, -1 if compile
+ * failed (slot given back: a bad key from disk must not hold cache space) */
 static int precompile_key(const PCGXShaderKey* key) {
     if (s_variant_count >= PC_GX_SHADER_CACHE_SIZE) return 0;
     for (int i = 0; i < s_variant_count; i++) {
         if (memcmp(key, &s_variants[i].key, sizeof(*key)) == 0) return 0;
     }
-    compile_variant(key);
+    PCGXShaderVariant* v = compile_variant(key);
+    if (v->prog == default_program) {
+        s_variant_count--;
+        return -1;
+    }
+    return 1;
+}
+
+/* Rejects garbage keys from a torn cache file that might still compile */
+static int key_is_sane(const PCGXShaderKey* k) {
+    if (k->num_stages > PC_GX_MAX_TEV_STAGES || k->num_ind > 4) return 0;
+    if (k->fog_enable > 1 || k->light[0] > 1 || k->light[4] > 1) return 0;
+    for (int i = 0; i < 16; i++) {
+        if (k->swap_tbl[i] > 3) return 0;
+    }
+    for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
+        if (k->st[s].tc_src > 1 || k->st[s].use_tex > 1) return 0;
+        if (k->st[s].outc[0] > 1 || k->st[s].outc[1] > 1) return 0;
+    }
     return 1;
 }
 
@@ -470,7 +498,7 @@ static void pc_gx_tev_precompile_cached(void) {
         for (int i = 0; i < PC_SHADER_SEED_COUNT; i++) {
             PCGXShaderKey key;
             memcpy(&key, pc_shader_seed_keys[i], sizeof(key));
-            loaded += precompile_key(&key);
+            if (precompile_key(&key) == 1) loaded++;
         }
     } else {
         fprintf(stderr, "WARNING: pc_shader_seed.h key size mismatch, regenerate with gen_shader_seed.py\n");
@@ -484,15 +512,32 @@ static void pc_gx_tev_precompile_cached(void) {
             hdr[0] != PC_GX_KEY_CACHE_MAGIC || hdr[1] != (u32)sizeof(PCGXShaderKey)) {
             /* Stale format (key struct changed): drop the file */
             fclose(f);
-            f = NULL;
             remove(PC_GX_KEY_CACHE_FILE);
             printf("[PC/TEV] shader key cache format changed, discarded\n");
         } else {
+            /* Bad entries mean a torn file: rewrite with the good ones */
+            static PCGXShaderKey good[PC_GX_SHADER_CACHE_SIZE];
+            int ngood = 0, bad = 0;
             PCGXShaderKey key;
             while (fread(&key, sizeof(key), 1, f) == 1) {
-                loaded += precompile_key(&key);
+                if (!key_is_sane(&key)) { bad++; continue; }
+                int r = precompile_key(&key);
+                if (r < 0) { bad++; continue; }
+                if (r == 1) loaded++;
+                if (ngood < PC_GX_SHADER_CACHE_SIZE) good[ngood++] = key;
             }
             fclose(f);
+            if (bad) {
+                FILE* w = fopen(PC_GX_KEY_CACHE_FILE, "wb");
+                if (w) {
+                    u32 whdr[2] = { PC_GX_KEY_CACHE_MAGIC, (u32)sizeof(PCGXShaderKey) };
+                    fwrite(whdr, sizeof(whdr), 1, w);
+                    if (ngood) fwrite(good, sizeof(good[0]), (size_t)ngood, w);
+                    fclose(w);
+                }
+                fprintf(stderr, "WARNING: shader key cache had %d bad entries, rewrote %s\n",
+                        bad, PC_GX_KEY_CACHE_FILE);
+            }
         }
     }
 
