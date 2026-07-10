@@ -7,6 +7,7 @@
 #include "pc_texture_pack.h"
 #include "pc_gx_internal.h"
 #include "pc_settings.h"
+#include "pc_profiler.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -545,6 +546,7 @@ static GLuint load_dds_file(const char* filepath, int* out_w, int* out_h) {
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
+    pc_profiler_add_count_texture_bind();
 
     if (compressed) {
         glCompressedTexImage2D(GL_TEXTURE_2D, 0, gl_internal,
@@ -750,6 +752,7 @@ static int tpc_upload_entry(const TPCEntryHeader* eh, const unsigned char* pixel
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
+    pc_profiler_add_count_texture_bind();
 
     if (eh->compressed) {
         glCompressedTexImage2D(GL_TEXTURE_2D, 0, (GLenum)eh->gl_internal,
@@ -983,6 +986,7 @@ void pc_texture_pack_preload_all(void) {
             GLuint tex;
             glGenTextures(1, &tex);
             glBindTexture(GL_TEXTURE_2D, tex);
+            pc_profiler_add_count_texture_bind();
             if (comp)
                 glCompressedTexImage2D(GL_TEXTURE_2D, 0, (GLenum)gl_int,
                                        (GLsizei)dds_w, (GLsizei)dds_h, 0, data_size, pixels);
@@ -1040,6 +1044,7 @@ void pc_texture_pack_preload_all(void) {
             GLuint tex;
             glGenTextures(1, &tex);
             glBindTexture(GL_TEXTURE_2D, tex);
+            pc_profiler_add_count_texture_bind();
             if (comp)
                 glCompressedTexImage2D(GL_TEXTURE_2D, 0, (GLenum)gl_int,
                                        (GLsizei)dds_w, (GLsizei)dds_h, 0, data_size, pixels);

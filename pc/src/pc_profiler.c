@@ -75,66 +75,61 @@ void pc_profiler_begin_frame(void) {
     s_have_frame = 1;
 }
 
-Uint64 pc_profiler_begin_timer(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return 0;
-    return SDL_GetPerformanceCounter();
-}
-
-void pc_profiler_add_time(PCProfilerTimer timer, Uint64 start) {
-    if (!g_pc_profile_enabled || !s_have_frame || start == 0 || timer < 0 || timer >= PC_PROF_TIMER_COUNT) return;
+void pc_profiler_add_time_slow(PCProfilerTimer timer, Uint64 start) {
+    if (!s_have_frame || start == 0 || timer < 0 || timer >= PC_PROF_TIMER_COUNT) return;
     s_frame.timers_ms[timer] += pc_profiler_ticks_to_ms(SDL_GetPerformanceCounter() - start);
 }
 
-void pc_profiler_add_count_draw(int vertices, int indices) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_draw_slow(int vertices, int indices) {
+    if (!s_have_frame) return;
     s_frame.draws++;
     s_frame.vertices += vertices;
     s_frame.indices += indices;
 }
 
-void pc_profiler_add_count_flush(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_flush_slow(void) {
+    if (!s_have_frame) return;
     s_frame.flushes++;
 }
 
-void pc_profiler_add_count_shader_switch(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_shader_switch_slow(void) {
+    if (!s_have_frame) return;
     s_frame.shader_switches++;
 }
 
-void pc_profiler_add_count_uniform(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_uniform_slow(void) {
+    if (!s_have_frame) return;
     s_frame.uniforms++;
 }
 
-void pc_profiler_add_count_uniform_skip(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_uniform_skip_slow(void) {
+    if (!s_have_frame) return;
     s_frame.uniform_skips++;
 }
 
-void pc_profiler_add_count_uniform_lookup(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_uniform_lookup_slow(void) {
+    if (!s_have_frame) return;
     s_frame.uniform_lookups++;
 }
 
-void pc_profiler_add_count_texture_bind(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_texture_bind_slow(void) {
+    if (!s_have_frame) return;
     s_frame.texture_binds++;
 }
 
-void pc_profiler_add_count_buffer_upload(size_t bytes) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_buffer_upload_slow(size_t bytes) {
+    if (!s_have_frame) return;
     s_frame.buffer_uploads++;
     s_frame.buffer_upload_bytes += bytes;
 }
 
-void pc_profiler_add_count_state_change(void) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_count_state_change_slow(void) {
+    if (!s_have_frame) return;
     s_frame.state_changes++;
 }
 
-void pc_profiler_add_dirty_mask(unsigned int dirty) {
-    if (!g_pc_profile_enabled || !s_have_frame) return;
+void pc_profiler_add_dirty_mask_slow(unsigned int dirty) {
+    if (!s_have_frame) return;
     for (int i = 0; i < 16; i++) {
         if (dirty & (1u << i)) s_frame.dirty_groups[i]++;
     }

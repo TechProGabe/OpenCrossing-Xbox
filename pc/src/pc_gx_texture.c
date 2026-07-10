@@ -628,6 +628,7 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
         if (efb_tex) {
             pc_gx_draw_pending();
             glBindTexture(GL_TEXTURE_2D, efb_tex);
+            pc_profiler_add_count_texture_bind();
             pc_gx_texture_bind_cache_invalidate();
             GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
@@ -663,6 +664,7 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
         if (params_changed) {
             pc_gx_draw_pending();
             glBindTexture(GL_TEXTURE_2D, tex);
+            pc_profiler_add_count_texture_bind();
             pc_gx_texture_bind_cache_invalidate();
         }
         if (cached->wrap_s != wrap_s || cached->wrap_t != wrap_t) {
@@ -716,6 +718,7 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
                                                &hd_w, &hd_h);
         if (hd_tex) {
             glBindTexture(GL_TEXTURE_2D, hd_tex);
+            pc_profiler_add_count_texture_bind();
             pc_gx_texture_bind_cache_invalidate();
             GLenum gl_ws = (wrap_s == 2) ? GL_MIRRORED_REPEAT :
                            (wrap_s == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
@@ -744,6 +747,7 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
+    pc_profiler_add_count_texture_bind();
     pc_gx_texture_bind_cache_invalidate();
 
     if (image_ptr && width > 0 && height > 0 && width <= 1024 && height <= 1024) {

@@ -45,6 +45,8 @@ extern void pc_gx_draw_pending(void);
 extern int g_pc_window_w;
 extern int g_pc_window_h;
 extern int pc_settings_get_nes_aspect(void);
+extern int g_pc_profile_enabled;
+extern void pc_profiler_add_count_texture_bind_slow(void);
 
 /* ======================================================================
  * Global variables required by fixNES modules (normally in main.c)
@@ -157,6 +159,7 @@ static void fixnes_init_gl(void) {
 
     glGenTextures(1, &fixnes_texture);
     glBindTexture(GL_TEXTURE_2D, fixnes_texture);
+    if (g_pc_profile_enabled) pc_profiler_add_count_texture_bind_slow();
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -390,6 +393,7 @@ void pc_fixnes_render_frame(uint16_t *fb) {
      * (R in low bits) — upload with GL_UNSIGNED_SHORT_5_6_5_REV.
      * Skip top 8 rows (often garbage), show 224 lines. */
     glBindTexture(GL_TEXTURE_2D, fixnes_texture);
+    if (g_pc_profile_enabled) pc_profiler_add_count_texture_bind_slow();
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 256, 224, 0,
                  GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, fb + 256 * 8);
 
@@ -423,6 +427,7 @@ void pc_fixnes_render_frame(uint16_t *fb) {
     glUseProgram(fixnes_shader);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, fixnes_texture);
+    if (g_pc_profile_enabled) pc_profiler_add_count_texture_bind_slow();
     glUniform1i(fixnes_tex_uniform, 0);
     glBindVertexArray(fixnes_vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);

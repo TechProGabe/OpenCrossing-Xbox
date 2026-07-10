@@ -2279,6 +2279,7 @@ static void pc_gx_copy_tex_execute_impl(void* dest, GXBool clear) {
         GLuint efb_tex;
         glGenTextures(1, &efb_tex);
         glBindTexture(GL_TEXTURE_2D, efb_tex);
+        pc_profiler_add_count_texture_bind();
         pc_gx_texture_bind_cache_invalidate();
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, read_wd, read_ht, 0,
@@ -2289,6 +2290,7 @@ static void pc_gx_copy_tex_execute_impl(void* dest, GXBool clear) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         pc_gx_efb_capture_store((u32)(uintptr_t)dest, efb_tex);
         glBindTexture(GL_TEXTURE_2D, 0);
+        pc_profiler_add_count_texture_bind();
         pc_gx_texture_bind_cache_invalidate();
         /* Unit 0 binding was clobbered; force rebind at next flush */
         DIRTY(PC_GX_DIRTY_TEXTURES);

@@ -50,6 +50,15 @@ void VIWaitForRetrace(void) {
     }
     pc_profiler_add_time(PC_PROF_TIMER_POLL_EVENTS, t_before_poll);
 
+    /* Drain the frame's last deferred batch here so its cost bills to
+     * gx_flush instead of inflating the swap timer. */
+    {
+        extern void pc_gx_draw_pending(void);
+        Uint64 t_drain = pc_profiler_begin_timer();
+        pc_gx_draw_pending();
+        pc_profiler_add_time(PC_PROF_TIMER_GX_FLUSH, t_drain);
+    }
+
     Uint64 t_before_swap = SDL_GetPerformanceCounter();
     Uint64 t_before_swap_prof = pc_profiler_begin_timer();
     pc_platform_swap_buffers();
