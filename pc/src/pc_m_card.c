@@ -876,6 +876,17 @@ int mCD_InitGameStart_bg(int player_no, int card_private_idx, int start_cond, s3
                 mPr_CopyPrivateInfo(foreigner, &l_mcd_foreigner_file.file.priv);
                 mPr_LoadPak_and_SetPrivateInfo2(foreigner, (u8)player_no);
                 mHm_SetNowHome();
+
+                if (Now_Private != NULL) {
+                    u16 copy_protect = pc_get_land_copy_protect();
+                    pc_set_reset_code(Now_Private);
+                    Common_Set(copy_protect, copy_protect);
+                    Save_Set(copy_protect, copy_protect);
+                    Save_Set(travel_hard_time, lbRTC_HardTime());
+                    if (!pc_save_write_gci()) {
+                        OSReport("[PC] InitGameStart: return-home persist failed\n");
+                    }
+                }
                 OSReport("[PC] InitGameStart: OUTGOING_FOREIGNER — landed player_no=%d\n",
                          Common_Get(player_no));
             }
