@@ -9,7 +9,6 @@ typedef struct {
     int flushes;
     int shader_switches;
     int uniforms;
-    int uniform_skips;
     int uniform_lookups;
     int texture_binds;
     int buffer_uploads;
@@ -102,11 +101,6 @@ void pc_profiler_add_count_uniform_slow(void) {
     s_frame.uniforms++;
 }
 
-void pc_profiler_add_count_uniform_skip_slow(void) {
-    if (!s_have_frame) return;
-    s_frame.uniform_skips++;
-}
-
 void pc_profiler_add_count_uniform_lookup_slow(void) {
     if (!s_have_frame) return;
     s_frame.uniform_lookups++;
@@ -143,7 +137,6 @@ static void pc_profiler_accum_frame(void) {
     s_accum.flushes += s_frame.flushes;
     s_accum.shader_switches += s_frame.shader_switches;
     s_accum.uniforms += s_frame.uniforms;
-    s_accum.uniform_skips += s_frame.uniform_skips;
     s_accum.uniform_lookups += s_frame.uniform_lookups;
     s_accum.texture_binds += s_frame.texture_binds;
     s_accum.buffer_uploads += s_frame.buffer_uploads;
@@ -193,9 +186,8 @@ static void pc_profiler_print_report(void) {
     }
     printf("\n");
 
-    printf("[PROFILE] gl calls/state per frame: uniforms=%.1f skipped=%.1f lookups=%.1f tex_binds=%.1f buf_uploads=%.1f %.1fKB shader_switch=%.1f state=%.1f cmds=%.1f tris=%.1f vtxcmd=%.1f dl=%.1f cull=%.1f/%.1f\n",
+    printf("[PROFILE] gl calls/state per frame: uniforms=%.1f lookups=%.1f tex_binds=%.1f buf_uploads=%.1f %.1fKB shader_switch=%.1f state=%.1f cmds=%.1f tris=%.1f vtxcmd=%.1f dl=%.1f cull=%.1f/%.1f\n",
            (double)s_accum.uniforms / n,
-           (double)s_accum.uniform_skips / n,
            (double)s_accum.uniform_lookups / n,
            (double)s_accum.texture_binds / n,
            (double)s_accum.buffer_uploads / n,

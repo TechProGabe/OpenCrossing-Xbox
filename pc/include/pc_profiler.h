@@ -43,7 +43,6 @@ void pc_profiler_add_count_draw_slow(int vertices, int indices);
 void pc_profiler_add_count_flush_slow(void);
 void pc_profiler_add_count_shader_switch_slow(void);
 void pc_profiler_add_count_uniform_slow(void);
-void pc_profiler_add_count_uniform_skip_slow(void);
 void pc_profiler_add_count_uniform_lookup_slow(void);
 void pc_profiler_add_count_texture_bind_slow(void);
 void pc_profiler_add_count_buffer_upload_slow(size_t bytes);
@@ -68,9 +67,6 @@ static inline void pc_profiler_add_count_shader_switch(void) {
 }
 static inline void pc_profiler_add_count_uniform(void) {
     if (g_pc_profile_enabled) pc_profiler_add_count_uniform_slow();
-}
-static inline void pc_profiler_add_count_uniform_skip(void) {
-    if (g_pc_profile_enabled) pc_profiler_add_count_uniform_skip_slow();
 }
 static inline void pc_profiler_add_count_uniform_lookup(void) {
     if (g_pc_profile_enabled) pc_profiler_add_count_uniform_lookup_slow();

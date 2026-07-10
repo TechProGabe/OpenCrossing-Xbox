@@ -31,189 +31,6 @@ typedef struct { u8 r, g, b, a; } GXColor;
 #undef glUniformMatrix3fv
 #undef glUniformMatrix4fv
 
-#ifndef PC_GX_ENABLE_UNIFORM_VALUE_CACHE
-#define PC_GX_ENABLE_UNIFORM_VALUE_CACHE 0
-#endif
-
-#if PC_GX_ENABLE_UNIFORM_VALUE_CACHE
-// Experimental
-#define PC_GX_UNIFORM_CACHE_MAX   2048
-#define PC_GX_UNIFORM_CACHE_BYTES 128
-
-typedef struct {
-    int valid;
-    size_t bytes;
-    unsigned char data[PC_GX_UNIFORM_CACHE_BYTES];
-} PCGXUniformCacheEntry;
-
-static PCGXUniformCacheEntry s_uniform_cache[PC_GX_UNIFORM_CACHE_MAX];
-
-static void pc_gx_uniform_cache_reset(void) {
-    memset(s_uniform_cache, 0, sizeof(s_uniform_cache));
-}
-
-static int pc_gx_uniform_cache_changed(GLint loc, const void* data, size_t bytes) {
-    if (loc < 0) return 0;
-    if (loc >= PC_GX_UNIFORM_CACHE_MAX) return 1;
-    if (bytes > PC_GX_UNIFORM_CACHE_BYTES) return 1;
-
-    PCGXUniformCacheEntry* entry = &s_uniform_cache[loc];
-    if (entry->valid && entry->bytes == bytes && memcmp(entry->data, data, bytes) == 0) {
-        pc_profiler_add_count_uniform_skip();
-        return 0;
-    }
-
-    entry->valid = 1;
-    entry->bytes = bytes;
-    memcpy(entry->data, data, bytes);
-    return 1;
-}
-
-static void pc_gx_uniform1i(GLint loc, GLint v0) {
-    GLint data[1] = { v0 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform1i(loc, v0);
-}
-
-static void pc_gx_uniform2i(GLint loc, GLint v0, GLint v1) {
-    GLint data[2] = { v0, v1 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform2i(loc, v0, v1);
-}
-
-static void pc_gx_uniform3i(GLint loc, GLint v0, GLint v1, GLint v2) {
-    GLint data[3] = { v0, v1, v2 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform3i(loc, v0, v1, v2);
-}
-
-static void pc_gx_uniform4i(GLint loc, GLint v0, GLint v1, GLint v2, GLint v3) {
-    GLint data[4] = { v0, v1, v2, v3 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform4i(loc, v0, v1, v2, v3);
-}
-
-static void pc_gx_uniform1f(GLint loc, GLfloat v0) {
-    GLfloat data[1] = { v0 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform1f(loc, v0);
-}
-
-static void pc_gx_uniform2f(GLint loc, GLfloat v0, GLfloat v1) {
-    GLfloat data[2] = { v0, v1 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform2f(loc, v0, v1);
-}
-
-static void pc_gx_uniform3f(GLint loc, GLfloat v0, GLfloat v1, GLfloat v2) {
-    GLfloat data[3] = { v0, v1, v2 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform3f(loc, v0, v1, v2);
-}
-
-static void pc_gx_uniform4f(GLint loc, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3) {
-    GLfloat data[4] = { v0, v1, v2, v3 };
-    if (!pc_gx_uniform_cache_changed(loc, data, sizeof(data))) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform4f(loc, v0, v1, v2, v3);
-}
-
-static void pc_gx_uniform1iv(GLint loc, GLsizei count, const GLint* value) {
-    size_t bytes = (size_t)count * sizeof(GLint);
-    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform1iv(loc, count, value);
-}
-
-static void pc_gx_uniform2iv(GLint loc, GLsizei count, const GLint* value) {
-    size_t bytes = (size_t)count * 2 * sizeof(GLint);
-    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform2iv(loc, count, value);
-}
-
-static void pc_gx_uniform3iv(GLint loc, GLsizei count, const GLint* value) {
-    size_t bytes = (size_t)count * 3 * sizeof(GLint);
-    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform3iv(loc, count, value);
-}
-
-static void pc_gx_uniform4iv(GLint loc, GLsizei count, const GLint* value) {
-    size_t bytes = (size_t)count * 4 * sizeof(GLint);
-    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform4iv(loc, count, value);
-}
-
-static void pc_gx_uniform3fv(GLint loc, GLsizei count, const GLfloat* value) {
-    size_t bytes = (size_t)count * 3 * sizeof(GLfloat);
-    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform3fv(loc, count, value);
-}
-
-static void pc_gx_uniform4fv(GLint loc, GLsizei count, const GLfloat* value) {
-    size_t bytes = (size_t)count * 4 * sizeof(GLfloat);
-    if (!pc_gx_uniform_cache_changed(loc, value, bytes)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniform4fv(loc, count, value);
-}
-
-static void pc_gx_uniform_matrix3fv(GLint loc, GLsizei count, GLboolean transpose, const GLfloat* value) {
-    unsigned char data[1 + 9 * sizeof(GLfloat)];
-    size_t value_bytes = (size_t)count * 9 * sizeof(GLfloat);
-    if (count != 1 || value_bytes + 1 > sizeof(data)) {
-        pc_profiler_add_count_uniform();
-        glad_glUniformMatrix3fv(loc, count, transpose, value);
-        return;
-    }
-    data[0] = (unsigned char)transpose;
-    memcpy(data + 1, value, value_bytes);
-    if (!pc_gx_uniform_cache_changed(loc, data, value_bytes + 1)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniformMatrix3fv(loc, count, transpose, value);
-}
-
-static void pc_gx_uniform_matrix4fv(GLint loc, GLsizei count, GLboolean transpose, const GLfloat* value) {
-    unsigned char data[1 + 16 * sizeof(GLfloat)];
-    size_t value_bytes = (size_t)count * 16 * sizeof(GLfloat);
-    if (count != 1 || value_bytes + 1 > sizeof(data)) {
-        pc_profiler_add_count_uniform();
-        glad_glUniformMatrix4fv(loc, count, transpose, value);
-        return;
-    }
-    data[0] = (unsigned char)transpose;
-    memcpy(data + 1, value, value_bytes);
-    if (!pc_gx_uniform_cache_changed(loc, data, value_bytes + 1)) return;
-    pc_profiler_add_count_uniform();
-    glad_glUniformMatrix4fv(loc, count, transpose, value);
-}
-
-#define glUniform1i        pc_gx_uniform1i
-#define glUniform2i        pc_gx_uniform2i
-#define glUniform3i        pc_gx_uniform3i
-#define glUniform4i        pc_gx_uniform4i
-#define glUniform1f        pc_gx_uniform1f
-#define glUniform2f        pc_gx_uniform2f
-#define glUniform3f        pc_gx_uniform3f
-#define glUniform4f        pc_gx_uniform4f
-#define glUniform1iv       pc_gx_uniform1iv
-#define glUniform2iv       pc_gx_uniform2iv
-#define glUniform3iv       pc_gx_uniform3iv
-#define glUniform4iv       pc_gx_uniform4iv
-#define glUniform4fv       pc_gx_uniform4fv
-#define glUniform3fv       pc_gx_uniform3fv
-#define glUniformMatrix3fv pc_gx_uniform_matrix3fv
-#define glUniformMatrix4fv pc_gx_uniform_matrix4fv
-#else
 #define glUniform1i(...)        (pc_profiler_add_count_uniform(), glad_glUniform1i(__VA_ARGS__))
 #define glUniform2i(...)        (pc_profiler_add_count_uniform(), glad_glUniform2i(__VA_ARGS__))
 #define glUniform3i(...)        (pc_profiler_add_count_uniform(), glad_glUniform3i(__VA_ARGS__))
@@ -230,7 +47,6 @@ static void pc_gx_uniform_matrix4fv(GLint loc, GLsizei count, GLboolean transpos
 #define glUniform3fv(...)       (pc_profiler_add_count_uniform(), glad_glUniform3fv(__VA_ARGS__))
 #define glUniformMatrix3fv(...) (pc_profiler_add_count_uniform(), glad_glUniformMatrix3fv(__VA_ARGS__))
 #define glUniformMatrix4fv(...) (pc_profiler_add_count_uniform(), glad_glUniformMatrix4fv(__VA_ARGS__))
-#endif
 
 /* --- Global GX State --- */
 PCGXState g_gx;
@@ -941,9 +757,6 @@ void pc_gx_flush_vertices(void) {
         pc_gx_use_program_profiled(shader);
         PC_GL_CHECK("glUseProgram");
         g_gx.current_shader = shader;
-#if PC_GX_ENABLE_UNIFORM_VALUE_CACHE
-        pc_gx_uniform_cache_reset();
-#endif
         g_gx.uloc = var->uloc;
         /* Uniform values persist per program: re-upload only groups that
          * changed while another program was bound */
