@@ -50,7 +50,7 @@ static const Item tab_video_items[] = {
 
 static const Item tab_gameplay_items[] = {
     { "Resetti",          ITEM_RESETTI,          0 },
-    { "Nookington's Upgrade", ITEM_SHOP_VISITOR,     0 },
+    { "Shop upgrade",     ITEM_SHOP_VISITOR,     0 },
     { "Borderless acres", ITEM_BORDERLESS_ACRES, 0 },
     { "NES aspect",       ITEM_NES_ASPECT,       0 },
 };
