@@ -42,16 +42,14 @@ add_compile_definitions(
     KEYBOARD_TYPING   # Physical keyboard typing in text editor. Remove for platforms without keyboards.
 )
 
-# Common compiler flags (applied to all sources)
-if(MSVC)
-    add_compile_options(/W0)
-else()
-    add_compile_options(
-        -O2
-        -fno-strict-aliasing
-        -fwrapv
-    )
-endif()
+# Common compiler flags (applied to all sources). GCC is required:
+# the decomp depends on -fno-strict-aliasing/-fwrapv semantics and the
+# PC layer uses GCC builtins.
+add_compile_options(
+    -O2
+    -fno-strict-aliasing
+    -fwrapv
+)
 
 # =============================================================================
 # Include paths
