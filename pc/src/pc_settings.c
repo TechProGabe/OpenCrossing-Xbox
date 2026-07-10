@@ -1,6 +1,7 @@
 /* pc_settings.c - runtime settings loaded from settings.ini */
 #include "pc_settings.h"
 #include "pc_platform.h"
+#include "m_player_lib.h"
 
 PCSettings g_pc_settings = {
     .window_width  = PC_SCREEN_WIDTH,
@@ -11,6 +12,7 @@ PCSettings g_pc_settings = {
     .msaa          = 4,
     .preload_textures = 0,
     .disable_resetti = 0,
+    .borderless_acres = 1,
     .nes_aspect = 1,
     .master_volume = 100,
 };
@@ -42,6 +44,9 @@ static const char* DEFAULT_SETTINGS =
     "[Gameplay]\n"
     "# Disable Mr. Resetti: 0 = normal, 1 = disable\n"
     "disable_resetti = 0\n"
+    "\n"
+    "# Borderless acres: 0 = original acre transitions, 1 = continuous movement/camera\n"
+    "borderless_acres = 1\n"
     "\n"
     "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n"
     "nes_aspect = 1\n"
@@ -85,6 +90,8 @@ static void apply_setting(const char* key, const char* value) {
         if (val >= 0 && val <= 2) g_pc_settings.preload_textures = val;
     } else if (strcmp(key, "disable_resetti") == 0) {
         if (val == 0 || val == 1) g_pc_settings.disable_resetti = val;
+    } else if (strcmp(key, "borderless_acres") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.borderless_acres = val;
     } else if (strcmp(key, "nes_aspect") == 0) {
         if (val == 0 || val == 1) g_pc_settings.nes_aspect = val;
     } else if (strcmp(key, "master_volume") == 0) {
@@ -107,6 +114,10 @@ static void apply_frame_limit_setting(void) {
     }
 
     g_frame_limiter = (u32)max_fps;
+}
+
+static void apply_borderless_acres_setting(void) {
+    g_mPlib_wade_disabled = g_pc_settings.borderless_acres != 0;
 }
 
 static void write_defaults(const char* path) {
@@ -147,6 +158,9 @@ void pc_settings_save(void) {
     fprintf(f, "[Gameplay]\n");
     fprintf(f, "# Disable Mr. Resetti: 0 = normal, 1 = disable\n");
     fprintf(f, "disable_resetti = %d\n", g_pc_settings.disable_resetti);
+    fprintf(f, "\n");
+    fprintf(f, "# Borderless acres: 0 = original acre transitions, 1 = continuous movement/camera\n");
+    fprintf(f, "borderless_acres = %d\n", g_pc_settings.borderless_acres);
     fprintf(f, "\n");
     fprintf(f, "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n");
     fprintf(f, "nes_aspect = %d\n", g_pc_settings.nes_aspect);
@@ -251,6 +265,7 @@ void pc_settings_cycle_resolution(int* width, int* height, int dir) {
 
 void pc_settings_apply(void) {
     apply_frame_limit_setting();
+    apply_borderless_acres_setting();
 
     if (!g_pc_window) return;
 
@@ -307,6 +322,7 @@ void pc_settings_load(void) {
     if (!f) {
         write_defaults(SETTINGS_FILE);
         apply_frame_limit_setting();
+        apply_borderless_acres_setting();
         printf("[Settings] Created default %s\n", SETTINGS_FILE);
         return;
     }
@@ -332,9 +348,10 @@ void pc_settings_load(void) {
     }
     fclose(f);
     apply_frame_limit_setting();
+    apply_borderless_acres_setting();
 
-    printf("[Settings] Loaded %s: %dx%d fullscreen=%d vsync=%d max_fps=%d msaa=%d preload_textures=%d\n",
+    printf("[Settings] Loaded %s: %dx%d fullscreen=%d vsync=%d max_fps=%d msaa=%d preload_textures=%d borderless_acres=%d\n",
            SETTINGS_FILE, g_pc_settings.window_width, g_pc_settings.window_height,
            g_pc_settings.fullscreen, g_pc_settings.vsync, g_pc_settings.max_fps, g_pc_settings.msaa,
-           g_pc_settings.preload_textures);
+           g_pc_settings.preload_textures, g_pc_settings.borderless_acres);
 }
