@@ -40,7 +40,7 @@ unsigned int pc_image_end  = 0;
 void pc_platform_init(void) {
 #ifdef _WIN32
     SetProcessDPIAware();
-
+    SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");
 #endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
