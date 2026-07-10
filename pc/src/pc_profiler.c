@@ -37,7 +37,8 @@ static Uint64 s_freq = 0;
 
 static const char* s_timer_names[PC_PROF_TIMER_COUNT] = {
     "gx_begin", "dl_replay", "gx_flush", "buf_upload", "uniforms", "uniform_lookup",
-    "tex_bind", "shader_switch", "gl_state", "draw_submit", "poll", "swap", "pace"
+    "tex_bind", "shader_switch", "gl_state", "draw_submit", "poll", "swap", "pace",
+    "game_logic", "emu64_task", "texobj"
 };
 
 static const char* s_dirty_names[16] = {

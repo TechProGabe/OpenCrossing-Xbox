@@ -559,7 +559,7 @@ void pc_gx_init(void) {
 }
 
 void pc_gx_begin_frame(void) {
-    pc_profiler_begin_frame();
+    /* Profiler frame opens in graph_main so game_main is captured */
     Uint64 prof_start = pc_profiler_begin_timer();
     pc_emu64_frame_cmds = 0;
     pc_emu64_frame_noop_cmds = 0;
@@ -2060,6 +2060,8 @@ static void pc_gx_copy_tex_execute(void* dest, GXBool clear) {
         pc_gx_efb_capture_store((u32)(uintptr_t)dest, efb_tex);
         glBindTexture(GL_TEXTURE_2D, 0);
         pc_gx_texture_bind_cache_invalidate();
+        /* Unit 0 binding was clobbered; force rebind at next flush */
+        DIRTY(PC_GX_DIRTY_TEXTURES);
     }
 #else
     if (g_gx.tex_copy_fmt == 0x4) {

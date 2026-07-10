@@ -1,6 +1,7 @@
 /* pc_gx_texture.c - GC texture format decoders + 2048-entry texture cache */
 #include "pc_gx_internal.h"
 #include "pc_texture_pack.h"
+#include "pc_profiler.h"
 #include <dolphin/gx/GXEnum.h>
 #include <stdlib.h>
 
@@ -592,7 +593,7 @@ static void decode_gc_texture(const void* src, u8* dst_rgba, int w, int h, u32 f
     }
 }
 
-void GXLoadTexObj(void* obj, u32 id) {
+static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
     pc_gx_flush_if_begin_complete();
 
     if (id >= 8 && id != 0xFF && id < 0x100) return;
@@ -803,6 +804,12 @@ void GXLoadTexObj(void* obj, u32 id) {
     g_gx.tex_obj_h[id] = height;
     g_gx.tex_obj_fmt[id] = (int)format;
     DIRTY(PC_GX_DIRTY_TEXTURES);
+}
+
+void GXLoadTexObj(void* obj, u32 id) {
+    Uint64 prof_start = pc_profiler_begin_timer();
+    pc_gx_load_tex_obj_impl(obj, id);
+    pc_profiler_add_time(PC_PROF_TIMER_TEXOBJ, prof_start);
 }
 
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, GXBool mipmap, u8 max_lod) {

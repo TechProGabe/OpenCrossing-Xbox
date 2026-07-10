@@ -30,6 +30,7 @@
 #include "pc_diag.h"
 #include "pc_platform.h"
 #include "pc_pause_menu.h"
+#include "pc_profiler.h"
 extern int g_pc_running;
 #endif
 
@@ -186,7 +187,15 @@ static void graph_task_set00(GRAPH* this) {
             emu64_set_ucode_info(2, ucode);
             emu64_set_first_ucode(ucode[0].ucode_p);
             PC_DIAG(3, "graph_task_set00: emu64_taskstart(Gfx_list05=%p)\n", (void*)this->Gfx_list05);
+#ifdef TARGET_PC
+            {
+                Uint64 pc_prof_t = pc_profiler_begin_timer();
+                emu64_taskstart(this->Gfx_list05); /* work data */
+                pc_profiler_add_time(PC_PROF_TIMER_EMU64, pc_prof_t);
+            }
+#else
             emu64_taskstart(this->Gfx_list05); /* work data */
+#endif
 #ifdef TARGET_PC
             {
                 extern int pc_emu64_frame_cmds, pc_emu64_frame_tri_cmds, pc_emu64_frame_vtx_cmds;
@@ -357,7 +366,17 @@ static void graph_main(GRAPH* this, GAME* game) {
     game->disable_display = FALSE;
     GRAPH_SET_DOING_POINT(this, GAME_MAIN);
     PC_DIAG(10, "graph_main: calling game_main (exec=%p)\n", (void*)game->exec);
+#ifdef TARGET_PC
+    {
+        Uint64 pc_prof_t;
+        pc_profiler_begin_frame();
+        pc_prof_t = pc_profiler_begin_timer();
+        game_main(game);
+        pc_profiler_add_time(PC_PROF_TIMER_GAME_LOGIC, pc_prof_t);
+    }
+#else
     game_main(game);
+#endif
     PC_DIAG(10, "graph_main: game_main returned, frame_counter=%d\n", this->frame_counter);
 #ifdef TARGET_PC
     pc_pause_menu_draw(game);
