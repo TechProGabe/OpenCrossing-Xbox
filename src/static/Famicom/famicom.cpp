@@ -12,6 +12,7 @@ extern "C" {
     unsigned short* pc_fixnes_frame(void);
     void pc_fixnes_render_frame(unsigned short* fb);
     void pc_fixnes_cleanup(void);
+    void pc_fixnes_reset(void);
 
     /* fixNES battery RAM — sync with famicomCommon.bbramp for save persistence */
     extern unsigned char* emuPrgRAM;
@@ -2687,7 +2688,12 @@ extern void famicom_1frame() {
                 nesinfo_update_highscore(famicomCommon.internal_save_datap, 1);
             }
 
+#ifdef TARGET_PC
+            /* ksNes state is never initialized on PC; reset fixNES instead */
+            pc_fixnes_reset();
+#else
             ksNesPushResetButton(famicomCommon.sp);
+#endif
         }
 
         if (APPNMI_ZURUMODE_GET()) {

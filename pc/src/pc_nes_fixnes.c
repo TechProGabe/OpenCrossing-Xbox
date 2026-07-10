@@ -327,6 +327,12 @@ void pc_fixnes_sync_wram(uint8_t *dst_wram) {
         memcpy(dst_wram, src, 0x800);
 }
 
+void pc_fixnes_reset(void) {
+    // Console soft reset (L+R+Start)
+    if (fixnes_initialized)
+        ppuSoftReset();
+}
+
 void pc_fixnes_set_input(uint8_t buttons) {
     /* buttons: bit0=A, bit1=B, bit2=Select, bit3=Start,
      *          bit4=Up, bit5=Down, bit6=Left, bit7=Right
