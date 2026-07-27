@@ -1485,3 +1485,55 @@ extern void mPr_PrintMapInfo_debug(gfxprint_t* gfxprint) {
         }
     }
 }
+
+#ifdef PC_ENHANCEMENTS
+/* bell amount for a money-bag item, 0 if not one */
+extern u32 mPr_GetAmountForMoneyItem(mActor_name_t item) {
+    int type = mNT_get_itemTableNo(item);
+    int idx = item & 0xFF;
+
+    if (type != 9) return 0;
+
+    switch (idx) {
+        case 0: return 1000;
+        case 1: return 10000;
+        case 2: return 30000;
+    }
+
+    if (idx >= 3 && idx <= 0x0B) {
+        return (u32)(idx - 2) * 100;
+    }
+    if (idx >= 0x0C && idx <= 0x6E) {
+        return (u32)(idx - 0x0B) * 1000;
+    }
+
+    return 0;
+}
+
+/* deposit bells to wallet, overflow into bank */
+extern int mPr_GivePossessionBells(u32 amount) {
+    u32 wallet_space;
+    u32 bank_space;
+    u32 to_wallet;
+    u32 to_bank;
+
+    wallet_space = mPr_WALLET_MAX - Now_Private->inventory.wallet;
+    if (amount <= wallet_space) {
+        Now_Private->inventory.wallet += amount;
+        return TRUE;
+    }
+
+    Now_Private->inventory.wallet = mPr_WALLET_MAX;
+    amount -= wallet_space;
+
+    bank_space = mPr_DEPOSIT_MAX - Now_Private->bank_account;
+    if (amount <= bank_space) {
+        Now_Private->bank_account += amount;
+        return TRUE;
+    }
+
+    Now_Private->bank_account = mPr_DEPOSIT_MAX;
+    return FALSE;
+}
+
+#endif

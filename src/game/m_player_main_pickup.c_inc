@@ -49,7 +49,22 @@ static void Player_actor_setup_main_Pickup(ACTOR* actorx, GAME* game) {
         aSIGN_erase_white_sign(game, target_pos_p);
     }
 
+#ifdef PC_ENHANCEMENTS
+    /* bells go straight to wallet, not a pocket slot */
+    {
+        u32 bell_amount = mPr_GetAmountForMoneyItem(item);
+        if (bell_amount > 0) {
+            mPr_GivePossessionBells(bell_amount);
+            if (target_pos_p != NULL) {
+                mFI_SetFG_common(EMPTY_NO, *target_pos_p, TRUE);
+            }
+        } else {
+            Player_actor_putin_item(slot_idx, item, target_pos_p);
+        }
+    }
+#else
     Player_actor_putin_item(slot_idx, item, target_pos_p);
+#endif
 
     if (slot_idx >= 0) {
         main_pickup_p->exchange_flag = FALSE;
