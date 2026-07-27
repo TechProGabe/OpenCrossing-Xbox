@@ -498,7 +498,12 @@ static void Camera2_Get_GoalDistanceAndDirection(GAME_PLAY* play, f32* dist, s_x
     *dist = distance_array[main_index];
     *dir = direction_array[main_index];
 
+// #ifdef PC_ENHANCEMENTS
+//     /* C-stick camera now works in every scene */
+//     if (main_index == CAMERA2_PROCESS_NORMAL) {
+// #else
     if (main_index == CAMERA2_PROCESS_NORMAL && Camera2_InDoorCheck()) {
+// #endif
         if (add_dist_idx < 0 || add_dist_idx >= 3) {
             add_dist_idx = 1;
         }

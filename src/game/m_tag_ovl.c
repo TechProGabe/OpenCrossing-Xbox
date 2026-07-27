@@ -4326,7 +4326,11 @@ static int mTG_mark_enable_check(int menu_type, int param, int table, u8 field_t
                             }
                             break;
                         case mTG_TABLE_MAIL:
-                            if (field_type == mFI_FIELDTYPE2_FG) {
+                            /* mail can be deleted indoors too */
+                        #ifndef PC_ENHANCEMENTS
+                            if (field_type == mFI_FIELDTYPE2_FG) 
+                        #endif
+                            {
                                 res = mTG_MARK_TYPE_INV_FG_MAIL;
                             }
                             break;
