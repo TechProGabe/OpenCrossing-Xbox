@@ -1464,8 +1464,9 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
 
     #define IS_CUSTOM_UMBRELLA(item) ((item) >= ITM_MY_ORG_UMBRELLA0 && (item) <= ITM_MY_ORG_UMBRELLA7)
 
+    static int last_tool_slot = 0;
+
     static void TrySwitchToolSlot(GAME* game, int direction) {
-        static int last_tool_slot = 0;
         static int last_direction = 0;
         Private_c* priv;
         mActor_name_t held_item;
@@ -1538,6 +1539,7 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
                 return;
             }
             mPr_SetPossessionItem(priv, slot, held_item, 0);
+            last_tool_slot = slot;
         }
 
         priv->equipment = EMPTY_NO;
@@ -1551,7 +1553,7 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
         player = GET_PLAYER_ACTOR_GAME(game);
 
         /* only during free movement (walk/run/stand/dash), not mid-demo */
-        main_index = player->prev_main_index;
+        main_index = player->now_main_index;
         if (main_index < mPlayer_INDEX_WAIT || main_index > mPlayer_INDEX_DASH) {
             return;
         }
