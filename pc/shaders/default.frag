@@ -267,7 +267,7 @@ vec2 applyIndirect(ivec4 ind_cfg, ivec3 ind_wrap, vec2 coord,
 // Rather than interpolating over the entire pixel when drawing something linearly, only interpolate on the edges
 // this looks look a lot better when using the original GameCube graphics
 
-const float TEX_SHARP_PIXELS = 5.0;
+const float TEX_SHARP_PIXELS = 3.5; // lower is sharper
 
 vec4 sharpSample(sampler2D tex, vec2 uv) {
     vec2 texSize = vec2(textureSize(tex, 0));
