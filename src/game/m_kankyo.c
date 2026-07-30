@@ -1,5 +1,6 @@
 #include "m_kankyo.h"
 
+#include "m_camera2.h"
 #include "m_room_type.h"
 #include "m_scene_table.h"
 #include "m_common_data.h"
@@ -1853,7 +1854,7 @@ static void mEnv_SetDiffuseLight(Kankyo* kankyo) {
     kankyo->moon_light.lights.diffuse.z = kankyo->base_light.moon_dir[2];
 }
 
-static void mEnv_SetFog(Kankyo* kankyo, Global_light* global_light) {
+static void mEnv_SetFog(GAME_PLAY* play, Kankyo* kankyo, Global_light* global_light) {
     int field_id = mFI_GetFieldId();
     int fog_near;
     int fog_far;
@@ -1878,6 +1879,17 @@ static void mEnv_SetFog(Kankyo* kankyo, Global_light* global_light) {
         global_light->fogFar = 1000;
         global_light->fogNear = 1000;
     }
+#ifdef PC_ENHANCEMENTS
+    /* reset fog if rotated camera with C-stick outside*/
+    else if  (play->camera.focus_distance != 620.0){
+        if  (play->camera.now_main_index == CAMERA2_PROCESS_NORMAL
+        ||  (play->camera.last_main_index == CAMERA2_PROCESS_NORMAL && play->camera.now_main_index == CAMERA2_PROCESS_WADE)
+        ){
+            global_light->fogFar = 1000;
+            global_light->fogNear = 1000;
+        } 
+    }  
+#endif
 }
 
 static void mEnv_PermitCheckDiffuseLight(Kankyo* kankyo) {
@@ -2184,7 +2196,7 @@ extern void Global_kankyo_set(GAME_PLAY* play, Kankyo* kankyo, Global_light* glo
     mEnv_AddAndSetRGBColor(global_light->ambientColor, kankyo->base_light.ambient_color,
                            kankyo->add_light_info.ambient_color);
     mEnv_SetDiffuseLight(kankyo);
-    mEnv_SetFog(kankyo, global_light);
+    mEnv_SetFog(play, kankyo, global_light);
     mEnv_PermitCheckDiffuseLight(kankyo);
     mEnv_TaimatuPointLightWaveMoveProc(play);
     mEnv_CheckNpcLight_ToSwitchON(play);
