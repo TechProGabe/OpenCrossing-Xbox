@@ -72,7 +72,7 @@ int Camera2_InDoorCheck() {
 }
 
 static int Camera2_CheckInDoorNearFar(GAME_PLAY* play) {
-    if (play->camera.indoor_distance_addition_idx == 0 ||
+    if ((play->camera.indoor_distance_addition_idx == 0 && Camera2_InDoorCheck()) ||
         (Save_Get(scene_no) == SCENE_BROKER_SHOP && play->camera.now_main_index == CAMERA2_PROCESS_TALK)) {
         return TRUE;
     }
@@ -995,8 +995,11 @@ static void Camera2_setup_main_Wade(GAME_PLAY* play) {
 
 #ifdef PC_ENHANCEMENTS
     /* Reset any outdoor C-stick camera changes instead of a weird double transition */
-    play->camera.indoor_distance_addition_idx = 1;
-    play->camera.indoor_direction_addition_idx = 1;
+    if (!mPlib_IsWadeDisabled()){
+        play->camera.indoor_distance_addition_idx = 1;
+        play->camera.indoor_direction_addition_idx = 1;
+    }
+  
 #endif
 }
 
