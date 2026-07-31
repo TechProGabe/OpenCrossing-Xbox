@@ -2144,6 +2144,7 @@ static void mSM_make_trigger_data(Submenu* submenu) {
 #ifdef PC_ENHANCEMENTS
     /* D-Pad bits sit at the same positions as the C-stick bits, shifted left by 8 */
     trigger |= (getButton() & (BUTTON_DUP | BUTTON_DDOWN | BUTTON_DLEFT | BUTTON_DRIGHT)) >> 8;
+    trigger &= ~(BUTTON_DUP | BUTTON_DDOWN | BUTTON_DLEFT | BUTTON_DRIGHT);
 #endif
 
     if (gamePT->mcon.move_pR > 0.5f) {
