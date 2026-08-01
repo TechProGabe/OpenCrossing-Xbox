@@ -1563,7 +1563,7 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
         if (Player_actor_Check_is_demo_mode(main_index) != 0) {
             return;
         }
-        if (Player_actor_Check_is_demo_mode(player->requested_main_index_priority) != 0) {
+        if (Player_actor_Check_is_demo_mode(player->requested_main_index) != 0) {
             return;
         }
 
