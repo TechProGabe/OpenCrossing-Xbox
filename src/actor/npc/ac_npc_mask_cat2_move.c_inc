@@ -396,7 +396,11 @@ static void aNM2_announce_start_wait(ACTOR* actorx, GAME* game) {
     } else if (mask_cat2_actor->wait_timer <= 0.0f) {
         mDemo_Request(mDemo_TYPE_SPEAK, actorx, aNM2_set_talk_info_announce_start_wait);
     } else {
+#ifdef TARGET_PC
+        mask_cat2_actor->wait_timer -= 0.5f * (f32)game->graph->dt_num_60fps_frames;
+#else
         mask_cat2_actor->wait_timer -= 0.5f;
+#endif
     }
 }
 
@@ -475,7 +479,11 @@ static void aNM2_turn_deck(ACTOR* actorx, GAME* game) {
 static void aNM2_keitai_off_start_wait(ACTOR* actorx, GAME* game) {
     NPC_MASK_CAT2_ACTOR* mask_cat2_actor = (NPC_MASK_CAT2_ACTOR*)actorx;
     GAME_PLAY* play = (GAME_PLAY*)game;
+#ifdef TARGET_PC
+    mask_cat2_actor->wait_timer -= 0.5f * (f32)game->graph->dt_num_60fps_frames;
+#else
     mask_cat2_actor->wait_timer -= 0.5f;
+#endif
     if (mask_cat2_actor->wait_timer <= 0.0f) {
         aNM2_setupAction(actorx, game, aNM2_MOVE_KEITAI_OFF_END_WAIT);
     }
