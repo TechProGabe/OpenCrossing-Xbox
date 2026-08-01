@@ -1549,8 +1549,17 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
     }
 
     static void Player_actor_check_and_switch_tool(GAME* game) {
+        GAME_PLAY* play = (GAME_PLAY*)game;
         PLAYER_ACTOR* player;
         int main_index;
+
+        /* outdoors only, and not while a submenu is open or opening */
+        if (mFI_GET_TYPE(mFI_GetFieldId()) != mFI_FIELDTYPE2_FG ||
+            play->submenu.start_refuse ||
+            play->submenu.current_menu_type != mSM_OVL_NONE ||
+            play->submenu.menu_type != mSM_OVL_NONE) {
+            return;
+        }
 
         player = GET_PLAYER_ACTOR_GAME(game);
 
