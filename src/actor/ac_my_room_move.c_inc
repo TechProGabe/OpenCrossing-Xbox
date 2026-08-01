@@ -2603,19 +2603,35 @@ static void aMR_FtrDeath(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_roo
 }
 
 static void aMR_FtrWaitRrotate(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_room) {
-    if (ftr_actor->rotation_delay_timer <= 0) {
-        ftr_actor->state = aFTR_STATE_RROTATE;
-    }
+#ifdef TARGET_PC
+    int ticks = graph_dt_60hz_ticks(game, &ftr_actor->rotation_delay_accum);
+#else
+    int ticks = 1;
+#endif
 
-    ftr_actor->rotation_delay_timer--;
+    while (ticks-- > 0) {
+        if (ftr_actor->rotation_delay_timer <= 0) {
+            ftr_actor->state = aFTR_STATE_RROTATE;
+        }
+
+        ftr_actor->rotation_delay_timer--;
+    }
 }
 
 static void aMR_FtrWaitLrotate(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_room) {
-    if (ftr_actor->rotation_delay_timer <= 0) {
-        ftr_actor->state = aFTR_STATE_LROTATE;
-    }
+#ifdef TARGET_PC
+    int ticks = graph_dt_60hz_ticks(game, &ftr_actor->rotation_delay_accum);
+#else
+    int ticks = 1;
+#endif
 
-    ftr_actor->rotation_delay_timer--;
+    while (ticks-- > 0) {
+        if (ftr_actor->rotation_delay_timer <= 0) {
+            ftr_actor->state = aFTR_STATE_LROTATE;
+        }
+
+        ftr_actor->rotation_delay_timer--;
+    }
 }
 
 static void aMR_GetItemPosOnMovingFurniture(MY_ROOM_ACTOR* my_room, FTR_ACTOR* ftr_actor) {
