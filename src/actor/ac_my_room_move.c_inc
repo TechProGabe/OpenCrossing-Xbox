@@ -2684,6 +2684,9 @@ static void aMR_FurnitureMoveFunction(ACTOR* actorx, GAME* game) {
             aFTR_PROFILE* profile = aMR_GetFurnitureProfile(ftr_actor->name);
 
             if (profile != NULL) {
+#ifdef TARGET_PC
+                ftr_actor->texture_scroll_frame += (f32)game->graph->dt_num_60fps_frames;
+#endif
                 (*fproc[ftr_actor->state])(ftr_actor, game, my_room);
                 ftr_actor->s_angle_y = RAD2SHORT_ANGLE2(DEG2RAD(ftr_actor->angle_y));
 
