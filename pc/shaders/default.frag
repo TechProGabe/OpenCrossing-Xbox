@@ -263,25 +263,6 @@ vec2 applyIndirect(ivec4 ind_cfg, ivec3 ind_wrap, vec2 coord,
     return wrappedCoord + offset;
 }
 
-// A nice trick to make large pixels on screen more pleasing to look at
-// Rather than interpolating over the entire pixel when drawing something linearly, only interpolate on the edges
-// this looks look a lot better when using the original GameCube graphics
-
-const float TEX_SHARP_PIXELS = 3.5; // lower is sharper
-
-vec4 sharpSample(sampler2D tex, vec2 uv) {
-    vec2 texSize = vec2(textureSize(tex, 0));
-    vec2 t = uv * texSize - 0.5;
-    vec2 i = floor(t);
-
-    vec2 halfWidth = clamp(0.5 * TEX_SHARP_PIXELS * fwidth(t), .00001, 0.5);
-
-    vec2 sharpFrac = clamp(((t-i) - (0.5 - halfWidth)) / (2.0 * halfWidth), 0.0, 1.0);
-
-    vec2 sharpUV = (i + sharpFrac + 0.5) / texSize;
-    return texture(tex, sharpUV);
-}
-
 /* EQUAL/NEQUAL use epsilon for float precision after interpolation */
 bool alphaTest(int comp, float val, float ref) {
     const float EPS = 0.5 / 255.0;
@@ -322,9 +303,9 @@ void main() {
     /* Texture samples. Kept as an explicit 3-way dispatch rather than a
        sampler array so the C side doesn't need to change. */
     vec4 texColor[3];
-    texColor[0] = (u_use_texture[0] != 0) ? sharpSample(u_texture0, stc[0]) : vec4(1.0);
-    texColor[1] = (u_use_texture[1] != 0) ? sharpSample(u_texture1, stc[1]) : vec4(1.0);
-    texColor[2] = (u_use_texture[2] != 0) ? sharpSample(u_texture2, stc[2]) : vec4(1.0);
+    texColor[0] = (u_use_texture[0] != 0) ? texture(u_texture0, stc[0]) : vec4(1.0);
+    texColor[1] = (u_use_texture[1] != 0) ? texture(u_texture1, stc[1]) : vec4(1.0);
+    texColor[2] = (u_use_texture[2] != 0) ? texture(u_texture2, stc[2]) : vec4(1.0);
 
     /* Rasterized color: GX lighting model */
     vec4 rasColor;
