@@ -509,6 +509,9 @@ static int Player_actor_request_main_demo_getoff_boat_all(GAME* game, const xyz_
 static void Player_actor_init_value(ACTOR* actorx, GAME* game) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actorx;
 
+#ifdef TARGET_PC
+    player->sunburn_time_accum = 0.0f;
+#endif
     player->actor_class.gravity = -1.0f;
     player->actor_class.max_velocity_y = -8.0f;
     player->actor_class.scale.x = 0.01f;
