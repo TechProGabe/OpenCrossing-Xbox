@@ -11,6 +11,7 @@ PCSettings g_pc_settings = {
     .vsync         = 0,
     .max_fps       = 60,
     .msaa          = 4,
+    .texture_filtering = 1,
     .preload_textures = 0,
     .disable_resetti = 0,
     .disable_shop_visitor_req = 0,
@@ -40,6 +41,9 @@ static const char* DEFAULT_SETTINGS =
     "\n"
     "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n"
     "msaa = 4\n"
+    "\n"
+    "# Texture filtering: 0 = nearest-neighbor, 1 = use the game's filtering\n"
+    "texture_filtering = 1\n"
     "\n"
     "[Enhancements]\n"
     "# Preload HD textures at startup: 0 = off (load on demand), 1 = preload, 2 = preload + cache file (fastest)\n"
@@ -98,6 +102,8 @@ static void apply_setting(const char* key, const char* value) {
     } else if (strcmp(key, "msaa") == 0) {
         if (val == 0 || val == 2 || val == 4 || val == 8)
             g_pc_settings.msaa = val;
+    } else if (strcmp(key, "texture_filtering") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.texture_filtering = val;
     } else if (strcmp(key, "preload_textures") == 0) {
         if (val >= 0 && val <= 2) g_pc_settings.preload_textures = val;
     } else if (strcmp(key, "disable_resetti") == 0) {
@@ -173,6 +179,9 @@ void pc_settings_save(void) {
     fprintf(f, "\n");
     fprintf(f, "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n");
     fprintf(f, "msaa = %d\n", g_pc_settings.msaa);
+    fprintf(f, "\n");
+    fprintf(f, "# Texture filtering: 0 = nearest-neighbor, 1 = use the game's filtering\n");
+    fprintf(f, "texture_filtering = %d\n", g_pc_settings.texture_filtering);
     fprintf(f, "\n");
     fprintf(f, "[Enhancements]\n");
     fprintf(f, "# Preload HD textures at startup: 0 = off (load on demand), 1 = preload, 2 = preload + cache file (fastest)\n");

@@ -2,6 +2,7 @@
 #include "pc_gx_internal.h"
 #include "pc_texture_pack.h"
 #include "pc_profiler.h"
+#include "pc_settings.h"
 #include <dolphin/gx/GXEnum.h>
 #include <stdlib.h>
 
@@ -608,7 +609,9 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
     u32 tlut_key = (format == GX_TF_C4 || format == GX_TF_C8) ? o[TEXOBJ_TLUT_NAME] : 0xFFFFFFFF;
     u32 tlut_ptr_key = 0;
     u32 tlut_hash_key = 0;
-    u32 filter_mode = o[TEXOBJ_MIN_FILTER];
+    /* The setting is a PC sampler override: enabled preserves the GX
+     * request, while disabled forces nearest-neighbor for every game texture. */
+    u32 filter_mode = g_pc_settings.texture_filtering ? o[TEXOBJ_MIN_FILTER] : GX_NEAR;
 
     if (format == GX_TF_C4 || format == GX_TF_C8) {
         int tlut_name = (int)o[TEXOBJ_TLUT_NAME];
@@ -726,6 +729,11 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
                            (wrap_t == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, gl_ws);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_wt);
+            {
+                GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
+            }
 
             TexCacheEntry* entry = tex_cache_insert(o[TEXOBJ_IMAGE_PTR], width, height, format,
                                                     tlut_key, tlut_ptr_key, tlut_hash_key, hash, hd_tex);

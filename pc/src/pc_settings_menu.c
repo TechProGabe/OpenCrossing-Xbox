@@ -19,6 +19,7 @@ enum {
     ITEM_VSYNC,
     ITEM_MAX_FPS,
     ITEM_MSAA,
+    ITEM_TEXTURE_FILTERING,
     ITEM_RES,
     ITEM_TEXTURES,
     ITEM_RESETTI,
@@ -44,6 +45,7 @@ static const Item tab_video_items[] = {
     { "VSync",      ITEM_VSYNC,    0 },
     { "Max FPS",    ITEM_MAX_FPS,  0 },
     { "MSAA",       ITEM_MSAA,     1 },
+    { "Texture filter", ITEM_TEXTURE_FILTERING, 0 },
     { "Resolution", ITEM_RES,      0 },
     { "Textures",   ITEM_TEXTURES, 1 },
 };
@@ -245,6 +247,7 @@ static void recompute_dirty(void) {
         (s_pending.vsync            != g_pc_settings.vsync) ||
         (s_pending.max_fps          != g_pc_settings.max_fps) ||
         (s_pending.msaa             != g_pc_settings.msaa) ||
+        (s_pending.texture_filtering != g_pc_settings.texture_filtering) ||
         (s_pending.window_width     != g_pc_settings.window_width) ||
         (s_pending.window_height    != g_pc_settings.window_height) ||
         (s_pending.preload_textures != g_pc_settings.preload_textures) ||
@@ -289,6 +292,9 @@ static void item_cycle(int id, int dir) {
             idx = (idx + (dir > 0 ? 1 : 3)) % 4;
             s_pending.msaa = steps[idx];
         } break;
+        case ITEM_TEXTURE_FILTERING:
+            s_pending.texture_filtering = !s_pending.texture_filtering;
+            break;
         case ITEM_RES:
             pc_settings_cycle_resolution(&s_pending.window_width, &s_pending.window_height, dir);
             break;
@@ -354,6 +360,9 @@ static void item_format(int id, char* buf, size_t n) {
             if (s_pending.msaa > 0) snprintf(buf, n, "< %dx >", s_pending.msaa);
             else                    snprintf(buf, n, "< Off >");
             break;
+        case ITEM_TEXTURE_FILTERING:
+            snprintf(buf, n, "%s", s_pending.texture_filtering ? "< On >" : "< Off >");
+            break;
         case ITEM_RES:
             snprintf(buf, n, "< %dx%d >", s_pending.window_width, s_pending.window_height);
             break;
@@ -401,6 +410,8 @@ static int item_changed(int id) {
         case ITEM_VSYNC:      return s_pending.vsync            != g_pc_settings.vsync;
         case ITEM_MAX_FPS:    return s_pending.max_fps          != g_pc_settings.max_fps;
         case ITEM_MSAA:       return s_pending.msaa             != g_pc_settings.msaa;
+        case ITEM_TEXTURE_FILTERING:
+            return s_pending.texture_filtering != g_pc_settings.texture_filtering;
         case ITEM_RES:        return (s_pending.window_width  != g_pc_settings.window_width) ||
                                      (s_pending.window_height != g_pc_settings.window_height);
         case ITEM_TEXTURES:   return s_pending.preload_textures != g_pc_settings.preload_textures;
@@ -793,7 +804,7 @@ static void draw_settings_page(struct game_s* game) {
     f32 vx = 200.0f;
     f32 y_tab = 50.0f;
     f32 y0    = 78.0f;
-    f32 line_h = 16.0f;
+    f32 line_h = 15.0f;
 
     pc_menu_draw_centered(game, "- Settings -", 30.0f, 255, 255, 255, 255, 1.0f);
     draw_tab_row(game, y_tab);
