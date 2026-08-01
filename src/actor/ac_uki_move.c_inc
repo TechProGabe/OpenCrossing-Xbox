@@ -34,6 +34,16 @@ static s16 aUKI_dt_angle_step(s16 step) {
     return (s16)dt_step;
 }
 
+static int aUKI_timer_step(s16* timer, int ticks) {
+    if (*timer <= ticks) {
+        *timer = 0;
+    } else {
+        *timer -= ticks;
+    }
+
+    return *timer;
+}
+
 static mActor_name_t aUKI_get_fish_type(ACTOR* actorx) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
     // clang-format off
@@ -275,21 +285,23 @@ static void aUKI_parabola_init(UKI_ACTOR* uki, xyz_t* p0, xyz_t* p1, s16 timer, 
     }
 }
 
-static void aUKI_parabola_move(ACTOR* actorx, u8 type) {
+static void aUKI_parabola_move(ACTOR* actorx, u8 type, int ticks) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
 
-    switch (type) {
-        case 0:
-            xyz_t_add(&actorx->world.position, &uki->parabola_vec[0], &actorx->world.position);
-            break;
-        case 1:
-            xyz_t_add(&actorx->world.position, &uki->parabola_vec[0], &actorx->world.position);
-            xyz_t_sub(&uki->parabola_vec[0], &uki->parabola_vec[1], &uki->parabola_vec[0]);
-            break;
-        case 2:
-            xyz_t_add(&uki->uki_pos, &uki->parabola_acc[0], &uki->uki_pos);
-            xyz_t_sub(&uki->parabola_acc[0], &uki->parabola_acc[1], &uki->parabola_acc[0]);
-            break;
+    while (ticks-- > 0) {
+        switch (type) {
+            case 0:
+                xyz_t_add(&actorx->world.position, &uki->parabola_vec[0], &actorx->world.position);
+                break;
+            case 1:
+                xyz_t_add(&actorx->world.position, &uki->parabola_vec[0], &actorx->world.position);
+                xyz_t_sub(&uki->parabola_vec[0], &uki->parabola_vec[1], &uki->parabola_vec[0]);
+                break;
+            case 2:
+                xyz_t_add(&uki->uki_pos, &uki->parabola_acc[0], &uki->uki_pos);
+                xyz_t_sub(&uki->parabola_acc[0], &uki->parabola_acc[1], &uki->parabola_acc[0]);
+                break;
+        }
     }
 }
 
@@ -493,15 +505,18 @@ static void aUKI_set_spd_relations_in_water(ACTOR* actorx, GAME* game) {
 static void aUKI_color(ACTOR* actorx) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
     f32 water_height = mCoBG_GetWaterHeight_File(actorx->world.position, __FILE__, 911);
+    int ticks = uki->logic_ticks;
 
-    if (actorx->world.position.y < (water_height - 3.0f)) {
-        aUKI_chase_color(&uki->color[0], 100, -52);
-        aUKI_chase_color(&uki->color[1], 100, -52);
-        aUKI_chase_color(&uki->color[2], 128, -43);
-    } else {
-        aUKI_chase_color(&uki->color[0], 255, 52);
-        aUKI_chase_color(&uki->color[1], 255, 52);
-        aUKI_chase_color(&uki->color[2], 255, 43);
+    while (ticks-- > 0) {
+        if (actorx->world.position.y < (water_height - 3.0f)) {
+            aUKI_chase_color(&uki->color[0], 100, -52);
+            aUKI_chase_color(&uki->color[1], 100, -52);
+            aUKI_chase_color(&uki->color[2], 128, -43);
+        } else {
+            aUKI_chase_color(&uki->color[0], 255, 52);
+            aUKI_chase_color(&uki->color[1], 255, 52);
+            aUKI_chase_color(&uki->color[2], 255, 43);
+        }
     }
 }
 
@@ -536,13 +551,7 @@ static void aUKI_carry(ACTOR* actorx, GAME* game) {
     uki->uki_pos = uki->right_hand_pos;
 
     if (uki->command == 2) {
-        int timer;
-
-        if (uki->frame_timer == 0) {
-            timer = 0;
-        } else {
-            timer = --uki->frame_timer;
-        }
+        int timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
         if (timer == 0) {
             aUKI_set_proc(actorx, game, aUKI_PROC_READY, 0);
@@ -552,13 +561,7 @@ static void aUKI_carry(ACTOR* actorx, GAME* game) {
 
 static void aUKI_ready(ACTOR* actorx, GAME* game) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
-    int timer;
-
-    if (uki->frame_timer == 0) {
-        timer = 0;
-    } else {
-        timer = --uki->frame_timer;
-    }
+    int timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
     if (timer == 0) {
         switch (uki->command) {
@@ -570,7 +573,7 @@ static void aUKI_ready(ACTOR* actorx, GAME* game) {
                 break;
         }
     } else {
-        aUKI_parabola_move(actorx, 0);
+        aUKI_parabola_move(actorx, 0, uki->logic_ticks);
     }
 }
 
@@ -578,12 +581,8 @@ static void aUKI_air(ACTOR* actorx, GAME* game) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
     int timer;
 
-    aUKI_parabola_move(actorx, 0);
-    if (uki->frame_timer == 0) {
-        timer = 0;
-    } else {
-        timer = --uki->frame_timer;
-    }
+    aUKI_parabola_move(actorx, 0, uki->logic_ticks);
+    timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
     if (timer == 0) {
         aUKI_clear_spd(actorx);
@@ -593,9 +592,8 @@ static void aUKI_air(ACTOR* actorx, GAME* game) {
 
 static void aUKI_cast(ACTOR* actorx, GAME* game) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
-    int timer;
 
-    aUKI_parabola_move(actorx, 1);
+    aUKI_parabola_move(actorx, 1, uki->logic_ticks);
     if (actorx->bg_collision_check.result.is_in_water) {
         uki->hit_water_flag = TRUE;
         aUKI_effect_sibuki(actorx, game, 3);
@@ -616,11 +614,7 @@ static void aUKI_wait(ACTOR* actorx, GAME* game) {
     if (aUKI_force_command(actorx, game) == FALSE) {
         int timer;
 
-        if (uki->cast_timer == 0) {
-            timer = 0;
-        } else {
-            timer = --uki->cast_timer;
-        }
+        timer = aUKI_timer_step(&uki->cast_timer, uki->logic_ticks);
 
         if (timer == 0 && uki->gyo_command == 1) {
             aUKI_set_proc(actorx, game, aUKI_PROC_TOUCH, 0);
@@ -628,11 +622,7 @@ static void aUKI_wait(ACTOR* actorx, GAME* game) {
             int timer;
 
             aUKI_clear_spd(actorx);
-            if (uki->frame_timer == 0) {
-                timer = 0;
-            } else {
-                timer = --uki->frame_timer;
-            }
+            timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
             if (timer == 0) {
                 aUKI_set_proc(actorx, game, aUKI_PROC_HIT, 1);
@@ -645,13 +635,7 @@ static void aUKI_wait(ACTOR* actorx, GAME* game) {
 
 static void aUKI_hit(ACTOR* actorx, GAME* game) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
-    int timer;
-
-    if (uki->frame_timer == 0) {
-        timer = 0;
-    } else {
-        timer = --uki->frame_timer;
-    }
+    int timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
     if (timer == 0) {
         if (uki->gyo_status == 5) {
@@ -662,8 +646,8 @@ static void aUKI_hit(ACTOR* actorx, GAME* game) {
             aUKI_set_proc(actorx, game, aUKI_PROC_CARRY, 0);
         }
     } else {
-        aUKI_parabola_move(actorx, 1);
-        aUKI_parabola_move(actorx, 2);
+        aUKI_parabola_move(actorx, 1, uki->logic_ticks);
+        aUKI_parabola_move(actorx, 2, uki->logic_ticks);
     }
 }
 
@@ -679,11 +663,7 @@ static void aUKI_touch(ACTOR* actorx, GAME* game) {
             int timer;
 
             aUKI_clear_spd(actorx);
-            if (uki->frame_timer == 0) {
-                timer = 0;
-            } else {
-                timer = --uki->frame_timer;
-            }
+            timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
             if (timer == 0) {
                 aUKI_set_proc(actorx, game, aUKI_PROC_HIT, 1);
@@ -729,11 +709,7 @@ static void aUKI_bite(ACTOR* actorx, GAME* game) {
             if (uki->command == 6) {
                 int timer;
 
-                if (uki->frame_timer == 0) {
-                    timer = 0;
-                } else {
-                    timer = --uki->frame_timer;
-                }
+                timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
                 if (timer == 0) {
                     aUKI_clear_spd(actorx);
@@ -808,18 +784,12 @@ static void aUKI_force(ACTOR* actorx, GAME* game) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
 
     if (uki->status == aUKI_STATUS_COMEBACK) {
-        int timer;
-
-        if (uki->frame_timer == 0) {
-            timer = 0;
-        } else {
-            timer = --uki->frame_timer;
-        }
+        int timer = aUKI_timer_step(&uki->frame_timer, uki->logic_ticks);
 
         if (timer == 0) {
             aUKI_set_proc(actorx, game, aUKI_PROC_CARRY, 0);
         } else {
-            aUKI_parabola_move(actorx, 1);
+            aUKI_parabola_move(actorx, 1, uki->logic_ticks);
         }
     } else {
         aUKI_force_command(actorx, game);
@@ -967,6 +937,8 @@ typedef void (*aUKI_MOVE_PROC)(ACTOR*, GAME*);
 
 static void aUKI_actor_move(ACTOR* actorx, GAME* game) {
     UKI_ACTOR* uki = (UKI_ACTOR*)actorx;
+
+    uki->logic_ticks = graph_dt_60hz_ticks(game, &uki->logic_accum);
 
     if (uki->command != 0) {
         // clang-format off
