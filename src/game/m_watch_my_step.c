@@ -19,6 +19,8 @@
 #include "m_scene_table.h"
 #include "m_private.h"
 
+extern int Camera2_InDoorCheck(void);
+
 typedef struct watch_my_step_s {
     f32 pos_x;
     f32 pos_y;
@@ -297,7 +299,8 @@ static void navigate_camera_move(GAME_PLAY* play) {
 
     switch (S_navigate.mode) {
         case 0: {
-            if (mPlib_check_able_change_camera_normal_index() != 0 && play->fb_fade_type == FADE_TYPE_NONE) {
+            // always hide camera controls popup when outdoors or when can't control camera
+            if (mPlib_check_able_change_camera_normal_index() != 0 && play->fb_fade_type == FADE_TYPE_NONE && Camera2_InDoorCheck()) {
                 S_navigate.timer = 150.0f;
                 S_navigate.mode++;
             }
