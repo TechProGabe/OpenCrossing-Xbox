@@ -1464,10 +1464,11 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
 
     #define IS_CUSTOM_UMBRELLA(item) ((item) >= ITM_MY_ORG_UMBRELLA0 && (item) <= ITM_MY_ORG_UMBRELLA7)
 
+    /* next slot the cycle search starts from; after a putaway, the slot holding the put-away tool */
     static int last_tool_slot = 0;
+    static int last_direction = 0;
 
     static void TrySwitchToolSlot(GAME* game, int direction) {
-        static int last_direction = 0;
         Private_c* priv;
         mActor_name_t held_item;
         mActor_name_t slot_item;
@@ -1494,12 +1495,12 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
             }
         }
 
-        /* direction changed, undo previous step */
+        /* direction changed, undo previous step so the search lands on the tool just swapped out */
         if (last_direction != 0 && direction != last_direction) {
             last_tool_slot = WrapToolSlot(last_tool_slot - last_direction);
         }
 
-        search_slot = WrapToolSlot(last_tool_slot + direction);
+        search_slot = last_tool_slot;
 
         for (i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) {
             slot_item = priv->inventory.pockets[search_slot];
@@ -1513,7 +1514,7 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
                 }
 
                 priv->equipment = slot_item;
-                last_tool_slot = search_slot;
+                last_tool_slot = WrapToolSlot(search_slot + direction);
                 last_direction = direction;
                 Player_actor_request_main_takeout_item(game, mPlayer_REQUEST_PRIORITY_37);
                 return;
@@ -1543,6 +1544,7 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
         }
 
         priv->equipment = EMPTY_NO;
+        last_direction = 0;
         Player_actor_request_main_putin_item(game, 0x25);
     }
 
