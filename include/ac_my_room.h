@@ -166,6 +166,9 @@ typedef struct room_rsv_ftr_s {
     s16 layer;
     s16 frames;
     s16 initial_frames_num;
+#ifdef TARGET_PC
+    f32 frame_accum;
+#endif
     int ut_x;
     int ut_z;
 } aMR_rsv_ftr_c;
