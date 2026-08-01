@@ -1119,6 +1119,7 @@ static int mMsg_Main_Cursol_ControlCursol(mMsg_Window_c* msg_p) {
     else {
       msg_p->status_flags &= ~mMsg_STATUS_FLAG_FAST_TEXT;
     }
+  }
 #endif
 
   if (mMsg_Check_CancelOrder(msg_p)) {
