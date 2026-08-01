@@ -1510,30 +1510,14 @@ extern u32 mPr_GetAmountForMoneyItem(mActor_name_t item) {
     return 0;
 }
 
-/* deposit bells to wallet, overflow into bank */
+/* deposit bells to wallet; fails without change unless the whole amount fits */
 extern int mPr_GivePossessionBells(u32 amount) {
-    u32 wallet_space;
-    u32 bank_space;
-    u32 to_wallet;
-    u32 to_bank;
-
-    wallet_space = mPr_WALLET_MAX - Now_Private->inventory.wallet;
-    if (amount <= wallet_space) {
-        Now_Private->inventory.wallet += amount;
-        return TRUE;
+    if (amount > mPr_WALLET_MAX - Now_Private->inventory.wallet) {
+        return FALSE;
     }
 
-    Now_Private->inventory.wallet = mPr_WALLET_MAX;
-    amount -= wallet_space;
-
-    bank_space = mPr_DEPOSIT_MAX - Now_Private->bank_account;
-    if (amount <= bank_space) {
-        Now_Private->bank_account += amount;
-        return TRUE;
-    }
-
-    Now_Private->bank_account = mPr_DEPOSIT_MAX;
-    return FALSE;
+    Now_Private->inventory.wallet += amount;
+    return TRUE;
 }
 
 #endif
