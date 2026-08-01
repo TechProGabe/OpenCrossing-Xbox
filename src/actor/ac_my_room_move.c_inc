@@ -2368,6 +2368,9 @@ static void aMR_FtrRotate(FTR_ACTOR* ftr_actor, GAME* game, MY_ROOM_ACTOR* my_ro
     f32 rotate_amount = aMR_GetEllipseSpeed(ftr_actor->angle_y, ftr_actor->angle_y_target, 5.6f, 90.0f);
     f32 delta_angle = ABS(ftr_actor->angle_y - ftr_actor->angle_y_target);
 
+    /* Preserve the original 60 Hz furniture rotation speed on the PC frame loop. */
+    rotate_amount *= (f32)game->graph->dt_num_60fps_frames;
+
     if (delta_angle <= rotate_amount + 1.0f) {
         ftr_actor->angle_y = ftr_actor->angle_y_target;
         ftr_actor->state = aFTR_STATE_STOP;
