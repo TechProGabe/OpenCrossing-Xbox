@@ -404,7 +404,12 @@ static u8* nextSrcData(u8* nowData) {
         }
         // Oopsies, forgot to call the function
 #ifndef FIXES
+#ifdef TARGET_XBOX
+        /* Same (always-false) test; clang rejects function-vs-bool compare. */
+        if ((void*)JKRDvdRipper::isErrorRetry == nullptr) {
+#else
         if (JKRDvdRipper::isErrorRetry == false) {
+#endif
             return nullptr;
         }
 #else

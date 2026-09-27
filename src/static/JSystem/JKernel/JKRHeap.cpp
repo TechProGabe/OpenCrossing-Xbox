@@ -296,23 +296,32 @@ bool JKRHeap::isSubHeap(JKRHeap* heap) const {
     return false;
 }
 
-void* operator new(u32 byteCount) {
+#ifdef TARGET_XBOX
+/* clang has no -fpermissive: operator new must take size_t, and the 2-arg
+   form must match JKRHeap.h's (size_t, s32) declaration. */
+#define JKR_NEW_SZ size_t
+#define JKR_NEW_ALIGN s32
+#else
+#define JKR_NEW_SZ u32
+#define JKR_NEW_ALIGN int
+#endif
+void* operator new(JKR_NEW_SZ byteCount) {
     return JKRHeap::alloc(byteCount, 4, nullptr);
 }
-void* operator new(u32 byteCount, int alignment) {
+void* operator new(JKR_NEW_SZ byteCount, JKR_NEW_ALIGN alignment) {
     return JKRHeap::alloc(byteCount, alignment, nullptr);
 }
-void* operator new(u32 byteCount, JKRHeap* heap, int alignment) {
+void* operator new(JKR_NEW_SZ byteCount, JKRHeap* heap, int alignment) {
     return JKRHeap::alloc(byteCount, alignment, heap);
 }
 
-void* operator new[](u32 byteCount) {
+void* operator new[](JKR_NEW_SZ byteCount) {
     return JKRHeap::alloc(byteCount, 4, nullptr);
 }
-void* operator new[](u32 byteCount, int alignment) {
+void* operator new[](JKR_NEW_SZ byteCount, JKR_NEW_ALIGN alignment) {
     return JKRHeap::alloc(byteCount, alignment, nullptr);
 }
-void* operator new[](u32 byteCount, JKRHeap* heap, int alignment) {
+void* operator new[](JKR_NEW_SZ byteCount, JKRHeap* heap, int alignment) {
     return JKRHeap::alloc(byteCount, alignment, heap);
 }
 

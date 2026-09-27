@@ -1,11 +1,20 @@
 # Toolchain
 
-Status: planned (M1). Verify each item when it lands, then mark ✅.
+Status: M1 ✅ (2026-09-27).
+
+```sh
+xbox/build-image.sh                      # SDK image opencrossing-xbox:sdk (~10 min cold)
+xbox/build.sh                            # -> build-xbox/xbe/default.xbe
+XBOX_TARGET=objs xbox/build.sh           # compile only, no link
+OCX_ISO=/path/to/AC.iso harness/xbox/run.sh 120 "stop-regex"   # xemu + COM1 log
+tools/xbox/fbdump_to_png.py ~/xemu/run/serial.log out          # [FBDUMP] -> PNG
+```
 
 ## Build
 
-- **nxdk** — https://github.com/XboxDev/nxdk (clang + lld, PE → XBE via
-  `cxbe`, pdclib, libc++, pbkit, nxdk-sdl SDL2). Pin a commit in the Dockerfile.
+- **nxdk** — https://github.com/XboxDev/nxdk pinned `58427c07` in
+  `xbox/docker/Dockerfile` (arm64-native Debian trixie + LLVM 21; upstream
+  images are amd64/386 only). CMake via `share/toolchain-nxdk.cmake`.
 - **pbgl** — https://github.com/fgsfdsfgs/pbgl (OpenGL 1.x subset on pbkit).
   Bring-up renderer, M3.
 - **xgu** (in nxdk) — low-level NV2A push-buffer helpers for the M6 renderer.
@@ -17,9 +26,10 @@ Status: planned (M1). Verify each item when it lands, then mark ✅.
 
 ## Run
 
-- **xemu** (macOS arm64 build available) — https://xemu.app. Needs MCPX boot
-  ROM, flash BIOS and an HDD image (user-supplied, never committed). Set RAM to
-  64 MB to enforce the budget.
+- **xemu** 0.8.136 (`brew install --cask xemu`). Firmware (user-supplied, never
+  committed) staged in `~/xemu/`: `mcpx.bin` (MCPX 1.0), `bios.bin` (Complex
+  4627 v1.03), `hdd.qcow2` (xemu dashboard image). Config
+  `~/Library/Application Support/xemu/xemu/xemu.toml`: 64 MB, skip boot anim.
 - Serial/debug output: xemu serial port → host file/terminal
   (https://xemu.app/docs/serial-port/).
 - Deploy loop (xemu): copy XBE + ISO into the HDD image (`E:\Games\OpenCrossing\`).

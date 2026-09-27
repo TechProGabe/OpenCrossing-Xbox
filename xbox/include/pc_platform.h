@@ -1,0 +1,129 @@
+/* pc_platform.h — XBOX SHADOW of pc/include/pc_platform.h (xbox/include is
+ * searched first). Keep in sync with upstream; differences are marked XBOX. */
+#ifndef PC_PLATFORM_H
+#define PC_PLATFORM_H
+
+/* 32-bit required: decomp code (JSystem, emu64) casts pointers to u32 */
+#include <stdint.h>
+#if UINTPTR_MAX != 0xFFFFFFFFu
+#error "This project must be compiled as 32-bit (pointer size != 4 bytes)"
+#endif
+
+#define SDL_MAIN_HANDLED
+#include <SDL.h>
+#include <glad/gl.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <math.h>
+#include <time.h>
+
+#include "pc_types.h"
+
+/* --- Configuration --- */
+#define PC_GC_WIDTH       640
+#define PC_GC_HEIGHT      480
+#define PC_SCREEN_WIDTH   PC_GC_WIDTH
+#define PC_SCREEN_HEIGHT  PC_GC_HEIGHT
+#define PC_WINDOW_TITLE   "Animal Crossing"
+
+#define PC_MAIN_MEMORY_SIZE   (24 * 1024 * 1024)
+#define PC_ARAM_SIZE          (16 * 1024 * 1024)   /* XBOX: M5 lever, docs/memory.md */
+#define PC_FIFO_SIZE          (256 * 1024)
+
+#define PC_SPEEDHACK_MULTIPLIER 10.0
+
+#define PC_PI  3.14159265358979323846
+#define PC_PIf 3.14159265358979323846f
+#define PC_DEG_TO_RAD (PC_PI / 180.0)
+#define PC_DEG_TO_RADf (PC_PIf / 180.0f)
+
+/* GC hardware clocks */
+#define GC_BUS_CLOCK          162000000u
+#define GC_CORE_CLOCK         486000000u
+#define GC_TIMER_CLOCK        (GC_BUS_CLOCK / 4)
+
+/* --- Platform headers --- */
+/* XBOX: no <windows.h> here. nxdk's xboxkrnl.h needs clang's MS-compat mode in
+ * C++, which the build turns off (docs/traps.md); TUs that need Win32 include
+ * it themselves. */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* --- Global state --- */
+extern SDL_Window*   g_pc_window;
+extern SDL_GLContext  g_pc_gl_context;
+extern int           g_pc_running;
+extern int           g_pc_verbose;
+extern int           g_pc_frame_limit_override;
+extern int           g_pc_speedhack_enabled;
+extern int           g_pc_time_override;
+extern int           g_pc_min_override;
+extern int           g_pc_sec_override;
+extern int           g_pc_date_month;
+extern int           g_pc_date_day;
+extern int           g_pc_date_year;
+extern int           g_pc_weather_override;
+extern int           g_pc_weather_intensity_override;
+extern u32           g_frame_limiter;
+
+extern int g_pc_window_w;
+extern int g_pc_window_h;
+void pc_platform_update_window_size(void);
+
+/* --- Widescreen mode (3-state) ---
+ * 0 = hor+ (default): full-window viewport, FOV-corrected projection. Resets each frame.
+ * 1 = stretch: full-window, no correction. For transitions/inventory BG.
+ * 2 = pillarbox: centered 4:3 with black bars. For inventory UI alignment.
+ *
+ * m_play.c inserts NOOPTag markers in POLY_OPA to switch between states:
+ *   ON (0xAC5701) -> 1, OFF (0xAC5700) -> 2. emu64 reads these during DL processing. */
+#define PC_NOOP_WIDESCREEN_STRETCH     0xAC5701u
+#define PC_NOOP_WIDESCREEN_STRETCH_OFF 0xAC5700u
+extern int g_pc_widescreen_stretch;
+
+/* --- Functions --- */
+void pc_platform_init(void);
+void pc_platform_shutdown(void);
+void pc_platform_swap_buffers(void);
+int  pc_platform_poll_events(void);
+
+/* EXE image range for seg2k0 pointer disambiguation (vs N64 segment addresses) */
+extern unsigned int pc_image_base;
+extern unsigned int pc_image_end;
+
+/* --- Model viewer --- */
+extern int g_pc_model_viewer;
+extern int g_pc_model_viewer_start;
+extern int g_pc_model_viewer_no_cull;
+
+/* --- Per-frame diagnostics --- */
+extern int pc_emu64_frame_cmds;
+extern int pc_emu64_frame_noop_cmds;
+extern int pc_emu64_frame_tri_cmds;
+extern int pc_emu64_frame_vtx_cmds;
+extern int pc_emu64_frame_dl_cmds;
+extern int pc_emu64_frame_cull_visible;
+extern int pc_emu64_frame_cull_rejected;
+extern int pc_gx_draw_call_count;
+
+/* --- Audio --- */
+extern int pc_save_loaded;
+int  pc_audio_get_buffer_fill(void);
+int  pc_audio_is_active(void);
+void pc_audio_set_paused(int paused);
+void pc_audio_shutdown(void);
+void pc_audio_start_producer_thread(void);
+void pc_audio_mq_init(void);
+void pc_audio_mq_shutdown(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* PC_PLATFORM_H */

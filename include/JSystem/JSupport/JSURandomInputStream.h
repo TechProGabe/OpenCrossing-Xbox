@@ -19,10 +19,17 @@ class JSURandomInputStream : public JSUInputStream {
     virtual int getLength() const = 0;
     virtual int getPosition() const = 0;
     virtual int seekPos(s32 offset, JSUStreamSeekFrom from) = 0;
+#ifdef TARGET_XBOX
+    int seekPos(s32 offset, int from) { return seekPos(offset, (JSUStreamSeekFrom)from); }
+#endif
 
     int align(s32 alignment);
     int peek(void* buf, s32 len);
     int seek(s32 offset, JSUStreamSeekFrom from);
+#ifdef TARGET_XBOX
+    /* stdio SEEK_* macros are ints; clang rejects the implicit enum conversion. */
+    int seek(s32 offset, int from) { return seek(offset, (JSUStreamSeekFrom)from); }
+#endif
 };
 
 class JSURandomOutputStream : public JSUOutputStream {
@@ -36,10 +43,17 @@ class JSURandomOutputStream : public JSUOutputStream {
     virtual int getLength() const = 0;
     virtual int getPosition() const = 0;
     virtual int seekPos(s32 offset, JSUStreamSeekFrom from) = 0;
+#ifdef TARGET_XBOX
+    int seekPos(s32 offset, int from) { return seekPos(offset, (JSUStreamSeekFrom)from); }
+#endif
 
     int align(s32 alignment);
     int peek(void* buf, s32 len);
     int seek(s32 offset, JSUStreamSeekFrom from);
+#ifdef TARGET_XBOX
+    /* stdio SEEK_* macros are ints; clang rejects the implicit enum conversion. */
+    int seek(s32 offset, int from) { return seek(offset, (JSUStreamSeekFrom)from); }
+#endif
 };
 
 #endif

@@ -22,6 +22,16 @@ class JSUIosBase {
     void setState(EIoState ioState) {
         this->mState |= ioState;
     }
+#ifdef TARGET_XBOX
+    /* Callers pass stdio's EOF macro (-1); GCC -fpermissive accepted the
+       int->enum conversion, clang has no -fpermissive. Same bits. */
+    void setState(int ioState) {
+        this->mState |= ioState;
+    }
+    void clrState(int ioState) {
+        this->mState &= ~ioState;
+    }
+#endif
 
     u8 mState;
 };
