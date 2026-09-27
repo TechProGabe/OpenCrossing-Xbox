@@ -134,6 +134,10 @@ set(PC_REUSED
 list(TRANSFORM PC_REUSED PREPEND "${PC_DIR}/src/")
 list(APPEND PC_REUSED "${DECOMP_ROOT}/src/static/dolphin/pad/Padclamp.c")
 
+# pc_pad.c's stick reads go through xbox/src/xbox_pad_axis.c (spike filter).
+set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS
+    "SDL_GameControllerGetAxis=xbox_controller_axis")
+
 # Debug: scripted pad input from PADRead call N on (xbox/src/xbox_autopad.c).
 set(XBOX_AUTOPAD "" CACHE STRING "debug: inject START/A presses from this PADRead call on")
 if(XBOX_AUTOPAD)

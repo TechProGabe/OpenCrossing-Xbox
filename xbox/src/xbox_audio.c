@@ -19,7 +19,6 @@
  */
 /* kernel headers first: types.h (via pc_platform.h) defines __declspec() away,
  * which turns xboxkrnl.h's dllimport data declarations into definitions */
-#include <hal/audio.h>
 #include <xboxkrnl/xboxkrnl.h>
 #include "pc_platform.h"
 #include "pc_settings.h"
@@ -135,6 +134,74 @@ static void dbg_audio(const s16* last) {
 }
 #endif
 
+/* --- AC97 (MCPX ACI) driver: polled, no interrupt ---
+ * Replaces nxdk's XAudio*. nxdk connects a level-triggered IRQ 6 handler and
+ * starts DMA with interrupt enables on; on a real Xbox the first hardware run
+ * froze solid (no watchdog, no disk flush) right at XAudioPlay, the signature
+ * of an interrupt that is never deasserted. Nothing here needs the IRQ (the
+ * pump polls CIV), so: same register sequence as nxdk hal/audio.c, but no
+ * KeConnectInterrupt, CR interrupt enables off, descriptors without IOC, and
+ * a timeout on every wait. PCM out (0x110) and S/PDIF (0x170) share buffers. */
+typedef struct { u32 addr; u16 samples; u16 ctl; } AciDesc;
+static AciDesc* s_desc_pcm;   /* 32 each, contiguous */
+static AciDesc* s_desc_spdif;
+static unsigned s_next_desc;
+
+static int aci_wait(volatile u32* reg, u32 mask, u32 want, const char* what) {
+    int i;
+    for (i = 0; i < 1000000; i++)
+        if ((*reg & mask) == want) return 1;
+    printf("[AUDIO] timeout waiting for %s\n", what);
+    return 0;
+}
+
+static int aci_init(void) {
+    volatile u32* m = (volatile u32*)ACI;
+    LARGE_INTEGER d;
+    u8* mem = (u8*)MmAllocateContiguousMemoryEx(2 * 32 * sizeof(AciDesc), 0, 0xFFFFFFFF, 0, PAGE_READWRITE);
+    if (!mem) return 0;
+    memset(mem, 0, 2 * 32 * sizeof(AciDesc));
+    s_desc_pcm = (AciDesc*)mem;
+    s_desc_spdif = (AciDesc*)(mem + 32 * sizeof(AciDesc));
+
+    /* DMA off, interrupt enables off, before anything else */
+    ACI[0x11B] = 0;
+    ACI[0x17B] = 0;
+    /* cold reset the AC-link, wait for the primary codec */
+    m[0x12C >> 2] &= ~2u;
+    d.QuadPart = -10 * 1000;   /* 1 ms */
+    KeDelayExecutionThread(KernelMode, FALSE, &d);
+    m[0x12C >> 2] |= 2u;
+    aci_wait(&m[0x130 >> 2], 0x100, 0x100, "codec ready");
+    /* reset both bus masters */
+    ACI[0x11B] = 1u << 1;
+    ACI[0x17B] = 1u << 1;
+    { int i; for (i = 0; i < 1000000 && ((ACI[0x11B] | ACI[0x17B]) & 2); i++) {} }
+    ACI[0x116] = 0xFF;   /* clear status */
+    ACI[0x176] = 0xFF;
+    m[0x100 >> 2] = 0;   /* no PCM in */
+    m[0x110 >> 2] = MmGetPhysicalAddress(s_desc_pcm);
+    m[0x170 >> 2] = MmGetPhysicalAddress(s_desc_spdif);
+    s_next_desc = 0;
+    return 1;
+}
+
+static void aci_queue(const s16* buf, unsigned bytes) {
+    u32 phys = MmGetPhysicalAddress((void*)buf);
+    unsigned i = s_next_desc;
+    s_desc_pcm[i].addr = s_desc_spdif[i].addr = phys;
+    s_desc_pcm[i].samples = s_desc_spdif[i].samples = (u16)(bytes / 2);
+    s_desc_pcm[i].ctl = s_desc_spdif[i].ctl = 0;   /* no IOC, no BUP */
+    ACI[0x115] = (u8)i;   /* last valid index */
+    ACI[0x175] = (u8)i;
+    s_next_desc = (i + 1) % 32;
+}
+
+static void aci_run(int on) {
+    ACI[0x11B] = on ? 1 : 0;   /* RPBM only: interrupt enables stay off */
+    ACI[0x17B] = on ? 1 : 0;
+}
+
 /* --- MCPX APU output (xemu) ---
  * macOS xemu never plays the AC97: it links no CoreAudio and xemu disables
  * QEMU's SDL driver, so the ac97 voice goes to the `none` backend. What xemu
@@ -143,8 +210,8 @@ static void dbg_audio(const s16* last) {
  * run one looping 16-bit stereo buffer voice at 48 kHz (pitch 0) over a ring
  * and refill the ring ahead of the voice's play cursor (CBO, kept in the voice
  * struct in RAM). Real hardware needs a GP DSP program to route mixbins to the
- * speakers, so it stays on AC97. xemu is detected by the QEMU codec's vendor
- * ID (SigmaTel 0x8384; the Xbox's WM9709 reads 0x574D). Model: xemu
+ * speakers, so it stays on AC97. xemu is detected by CPUID (running_in_xemu).
+ * Model: xemu
  * hw/xbox/mcpx/apu/vp/vp.c. Kill switch: -DXBOX_AUDIO_APU=0. */
 #ifndef XBOX_AUDIO_APU
 #define XBOX_AUDIO_APU 1
@@ -262,7 +329,7 @@ static int pump_func(void* data) {
             while (ahead < XBOX_AUDIO_NBUF - 1) {
                 s16* b = s_outbuf[s_queued % XBOX_AUDIO_NBUF];
                 fill_48k(b);
-                XAudioProvideSamples((unsigned char*)b, XBOX_AUDIO_FRAMES * 4, FALSE);
+                aci_queue(b, XBOX_AUDIO_FRAMES * 4);
                 s_queued++;
                 ahead++;
             }
@@ -274,35 +341,52 @@ static int pump_func(void* data) {
 
 /* --- AI (Audio Interface) --- */
 
+/* xemu or a real Xbox? CPUID, NOT the AC97 codec (codec register access over
+ * the AC-link is exactly what xemu can't vouch for). Both report the same
+ * Coppermine signature (0x68a), but xemu's CPU model lacks VME: leaf 1 EDX is
+ * 0383f9fd there and 0383f9ff on a real Xbox (measured 2026-09-27). If a
+ * future xemu adds VME it only loses xemu audio (AC97 path, inaudible there). */
+static int running_in_xemu(void) {
+    unsigned a, b, c, d;
+    __asm__ volatile("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(1));
+    printf("[AUDIO] cpuid 1: eax %08x ebx %08x ecx %08x edx %08x\n", a, b, c, d);
+    return !(d & (1u << 1));
+}
+
 void AIInit(u8* stack) {
-    int i;
+    int i, xemu;
     (void)stack;
     if (audio_device != 0) return;
+    printf("[AUDIO] init: buffers\n");
     for (i = 0; i < XBOX_AUDIO_NBUF; i++) {
         s_outbuf[i] = (s16*)MmAllocateContiguousMemoryEx(XBOX_AUDIO_FRAMES * 4, 0, 0xFFFFFFFF, 0,
                                                          PAGE_READWRITE | PAGE_WRITECOMBINE);
         if (!s_outbuf[i]) { printf("[AUDIO] buffer alloc failed\n"); return; }
         memset(s_outbuf[i], 0, XBOX_AUDIO_FRAMES * 4);
     }
-    XAudioInit(16, 2, NULL, NULL);
-    /* Unmute the codec mixer. The retail WM9709 has no mixer registers (these
-     * writes are no-ops there), but xemu models a generic AC97 codec whose
-     * reset state is Master 0x8000 / PCM-out 0x8808 = muted, and nxdk never
-     * touches them: DMA ran at 48 kHz with real samples and nothing was heard.
-     * 0x0000 = unmuted, full scale (QEMU hw/audio/ac97.c set_volume). */
-    *(volatile u16*)(ACI + 0x02) = 0x0000;   /* AC97_Master_Volume_Mute */
-    *(volatile u16*)(ACI + 0x18) = 0x0000;   /* AC97_PCM_Out_Volume_Mute */
+    xemu = running_in_xemu();
+    printf("[AUDIO] init: AC97 (%s)\n", xemu ? "xemu" : "hardware");
+    if (!aci_init()) { printf("[AUDIO] AC97 init failed\n"); return; }
+    if (xemu) {
+        /* xemu's QEMU ac97 codec resets muted (Master 0x8000 / PCM-out 0x8808)
+         * and nxdk never unmutes it. Moot for sound (xemu can't play the AC97;
+         * the APU voice below is what's heard), kept so wavcapture shows the
+         * AC97 stream too. Hardware never gets these codec writes. */
+        *(volatile u16*)(ACI + 0x02) = 0x0000;   /* AC97_Master_Volume_Mute */
+        *(volatile u16*)(ACI + 0x18) = 0x0000;   /* AC97_PCM_Out_Volume_Mute */
+    }
     s_queued = 0;
-    s_apu = XBOX_AUDIO_APU && *(volatile u16*)(ACI + 0x7C) == 0x8384 && apu_init();
+    printf("[AUDIO] init: output\n");
+    s_apu = XBOX_AUDIO_APU && xemu && apu_init();
     ASET(s_pump_run, 1);
     s_pump_thread = SDL_CreateThread(pump_func, "AudioPump", NULL);
-    if (!s_apu) XAudioPlay();
+    printf("[AUDIO] init: start\n");
+    if (!s_apu) aci_run(1);
     audio_device = 1;
     if (s_apu)
-        printf("[AUDIO] xemu codec: output via APU voice %d, 48 kHz ring %d frames\n", APU_VOICE, APU_RING_FRAMES);
+        printf("[AUDIO] xemu: output via APU voice %d, 48 kHz ring %d frames\n", APU_VOICE, APU_RING_FRAMES);
     else
-        printf("[AUDIO] AC97 pump: 48 kHz, %d x %d frames, polled (codec %04x)\n", XBOX_AUDIO_NBUF, XBOX_AUDIO_FRAMES,
-               *(volatile u16*)(ACI + 0x7C));
+        printf("[AUDIO] AC97 pump: 48 kHz, %d x %d frames, polled\n", XBOX_AUDIO_NBUF, XBOX_AUDIO_FRAMES);
 }
 
 void AIInitDMA(u32 addr, u32 size) {
@@ -392,6 +476,6 @@ void pc_audio_shutdown(void) {
         SDL_WaitThread(s_pump_thread, NULL);
         s_pump_thread = NULL;
     }
-    XAudioPause();
+    aci_run(0);
     audio_device = 0;
 }

@@ -270,6 +270,8 @@ static struct {
  * Push helpers
  * ====================================================================== */
 static uint32_t* P;
+/* NV_PCRTC_START: address of the framebuffer the CRTC is scanning out */
+#define PCRTC_START_REG (*(volatile uint32_t*)0xFD600800)
 #define PB_BEGIN() (P = pb_begin())
 #define PB_END() pb_end(P)
 
@@ -1116,6 +1118,45 @@ int xbox_nv2a_init(void) {
 #ifndef XBOX_HITCH_MS
 #define XBOX_HITCH_MS 40
 #endif
+/* perf.log: one line a minute on the HDD (hardware has no serial port):
+ * average fps, average cpu ms, worst frame, frames > 33 ms and > 100 ms.
+ * Times arrive in 0.1 ms units. -DXBOX_PERF_LOG=0 disables. */
+#ifndef XBOX_PERF_LOG
+#define XBOX_PERF_LOG 1
+#endif
+void xbox_flush_file(HANDLE h);
+static void perf_account(unsigned t10, unsigned cpu10) {
+    static unsigned n, worst, over33, over100;
+    static unsigned long long sum, cpu_sum;
+    static unsigned minute;
+    static HANDLE h = INVALID_HANDLE_VALUE;
+    if (!XBOX_PERF_LOG) return;
+    n++;
+    sum += t10;
+    cpu_sum += cpu10;
+    if (t10 > worst) worst = t10;
+    if (t10 > 330) over33++;
+    if (t10 > 1000) over100++;
+    if (sum < 600000) return;   /* 60 s */
+    minute++;
+    if (h == INVALID_HANDLE_VALUE)
+        h = CreateFileA(XBOX_UDATA_DIR "perf.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
+                        FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+        char line[160];
+        DWORD w;
+        int len = snprintf(line, sizeof line,
+                           "min %u (frame %u): %u.%u fps avg, cpu %u.%u ms avg, worst %u ms, >33ms %u, >100ms %u\r\n",
+                           minute, s_frame, (unsigned)(n * 100000ull / sum) / 10, (unsigned)(n * 100000ull / sum) % 10,
+                           (unsigned)(cpu_sum / n) / 10, (unsigned)(cpu_sum / n) % 10, worst / 10, over33, over100);
+        WriteFile(h, line, (DWORD)len, &w, NULL);
+        xbox_flush_file(h);
+        xbox_logf("[PERF] %s", line);
+    }
+    n = worst = over33 = over100 = 0;
+    sum = cpu_sum = 0;
+}
+
 static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
     static unsigned long long t_last;
     unsigned long long f = xbox_ticks_per_sec() / 1000;
@@ -1128,6 +1169,7 @@ static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
                       (unsigned)(g_xfs.tex_ticks / f), g_xfs.fread_n, (unsigned)(g_xfs.fread_bytes / 1024),
                       (unsigned)(g_xfs.fread_ticks / f));
     }
+    if (t_last) perf_account((unsigned)((t_done - t_last) * 10 / f), (unsigned)((t_enter - t_last) * 10 / f));
     t_last = t_done;
     memset(&g_xfs, 0, sizeof g_xfs);
     s_n_clr_frame = 0;
@@ -1158,6 +1200,19 @@ void xbox_nv2a_present(void) {
         xbox_fbdump(pb_back_buffer(), SCR_W, SCR_H, 32, (int)pb_back_buffer_pitch());
     }
     while (pb_finished()) {}
+    /* pbkit triple-buffers but only refuses a flip once its ready table is
+     * full: with two flips queued, the next back buffer IS the one being
+     * scanned out, and the next frame's clear shows as a black band rolling
+     * up the screen (real hardware only; xemu doesn't model scanout). Wait
+     * for vblank until the CRTC has moved off the buffer we're about to draw.
+     * Kill switch: -DXBOX_NO_SCANOUT_WAIT. */
+#ifndef XBOX_NO_SCANOUT_WAIT
+    {
+        int guard = 4;
+        while (guard-- && (PCRTC_START_REG & 0x03FFFFFF) == ((uint32_t)pb_back_buffer() & 0x03FFFFFF))
+            pb_wait_for_vbl();
+    }
+#endif
     hitch_log(t_enter, xbox_ticks());
     for (i = 0; i < s_ndeferred; i++) pool_free(s_deferred_free[i]);
     s_ndeferred = 0;

@@ -12,3 +12,8 @@ docker run --rm -v "$root":/src -w /src opencrossing-xbox:sdk bash -c "
   eval \$(/usr/src/nxdk/bin/activate -s)
   cmake -S xbox -B $bdir -G Ninja -DCMAKE_TOOLCHAIN_FILE=/usr/src/nxdk/share/toolchain-nxdk.cmake -DXBOX_OBJS_ONLY=$objs -DCMAKE_C_FLAGS= -DCMAKE_CXX_FLAGS= -DXBOX_AUTOPAD= ${XBOX_CMAKE_ARGS:-} >/dev/null
   ninja -C $bdir -k 0 ${XBOX_NINJA_ARGS:-}"
+# Dashboard icon: $$XTIMAGE section + default.tbn (host python3 + Pillow).
+xbe="$root/$bdir/xbe/default.xbe"
+if [ -z "${XBOX_NO_ICON:-}" ] && [ -f "$xbe" ] && python3 -c "import PIL" 2>/dev/null; then
+  python3 "$root/tools/xbox/xbe_title_image.py" "$xbe" "$root/xbox/assets/logo.png" "$root/$bdir/xbe/default.tbn"
+fi

@@ -125,20 +125,8 @@ static void dump_all(const char* why) {
         rep("\n");
     }
     rep("[WDOG] end\n");
-    xbox_log_write(s_report, (size_t)s_rlen);
 
-    h = CreateFileA(XBOX_UDATA_DIR "hang.log", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h != INVALID_HANDLE_VALUE) {
-        static char tail[4096];
-        DWORD w;
-        size_t tl = xbox_log_tail(tail, sizeof tail);
-        WriteFile(h, tail, (DWORD)tl, &w, NULL);
-        WriteFile(h, s_report, (DWORD)s_rlen, &w, NULL);
-        xbox_flush_file(h);
-        CloseHandle(h);
-    }
-
-    /* on screen: what a hardware tester can photograph */
+    /* screen FIRST: file I/O below can block if the hang involves the disk */
     pb_show_debug_screen();
     debugClearScreen();
     debugPrint("OpenCrossing-Xbox: %s at frame %u\n", why, xbox_frame_count());
@@ -152,6 +140,20 @@ static void dump_all(const char* why) {
         for (j = 0; j < o->n && j < 8; j++) debugPrint(" %08lx", o->words[j]);
         debugPrint("\n");
     }
+
+    xbox_log_write(s_report, (size_t)s_rlen);
+
+    h = CreateFileA(XBOX_UDATA_DIR "hang.log", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+        static char tail[4096];
+        DWORD w;
+        size_t tl = xbox_log_tail(tail, sizeof tail);
+        WriteFile(h, tail, (DWORD)tl, &w, NULL);
+        WriteFile(h, s_report, (DWORD)s_rlen, &w, NULL);
+        xbox_flush_file(h);
+        CloseHandle(h);
+    }
+
 }
 
 static volatile int s_disabled;

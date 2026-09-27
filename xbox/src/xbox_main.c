@@ -103,8 +103,10 @@ void pc_platform_swap_buffers(void) {
     xbox_nv2a_present();
     s_frames++;
     if ((s_frames % 60) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
-    if (s_frames == 600) {
-        xbox_logf("[XBOX] 600 frames up, closing boot.log\n");
+    /* boot.log is for hangs before the game runs (later ones: hang.log); its
+     * per-line HDD flushes cost ~45 ms each on hardware, so stop early */
+    if (s_frames == 120) {
+        xbox_logf("[XBOX] 120 frames up, closing boot.log\n");
         xbox_bootlog_close();
     }
 }
