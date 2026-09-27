@@ -27,15 +27,21 @@
 
 ## Next action
 
-0. Investigate the rare black frame (user report).
-   Profile hot spots at the title (EIP sampling via monitor `info registers`):
-   pdclib byte-loop `memset/memcpy/memmove/memcmp` (~45%) and `pb_cache_flush`
-   (~20%) — replace with `rep movsd/stosd` versions, cut flushes.
+0. Perf pass 1 done (2026-09-27): word-at-a-time `mem*` (`xbox_mem.c`, pdclib's
+   are byte loops, were ~45% of CPU) and one pushbuffer block across draws
+   (`XBOX_PB_KICK`, was 2 `pb_cache_flush` per draw). Title demo: 4620 → 5400
+   frames / 2 min; drawn frames > 40 ms: 3 → 2 (startup + first frame of a new
+   scene). `[HITCH]` lines on COM1 (frame > 40 ms or < 3 draws) now say where
+   a slow frame went (cpu / gpu+flip / tex uploads / fread). Black frame: none
+   outside boot + the game's own 2.3 s cleared screen between demo scenes; if
+   the user sees one, its `[HITCH] ... draws 0` line is the evidence.
+   Next perf lever: present waits for GPU idle every frame (`wait_idle`) — no
+   CPU/GPU overlap; top of the profile is now `pb_busy`.
 1. ✅ In-game (2026-09-27): title → K.K. intro → train with Rover → name
    entry → phone call, driven by `-DXBOX_AUTOPAD=<call>` (scripted START/A,
    `xbox_autopad.c`; cadence mirrors the DC port's DC_AUTOSTART). User plays
    it by hand in xemu: "running well", high fps, rare hitch + rare black frame.
-   Seen: train-window scenery renders as blocky green/white squares.
+   Visuals: user says 100% (train window included).
 2. Renderer fidelity: swap tables, indirect textures, EFB copies, NES path.
 3. Perf pass (DC opt lists, docs/perf.md), then real hardware.
 

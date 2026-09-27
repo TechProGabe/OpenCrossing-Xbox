@@ -37,7 +37,7 @@
 #define XBOX_FBDUMP_EVERY 0
 #endif
 int g_xbox_fbdump_every = XBOX_FBDUMP_EVERY;
-static uint32_t s_n_da, s_n_de, s_n_bd, s_n_clr, s_n_null;
+static uint32_t s_n_da, s_n_de, s_n_bd, s_n_clr, s_n_null, s_n_clr_frame;
 
 /* ======================================================================
  * Uniform table
@@ -272,6 +272,31 @@ static struct {
 static uint32_t* P;
 #define PB_BEGIN() (P = pb_begin())
 #define PB_END() pb_end(P)
+
+/* Draws share one open pushbuffer block, closed only every XBOX_PB_KICK
+ * dwords or before anything that must see the GPU caught up: every pb_end
+ * runs pbkit's pb_cache_flush (sfence + write-combine flush + MMIO poll), and
+ * with two blocks per draw that was ~400 flushes a frame and the second-
+ * hottest function in the profile. Kill switch: -DXBOX_PB_KICK=0 (close
+ * after every draw). */
+#ifndef XBOX_PB_KICK
+#define XBOX_PB_KICK 4096
+#endif
+static int s_pb_open;
+static uint32_t* s_pb_mark;
+
+static void pb_open(void) {
+    if (s_pb_open) return;
+    PB_BEGIN();
+    s_pb_mark = P;
+    s_pb_open = 1;
+}
+
+static void pb_close(void) {
+    if (!s_pb_open) return;
+    PB_END();
+    s_pb_open = 0;
+}
 static inline void put1(uint32_t m, uint32_t v) { P = pb_push1(P, m, v); }
 static inline void putf(uint32_t m, float v) { P = pb_push1(P, m, SETF(v)); }
 
@@ -394,8 +419,19 @@ static void gl_tex_parameteri(GLenum target, GLenum pname, GLint v) {
 
 static uint32_t s_tex_fail;
 
+static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
+                         GLenum fmt, GLenum type, const void* data);
+
 static void gl_tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
                             GLenum fmt, GLenum type, const void* data) {
+    unsigned long long t0 = xbox_ticks();
+    tex_image_2d(target, level, ifmt, w, h, border, fmt, type, data);
+    g_xfs.tex_ticks += xbox_ticks() - t0;
+    g_xfs.tex_n++;
+}
+
+static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
+                         GLenum fmt, GLenum type, const void* data) {
     GLuint id = s_bound[s_active_unit];
     XTex* t;
     int pw, ph, x, y;
@@ -485,8 +521,10 @@ static void gl_clear(GLbitfield mask) {
     int x, y, w, h;
     frame_open();
     s_n_clr++;
+    s_n_clr_frame++;
     clear_rect(&x, &y, &w, &h);
     if (w <= 0 || h <= 0) return;
+    pb_close();   /* pb_fill / pb_erase push their own blocks */
     if (mask & GL_COLOR_BUFFER_BIT) {
         uint32_t c = ((uint32_t)f2b(G.clear_c[3]) << 24) | ((uint32_t)f2b(G.clear_c[0]) << 16) |
                      ((uint32_t)f2b(G.clear_c[1]) << 8) | f2b(G.clear_c[2]);
@@ -496,6 +534,7 @@ static void gl_clear(GLbitfield mask) {
 }
 
 static void wait_idle(void) {
+    pb_close();
     while (pb_busy()) {}
 }
 
@@ -873,9 +912,8 @@ static void emit_fixed(void) {
 static void ring_reserve(int n) {
     if (s_ring_pos + (uint32_t)n > s_ring_cap) {
         /* GPU still reads the older part: drain, then restart at 0 */
-        PB_END();
         wait_idle();
-        PB_BEGIN();
+        pb_open();
         s_ring_pos = 0;
     }
 }
@@ -903,14 +941,11 @@ static void draw(GLenum mode, int count) {
     rp = rc_lookup(&cfg);
     if (rp->approximated) s_approx_draws++;
 
-    PB_BEGIN();
+    pb_open();
     emit_fixed();
     emit_textures(&cfg, scale);
     emit_vconsts(&cfg, scale);
     emit_combiners(rp);
-    PB_END();
-
-    PB_BEGIN();
     ring_reserve(count);
     start = s_ring_pos;
     for (i = 0; i < count; i++) {
@@ -958,7 +993,7 @@ static void draw(GLenum mode, int count) {
         }
     }
     put1(NV097_SET_BEGIN_END, NV097_SET_BEGIN_END_OP_END);
-    PB_END();
+    if (P - s_pb_mark >= XBOX_PB_KICK) pb_close();
     s_draws++;
 }
 
@@ -1075,8 +1110,32 @@ int xbox_nv2a_init(void) {
     return 1;
 }
 
+/* Hitch log: any frame slower than XBOX_HITCH_MS, or presented with fewer
+ * than 3 draws (a candidate black/stale frame), is reported with what the
+ * frame spent its time on. -DXBOX_HITCH_MS=0 turns it off. */
+#ifndef XBOX_HITCH_MS
+#define XBOX_HITCH_MS 40
+#endif
+static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
+    static unsigned long long t_last;
+    unsigned long long f = xbox_ticks_per_sec() / 1000;
+    if (XBOX_HITCH_MS && t_last) {
+        unsigned total = (unsigned)((t_done - t_last) / f), cpu = (unsigned)((t_enter - t_last) / f);
+        if (total >= XBOX_HITCH_MS || s_draws < 3)
+            xbox_logf("[HITCH] frame %u: %u ms (cpu %u, gpu+flip %u) draws %u clears %u | tex %u / %u ms | "
+                      "fread %u / %u KB / %u ms\n",
+                      s_frame, total, cpu, total - cpu, s_draws, s_n_clr_frame, g_xfs.tex_n,
+                      (unsigned)(g_xfs.tex_ticks / f), g_xfs.fread_n, (unsigned)(g_xfs.fread_bytes / 1024),
+                      (unsigned)(g_xfs.fread_ticks / f));
+    }
+    t_last = t_done;
+    memset(&g_xfs, 0, sizeof g_xfs);
+    s_n_clr_frame = 0;
+}
+
 void xbox_nv2a_present(void) {
     int i;
+    unsigned long long t_enter = xbox_ticks();
     frame_open();
     wait_idle();
     s_frame++;
@@ -1099,6 +1158,7 @@ void xbox_nv2a_present(void) {
         xbox_fbdump(pb_back_buffer(), SCR_W, SCR_H, 32, (int)pb_back_buffer_pitch());
     }
     while (pb_finished()) {}
+    hitch_log(t_enter, xbox_ticks());
     for (i = 0; i < s_ndeferred; i++) pool_free(s_deferred_free[i]);
     s_ndeferred = 0;
     s_frame_open = 0;

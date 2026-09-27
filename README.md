@@ -42,7 +42,7 @@ No compiling.
    ```
 4. Launch it from your dashboard.
 
-**Prefer a disc?** Run the included `make-xiso` script on your computer. It packs `default.xbe` and your disc image into one XISO you can burn to a DVD-R (modded Xbox with a DVD-R-friendly drive) or load in xemu with *Load Disc*. The script runs locally on your own files, and no game data ever comes from us.
+**Prefer a disc?** Run the included `make-xiso` script on your computer. It packs `default.xbe` and your disc image into one XISO (trimmed to ~30 MB, so a CD-R is enough) you can burn to a CD-R or DVD-R (modded Xbox with a drive that reads it) or load in xemu with *Load Disc*. The script runs locally on your own files, and no game data ever comes from us.
 
 The game reads its assets directly from your disc image at startup. There is no extraction step. Saves always go to the HDD (`E:\UDATA\`, the normal Xbox save location, even when booting from disc) in the GameCube `.gci` format, so they carry across the OpenCrossing ports and the PC port.
 

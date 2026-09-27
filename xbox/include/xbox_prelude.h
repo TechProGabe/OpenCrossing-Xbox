@@ -32,6 +32,7 @@ int strncasecmp(const char* a, const char* b, unsigned int n);
 #define fprintf  xbox_fprintf
 #define vfprintf xbox_vfprintf
 #define puts     xbox_puts
+#define fread    xbox_fread   /* timed for the hitch log (disc reads) */
 #endif
 
 #endif /* XBOX_PRELUDE_H */

@@ -29,6 +29,7 @@
 #undef fprintf
 #undef vfprintf
 #undef puts
+#undef fread
 
 int g_xbox_log = XBOX_LOG_DEFAULT;
 /* nonzero = only this thread may log (fbdump holds it so other threads can't
@@ -129,6 +130,21 @@ char* getcwd(char* buf, size_t size) {
     if (!buf || size < 4) return NULL;
     strcpy(buf, "D:\\");
     return buf;
+}
+
+/* ---- hitch stats ---- */
+XboxFrameStats g_xfs;
+
+unsigned long long xbox_ticks(void) { return KeQueryPerformanceCounter(); }
+unsigned long long xbox_ticks_per_sec(void) { return KeQueryPerformanceFrequency(); }
+
+size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f) {
+    unsigned long long t0 = xbox_ticks();
+    size_t r = fread(buf, size, n, f);
+    g_xfs.fread_ticks += xbox_ticks() - t0;
+    g_xfs.fread_bytes += (unsigned long long)r * size;
+    g_xfs.fread_n++;
+    return r;
 }
 
 /* ---- memory ---- */

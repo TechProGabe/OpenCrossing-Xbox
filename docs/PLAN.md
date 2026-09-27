@@ -52,6 +52,10 @@ setup). We ship the script, never an XISO. Consequences:
   must be judged on a DVD boot, not just HDD.
 - Burned discs need a modded box with a DVD-R-compatible drive (varies by drive
   model). Document in release readme.
+- **CD-R works too (2026-09-27):** `make-xiso` trims the image first
+  (`tools/gc_trim_ciso.py`: system area + DOL + FST files only → CISO,
+  1.46 GB → 27.6 MB, boots to title in xemu). CD-R reading also varies by drive
+  (Samsung good, Thomson poor). `--full` keeps the untrimmed image.
 
 ## Hard problems (ranked)
 

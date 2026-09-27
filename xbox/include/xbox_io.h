@@ -31,6 +31,17 @@ void xbox_watchdog_start(void);
 int  xbox_logf(const char* fmt, ...);
 int  xbox_vlogf(const char* fmt, va_list ap);
 
+/* Per-frame hitch stats (xbox_io.c): reset and reported by xbox_nv2a_present.
+ * Ticks are KeQueryPerformanceCounter units; fread counts every thread. */
+typedef struct {
+    unsigned fread_n, tex_n;
+    unsigned long long fread_bytes, fread_ticks, tex_ticks;
+} XboxFrameStats;
+extern XboxFrameStats g_xfs;
+unsigned long long xbox_ticks(void);
+unsigned long long xbox_ticks_per_sec(void);
+size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f);
+
 FILE* xbox_fopen(const char* path, const char* mode);
 int   xbox_remove(const char* path);
 int   xbox_rename(const char* from, const char* to);

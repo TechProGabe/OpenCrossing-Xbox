@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Pack default.xbe + your own GameCube disc image into one Xbox XISO
+# (burn to DVD-R for a modded Xbox, or xemu "Load Disc").
+#
+#   tools/make-xiso [--full] <default.xbe> <your disc image .iso/.gcm/.ciso> [out.iso]
+#
+# By default a .iso/.gcm is first trimmed to a ~28 MB CISO holding only the
+# data the game reads (tools/gc_trim_ciso.py, needs python3), so the XISO
+# fits a CD-R. --full packs the image untouched (~1.5 GB, DVD-R).
+#
+# Uses xdvdfs (https://github.com/antangelo/xdvdfs, `cargo install xdvdfs-cli`)
+# when it is on PATH; otherwise, in a dev checkout, the SDK Docker image's
+# extract-xiso. Runs locally on your files only; nothing is downloaded.
+set -euo pipefail
+full=0
+[ "${1:-}" = "--full" ] && { full=1; shift; }
+xbe="${1:?usage: make-xiso <default.xbe> <disc image> [out.iso]}"
+img="${2:?usage: make-xiso <default.xbe> <disc image> [out.iso]}"
+out="${3:-OpenCrossing.iso}"
+[ -f "$xbe" ] || { echo "no such XBE: $xbe" >&2; exit 1; }
+[ -f "$img" ] || { echo "no such disc image: $img" >&2; exit 1; }
+
+# stage next to the output (Docker Desktop/colima only share the user's tree)
+stage="$(mktemp -d "$(cd "$(dirname "$out")" && pwd)/.ocx-xiso.XXXXXX")"
+trap 'rm -rf "$stage"' EXIT
+cp "$xbe" "$stage/default.xbe"
+base="$(basename "$img")"
+case "$(echo "${base##*.}" | tr 'A-Z' 'a-z')" in
+    iso|gcm) trim=$((1 - full)) ;;
+    *) trim=0 ;;
+esac
+if [ "$trim" = 1 ]; then
+    python3 "$(dirname "$0")/gc_trim_ciso.py" "$img" "$stage/${base%.*}.ciso"
+else
+    # hard link the 1.4 GB image when possible (same filesystem), else copy
+    ln "$img" "$stage/$base" 2>/dev/null || cp "$img" "$stage/"
+fi
+
+rm -f "$out"
+if command -v xdvdfs >/dev/null 2>&1; then
+    xdvdfs pack "$stage" "$out"
+elif command -v docker >/dev/null 2>&1 && docker image inspect opencrossing-xbox:sdk >/dev/null 2>&1; then
+    outdir="$(cd "$(dirname "$out")" && pwd)"
+    docker run --rm -v "$stage":/stage -v "$outdir":/out opencrossing-xbox:sdk \
+        /usr/src/nxdk/tools/extract-xiso/build/extract-xiso -c /stage "/out/$(basename "$out")" >/dev/null
+else
+    echo "need xdvdfs on PATH (cargo install xdvdfs-cli)" >&2
+    exit 1
+fi
+echo "wrote $out ($(du -h "$out" | cut -f1))"
