@@ -192,6 +192,10 @@ static void aci_queue(const s16* buf, unsigned bytes) {
     s_desc_pcm[i].addr = s_desc_spdif[i].addr = phys;
     s_desc_pcm[i].samples = s_desc_spdif[i].samples = (u16)(bytes / 2);
     s_desc_pcm[i].ctl = s_desc_spdif[i].ctl = 0;   /* no IOC, no BUP */
+    /* The sample buffers are write-combining: drain the WC buffers (and stop
+     * the compiler sinking the descriptor stores) before handing the entry to
+     * the DMA. Cached descriptors are fine as they are: PCI snoops the cache. */
+    __asm__ volatile("sfence" ::: "memory");
     ACI[0x115] = (u8)i;   /* last valid index */
     ACI[0x175] = (u8)i;
     s_next_desc = (i + 1) % 32;
