@@ -94,7 +94,9 @@ void pc_platform_update_window_size(void) {
     g_pc_window_h = PC_SCREEN_HEIGHT;
 }
 
-static unsigned int s_frames;
+static volatile unsigned int s_frames;
+
+unsigned int xbox_frame_count(void) { return s_frames; }
 
 void pc_platform_swap_buffers(void) {
     pc_gx_draw_pending();
@@ -247,6 +249,7 @@ int main(void) {
     xbox_splash_progress(0.8f);
 
     pc_platform_init();
+    xbox_watchdog_start();
     xbox_mem_log("after nv2a init");
     xbox_splash_progress(1.0f);
 

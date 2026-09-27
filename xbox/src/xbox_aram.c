@@ -12,6 +12,7 @@
  *   - anything else reads as zero.
  * Kill switch: -DXBOX_ARAM_FLAT=1 restores the flat 16 MB buffer semantics
  * (every range resident, no disc mapping). docs/memory.md has the numbers. */
+#include <xboxkrnl/xboxkrnl.h>   /* before types.h: see xbox_audio.c */
 #include "pc_platform.h"
 #include "pc_disc.h"
 #include "xbox_io.h"
@@ -37,9 +38,12 @@ static int s_nmap;
 typedef struct { u32 key; u32 stamp; u8* buf; } Slot;   /* key = disc block index + 1 */
 static Slot s_slot[XBOX_ARAM_CACHE_SLOTS];
 static u32 s_clock, s_hits, s_misses;
+/* the LRU slots are shared by every thread that DMAs out of a disc map */
+static RTL_CRITICAL_SECTION s_cache_lock;
 
 u32 ARInit(u32* stack_idx_addr, u32 length) {
     (void)stack_idx_addr; (void)length;
+    if (!s_inited) RtlInitializeCriticalSection(&s_cache_lock);
     s_inited = 1;
     aram_alloc_ptr = 0;
     return 0;
@@ -65,11 +69,20 @@ u32 ARAlloc(u32 size) {
 
 void ARFree(u32* addr) { (void)addr; }
 
-static const DiscMap* find_map(u32 a) {
-    int i;
+/* s_map is written by the DVD/audio threads (add_map) and read by whoever
+ * DMAs (find_map). Single core: raising to DPC level blocks every other
+ * thread, so both sides copy under it and the disc read happens after. */
+static int find_map(u32 a, DiscMap* out) {
+    int i, found = 0;
+    KIRQL old = KeRaiseIrqlToDpcLevel();
     for (i = 0; i < s_nmap; i++)
-        if (a >= s_map[i].aram && a < s_map[i].aram + s_map[i].len) return &s_map[i];
-    return NULL;
+        if (a >= s_map[i].aram && a < s_map[i].aram + s_map[i].len) {
+            *out = s_map[i];
+            found = 1;
+            break;
+        }
+    KfLowerIrql(old);
+    return found;
 }
 
 static u8* cache_block(u32 disc_block) {
@@ -99,6 +112,7 @@ static u8* cache_block(u32 disc_block) {
 }
 
 static void read_disc(u8* dst, u32 disc_off, u32 len) {
+    RtlEnterCriticalSection(&s_cache_lock);
     while (len) {
         u32 blk = disc_off / ARAM_PAGE, in = disc_off % ARAM_PAGE;
         u32 n = ARAM_PAGE - in < len ? ARAM_PAGE - in : len;
@@ -109,6 +123,7 @@ static void read_disc(u8* dst, u32 disc_off, u32 len) {
         disc_off += n;
         len -= n;
     }
+    RtlLeaveCriticalSection(&s_cache_lock);
 }
 
 /* type 0 = MRAM->ARAM, type 1 = ARAM->MRAM. params are always (type, mram, aram). */
@@ -132,11 +147,11 @@ void ARStartDMA(u32 type, u32 mram_addr, u32 aram_addr, u32 length) {
         } else if (s_page[pg]) {
             memcpy(m, s_page[pg] + in, n);
         } else {
-            const DiscMap* d = find_map(aram_addr);
-            if (d) {
-                u32 run = d->aram + d->len - aram_addr;
+            DiscMap d;
+            if (find_map(aram_addr, &d)) {
+                u32 run = d.aram + d.len - aram_addr;
                 if (run < n) n = run;
-                read_disc(m, d->disc + (aram_addr - d->aram), n);
+                read_disc(m, d.disc + (aram_addr - d.aram), n);
             } else {
                 memset(m, 0, n);
             }
@@ -148,17 +163,21 @@ void ARStartDMA(u32 type, u32 mram_addr, u32 aram_addr, u32 length) {
 }
 
 static int add_map(u32 aram, u32 len, u32 disc) {
-    int i, j;
+    int i, j, ok = 0;
+    KIRQL old = KeRaiseIrqlToDpcLevel();
     /* a remount over the same ARAM replaces whatever mapped it before */
     for (i = j = 0; i < s_nmap; i++)
         if (s_map[i].aram + s_map[i].len <= aram || aram + len <= s_map[i].aram) s_map[j++] = s_map[i];
     s_nmap = j;
-    if (s_nmap >= (int)(sizeof s_map / sizeof s_map[0])) return 0;
-    s_map[s_nmap].aram = aram;
-    s_map[s_nmap].len = (len + 31) & ~31u;
-    s_map[s_nmap].disc = disc;
-    s_nmap++;
-    return 1;
+    if (s_nmap < (int)(sizeof s_map / sizeof s_map[0])) {
+        s_map[s_nmap].aram = aram;
+        s_map[s_nmap].len = (len + 31) & ~31u;
+        s_map[s_nmap].disc = disc;
+        s_nmap++;
+        ok = 1;
+    }
+    KfLowerIrql(old);
+    return ok;
 }
 
 /* JKRAramArchive::open (TARGET_XBOX branch): map an uncompressed archive's

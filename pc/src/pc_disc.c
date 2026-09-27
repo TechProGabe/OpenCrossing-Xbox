@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include "types.h"
 #include "pc_disc.h"
+#include <SDL.h>
 
 extern int g_pc_verbose;
 
@@ -35,6 +36,9 @@ typedef struct {
 /* ---- global state ---- */
 static DiscFile g_disc;
 static int g_disc_open = 0;
+/* disc_read is fseek+fread on one FILE*: the DVD, audio and game threads must
+ * not interleave between the two (each call is locked, the pair is not). */
+static SDL_mutex* g_disc_lock;
 
 /* DOL info */
 static u32 g_dol_offset = 0;
@@ -340,6 +344,7 @@ int pc_disc_init(void) {
     /* build FST lookup table */
     build_fst_table(&g_disc);
 
+    if (!g_disc_lock) g_disc_lock = SDL_CreateMutex();
     g_disc_open = 1;
     return 1;
 }
@@ -366,8 +371,12 @@ int pc_disc_find_file(const char* path, u32* disc_offset, u32* file_size) {
 }
 
 int pc_disc_read(u32 offset, void* dest, u32 size) {
+    int ok;
     if (!g_disc_open) return 0;
-    return disc_read(&g_disc, offset, dest, size);
+    if (g_disc_lock) SDL_LockMutex(g_disc_lock);
+    ok = disc_read(&g_disc, offset, dest, size);
+    if (g_disc_lock) SDL_UnlockMutex(g_disc_lock);
+    return ok;
 }
 
 u8* pc_disc_extract_dol(void) {

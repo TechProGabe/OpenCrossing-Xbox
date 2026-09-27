@@ -62,3 +62,18 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   values: `XBOX_CMAKE_ARGS="'-DCMAKE_C_FLAGS=-DA -DB'"`.
 - **`extern "C"` is file-scope only** — the decomp branches declare Xbox
   hooks at the top of the TU.
+- **xemu's AC97 codec boots muted.** xemu reuses QEMU `hw/audio/ac97.c`, whose
+  mixer reset is Master `0x8000` / PCM-out `0x8808` (mute bits). The retail
+  WM9709 has no mixer registers and nxdk never writes them, so DMA runs at
+  48 kHz with real samples and nothing is heard. `AIInit` writes both to 0.
+- **Never use `SDL_Atomic*` on nxdk.** They are one global spinlock whose
+  contention path is `SDL_Delay(0)` (yields only to ≥ priority). Game thread
+  preempted inside it + high-priority AC97 pump spinning = whole game livelocked,
+  randomly 5 s–minutes in. Use `__atomic_load_n/__atomic_store_n`.
+- **macOS xemu never plays AC97.** No CoreAudio linked, QEMU SDL driver
+  disabled → the ac97 voice goes to `none`. Only the MCPX APU is audible.
+  Verify guest audio instead: `-monitor unix:<sock>,server,nowait`, then
+  `wavcapture <path> #default`. `-DXBOX_DBG_AUDIO` logs CIV/LVI/peak every 2 s.
+- **Include `<xboxkrnl/xboxkrnl.h>` before `pc_platform.h`.** The decomp's
+  `include/types.h` does `#define __declspec(x)`, so kernel data imports
+  (`XboxKrnlVersion`, …) become definitions → duplicate symbols at link.

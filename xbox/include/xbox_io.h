@@ -26,6 +26,8 @@ const char* xbox_resolve(const char* in, int mode, char* out, size_t cap);
 void xbox_log_write(const char* s, size_t n);
 void xbox_log_exclusive(int on);
 void xbox_mem_log(const char* where);
+/* xbox_watchdog.c: dump every thread's stack to COM1 if frames stop */
+void xbox_watchdog_start(void);
 int  xbox_logf(const char* fmt, ...);
 int  xbox_vlogf(const char* fmt, va_list ap);
 
