@@ -129,7 +129,7 @@ static TexCacheEntry* tex_cache_insert(u32 data_ptr, int w, int h, u32 fmt, u32 
         for (int i = 0; i < tex_cache_count; i++) {
             TexCacheEntry* e = &tex_cache[i];
             if (e->data_ptr == data_ptr && e->width == w && e->height == h && e->format == fmt &&
-                !e->external && e->gl_tex) {
+                !e->external && e->gl_tex && e->gl_tex != gl_tex) {
                 for (int s = 0; s < 8; s++)
                     if (g_gx.gl_textures[s] == e->gl_tex) g_gx.gl_textures[s] = 0;
                 glDeleteTextures(1, &e->gl_tex);
