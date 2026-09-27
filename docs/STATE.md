@@ -49,6 +49,13 @@ Threading (fixed 2026-09-27): `xbox_aram.c` map table guarded at DPC level,
 its LRU disc cache by a critical section; `pc_disc_read` (fseek+fread pair on
 one FILE*) by an SDL mutex.
 
+**Hardware test build (2026-09-27):** `AC-Xbox-20260927a.iso` (35 MB XISO,
+trimmed CISO inside, CD-R or DVD-R) + `AC-Xbox-20260927a-hdd/default.xbe` on
+the user's Jupiter share `/Volumes/Gabe/AC-Xbox/` (commit in the `.src.json`).
+Build: release `xbox/build.sh` → `tools/make-xiso build-xbox/xbe/default.xbe
+<disc> ~/xemu/release/<name>.iso` → boot it in xemu → copy. M7 = user reports
+from the real box (AC97 audio, DVD/CD read speed, 64 MB, saves on E:).
+
 Resume recipe: `xbox/build.sh` then
 `OCX_ISO=<iso> harness/xbox/run.sh 150 "NV2A. frame 1200"` with
 `XBOX_CMAKE_ARGS="'-DCMAKE_C_FLAGS=-DXBOX_FBDUMP_EVERY=300'"` →
