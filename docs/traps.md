@@ -89,3 +89,15 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
 - **nxdk winapi has no `FlushFileBuffers`:** use `NtFlushBuffersFile` (its
   HANDLEs are NT handles) — `xbox_flush_file()`.
 - **xemu has no QEMU `screendump`** monitor command.
+- **nxdk hal/audio freezes a real Xbox:** its level-triggered IRQ 6 handler +
+  interrupt-enabled DMA locked the machine at XAudioPlay (never fires in
+  xemu). `xbox_audio.c` drives the ACI polled, no interrupt connected.
+- **xemu detection:** CPUID leaf 1 EDX bit 1 (VME) — clear in xemu (0383f9fd),
+  set on the Xbox (0383f9ff); both report signature 0x68a. Never probe the
+  AC97 codec to find out.
+- **pbkit can hand you the buffer being scanned out** (two flips queued):
+  wait for vblank until PCRTC_START moves off `pb_back_buffer()`.
+- **Python `bytearray[a:b] = b""` deletes.** It broke the first XBE icon patch
+  (every section offset shifted; kernel refused the XBE silently).
+- **Worn Duke/S sticks rest 18–35% off centre and overshoot on release:** a
+  12% per-axis deadzone reads that as walking. Measure with the L3 stick trace.

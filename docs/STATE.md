@@ -55,6 +55,15 @@ the user's Jupiter share `/Volumes/Gabe/AC-Xbox/` (commit in the `.src.json`).
 Build: release `xbox/build.sh` → `tools/make-xiso build-xbox/xbe/default.xbe
 <disc> ~/xemu/release/<name>.iso` → boot it in xemu → copy. M7 = user reports
 from the real box (AC97 audio, DVD/CD read speed, 64 MB, saves on E:).
+**Runs on real hardware (2026-09-27, builds d–g, FTP to F:\Applications):**
+boots, plays, sound (polled AC97), saves under E:\UDATA\4f430001\save.
+perf.log min 1: 56.6 fps avg (60 cap), cpu 9.5 ms avg. Fixed on HW: freeze at
+XAudioPlay (nxdk IRQ handler → own polled ACI driver), rolling black bar
+(scanout wait), worn-stick drift/snap-back (37% radial deadzone, rescaled, +
+snap-back suppression; L3 dumps a 10 s stick trace to stickN.log). Leaf icon
+($$XTIMAGE + default.tbn) — user to confirm it shows in their dashboard.
+Open: per-controller deadzone (a good pad also gets 37% now).
+
 **HW test 1 result (CD-R, build a):** our splash shows, then black forever.
 No serial on hardware, so build b adds: COM1 probe (an absent UART could make
 every logged byte spin ~0.1 s), `E:\UDATA\4f430001\boot.log` (flushed per
