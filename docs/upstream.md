@@ -5,7 +5,7 @@
 | remote | repo | role |
 |---|---|---|
 | `origin` | GabeConway/OpenCrossing-Xbox (private) | this repo |
-| `upstream-pc` | flyngmt/ACGC-PC-Port | platform layer + game fixes. **History shared** — we are a descendant of its `main` |
+| `upstream-pc` | flyngmt/ACGC-PC-Port | platform layer + game fixes. **History shared** — we are a descendant of its `master` |
 | `decomp` | ACreTeam/ac-decomp | game source of truth. **No shared history** (PC port squashed its import) |
 
 ## Bases (2026-09-27)
@@ -33,7 +33,7 @@
 
 ```sh
 git fetch upstream-pc decomp
-git merge upstream-pc/main               # shared history: normal merge
+git merge upstream-pc/master             # shared history: normal merge
 # decomp: repeat the per-file 3-way merge with base = last merged decomp head
 git diff --name-only 09ca8e8b decomp/master -- src include
 ```
