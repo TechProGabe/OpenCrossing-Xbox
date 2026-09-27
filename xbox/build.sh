@@ -11,7 +11,9 @@ docker run --rm -v "$root":/src -w /src opencrossing-xbox:sdk bash -c "
   set -e
   eval \$(/usr/src/nxdk/bin/activate -s)
   cmake -S xbox -B $bdir -G Ninja -DCMAKE_TOOLCHAIN_FILE=/usr/src/nxdk/share/toolchain-nxdk.cmake -DXBOX_OBJS_ONLY=$objs -DCMAKE_C_FLAGS= -DCMAKE_CXX_FLAGS= -DXBOX_AUTOPAD= ${XBOX_CMAKE_ARGS:-} >/dev/null
-  ninja -C $bdir -k 0 ${XBOX_NINJA_ARGS:-}"
+  ninja -C $bdir -k 0 ${XBOX_NINJA_ARGS:-}
+  # the container runs as root; on a Linux host the output would stay root-owned
+  chown -R $(id -u):$(id -g) $bdir 2>/dev/null || true"
 # Dashboard icon: $$XTIMAGE section + default.tbn (host python3 + Pillow).
 xbe="$root/$bdir/xbe/default.xbe"
 if [ -z "${XBOX_NO_ICON:-}" ] && [ -f "$xbe" ] && python3 -c "import PIL" 2>/dev/null; then
