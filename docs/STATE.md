@@ -11,11 +11,17 @@
   correctly on the NV2A backend (`xbox_nv2a.c` + `gx.vsh` + `xbox_tev_rc.c`)
   in xemu at 64 MB, ~180–220 draws/frame, 10–15 combiner programs, 0
   approximated. ~6 MB free at runtime (image 25.3 MB).
-- Audio: `xbox_audio.c` polls the AC97 (IRQ never fires in xemu) and feeds
-  48 kHz buffers; untested by ear.
+- **Audio: silent in xemu (user-confirmed 2026-09-27).** `xbox_audio.c` polls
+  the AC97 (IRQ never fires in xemu) and calls `XAudioProvideSamples`; the
+  producer ring fills, but nothing is heard. Suspects, in order: pump never
+  advances past the first buffers (CIV poll at `0xFEC00114` wrong/stale),
+  `s_playing` stays 0 (AIStartDMA not reached), buffers are silence (check
+  sample peaks in the log), XAudio descriptor/format setup. Debug with a
+  440 Hz tone in `fill_48k` first to split device vs game path.
 
 ## Next action
 
+0. Fix silent audio (see above).
 1. Drive input past the title (controller path in `xbox_main.c`) → town.
 2. Renderer fidelity: swap tables, indirect textures, EFB copies, NES path.
 3. Perf pass (DC opt lists, docs/perf.md), then real hardware.
