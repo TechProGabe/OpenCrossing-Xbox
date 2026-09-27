@@ -60,8 +60,10 @@ boots, plays, sound (polled AC97), saves under E:\UDATA\4f430001\save.
 perf.log min 1: 56.6 fps avg (60 cap), cpu 9.5 ms avg. Fixed on HW: freeze at
 XAudioPlay (nxdk IRQ handler → own polled ACI driver), rolling black bar
 (scanout wait), worn-stick drift/snap-back (37% radial deadzone, rescaled, +
-snap-back suppression; L3 dumps a 10 s stick trace to stickN.log). Leaf icon
-($$XTIMAGE + default.tbn) — user to confirm it shows in their dashboard.
+snap-back suppression; L3 dumps a 10 s stick trace to stickN.log; build h:
+43% radial, pc_pad per-axis deadzone bypassed, picked by replaying 4 traces).
+Leaf icon (user-confirmed in dashboard)
+($$XTIMAGE + default.tbn).
 Open: per-controller deadzone (a good pad also gets 37% now).
 
 **HW test 1 result (CD-R, build a):** our splash shows, then black forever.

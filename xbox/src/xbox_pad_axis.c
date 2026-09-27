@@ -32,7 +32,7 @@
 #define XBOX_PAD_MEDIAN 0   /* hardware traces showed no spikes; costs a frame */
 #endif
 #ifndef XBOX_STICK_DZ
-#define XBOX_STICK_DZ 37    /* radial %: playtest pad rests up to 29-35% off centre */
+#define XBOX_STICK_DZ 43    /* radial %: playtest pad rests up to 41% off centre */
 #endif
 #ifndef XBOX_STICK_SNAPBACK
 #define XBOX_STICK_SNAPBACK 1
@@ -118,10 +118,13 @@ static void trace_dump(void) {
 }
 
 /* Worn Duke/S sticks (measured on the playtest pad, stick*.log 2026-09-27):
- * rest at (-5136,-2617), 18% off centre, past pc_pad.c's 12% per-axis
- * deadzone -> creeps left; and after a full push + release the spring
+ * rest scattered up to 41% off centre (18% typical), past pc_pad.c's 12%
+ * per-axis deadzone -> creeps; and after a full push + release the spring
  * overshoots to -9000..-12500 (up to 38%) the other way for ~10 frames ->
  * the character lurches backwards. Smooth data, no spikes. So:
+ * Picked by replaying four hardware traces (tools: scratch stick_sim.py):
+ * 43% radial -> 0 phantom frames at rest, 0 missed pushes; an adaptive
+ * "learn the rest point" variant was worse (8 phantom frames).
  *  - radial deadzone (max of XBOX_STICK_DZ and settings stick_deadzone) on
  *    the stick vector, zeroing both axes inside it and rescaling the rest so
  *    the whole tilt range past it still maps onto walk..run;
@@ -133,8 +136,14 @@ static float s_hold_x, s_hold_y;   /* direction of the last strong push */
 static unsigned s_hold_frame;
 
 static void shape_left(Sint16 lx, Sint16 ly, Sint16* ox, Sint16* oy) {
-    int dzp = g_pc_settings.stick_deadzone;
-    float dz = (float)(dzp > XBOX_STICK_DZ ? dzp : XBOX_STICK_DZ) * 327.67f;
+    /* this radial deadzone replaces pc_pad.c's per-axis one, which on top of
+     * it snapped gentle diagonals onto an axis: take the user's value (if
+     * higher) once, then zero pc_pad.c's for every later PADRead */
+    static int user_dz = -1;
+    float dz;
+    if (user_dz < 0) user_dz = g_pc_settings.stick_deadzone;
+    g_pc_settings.stick_deadzone = 0;
+    dz = (float)(user_dz > XBOX_STICK_DZ ? user_dz : XBOX_STICK_DZ) * 327.67f;
     float x = lx, y = ly, m = sqrtf(x * x + y * y);
     unsigned f = xbox_frame_count();
     *ox = *oy = 0;
@@ -148,9 +157,9 @@ static void shape_left(Sint16 lx, Sint16 ly, Sint16* ox, Sint16* oy) {
         (x * s_hold_x + y * s_hold_y) / m < 0.0f)
         return;
     {
-        /* rescale [dz, full] onto [just past pc_pad.c's 12% per-axis
-         * deadzone, full] so gentle tilts (tiptoeing) still register */
-        const float lo = 0.13f * 32767.0f;
+        /* rescale [dz, full] onto [12%, full] so gentle tilts past the
+         * deadzone still walk slowly (the game has its own small deadzone) */
+        const float lo = 0.12f * 32767.0f;
         float k = (lo + (m > 32767.0f ? 32767.0f - dz : m - dz) / (32767.0f - dz) * (32767.0f - lo)) / m;
         *ox = (Sint16)(x * k);
         *oy = (Sint16)(y * k);
