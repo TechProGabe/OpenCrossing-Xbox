@@ -25,9 +25,15 @@ const char* xbox_resolve(const char* in, int mode, char* out, size_t cap);
 
 void xbox_log_write(const char* s, size_t n);
 void xbox_log_exclusive(int on);
+/* last <cap-1> bytes logged (for the on-screen hang report) */
+size_t xbox_log_tail(char* out, size_t cap);
+/* mirror the log to XBOX_UDATA_DIR "boot.log" (hardware has no COM1) */
+void xbox_bootlog_open(void);
+void xbox_bootlog_close(void);
 void xbox_mem_log(const char* where);
 /* xbox_watchdog.c: dump every thread's stack to COM1 if frames stop */
 void xbox_watchdog_start(void);
+void xbox_watchdog_disable(void);
 int  xbox_logf(const char* fmt, ...);
 int  xbox_vlogf(const char* fmt, va_list ap);
 

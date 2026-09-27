@@ -82,3 +82,10 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
 - **Include `<xboxkrnl/xboxkrnl.h>` before `pc_platform.h`.** The decomp's
   `include/types.h` does `#define __declspec(x)`, so kernel data imports
   (`XboxKrnlVersion`, …) become definitions → duplicate symbols at link.
+- **Real hardware has no COM1** (retail board; what the absent port reads is
+  up to board + modchip). `xbox_io.c` probes the UART scratch register and
+  stays silent without one; `boot.log` (until frame 600) and `hang.log` in
+  `E:\UDATA\4f430001\` plus the watchdog's on-screen report replace it.
+- **nxdk winapi has no `FlushFileBuffers`:** use `NtFlushBuffersFile` (its
+  HANDLEs are NT handles) — `xbox_flush_file()`.
+- **xemu has no QEMU `screendump`** monitor command.

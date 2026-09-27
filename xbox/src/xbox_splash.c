@@ -159,6 +159,7 @@ void xbox_splash_progress(float f) {
 
 void xbox_splash_error(const char* title, const char* const* lines) {
     int y, i;
+    xbox_watchdog_disable();
     xbox_logf("[XBOX] FATAL: %s\n", title);
     for (i = 0; lines && lines[i]; i++) xbox_logf("[XBOX]   %s\n", lines[i]);
     if (init_fb()) {

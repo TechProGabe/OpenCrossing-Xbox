@@ -48,8 +48,25 @@ static inline void port_out(unsigned short p, unsigned char v) {
     __asm__ volatile("outb %0, %1" : : "a"(v), "Nd"(p));
 }
 
+/* Is there a 16550 at 0x3F8? xemu's lpc47m157 and debug kits have one; a
+ * retail board does not, and what an absent port reads back is up to the
+ * board and modchip. If the LSR never shows "empty", every byte would spin
+ * out its full timeout (~0.1 s) and a boot's logging takes many minutes, so
+ * probe the scratch register once and stay silent when nothing answers. */
+static int s_com1 = -1;
+static int com1_present(void) {
+    if (s_com1 < 0) {
+        port_out(0x3F8 + 7, 0x5A);
+        s_com1 = port_in(0x3F8 + 7) == 0x5A;
+        port_out(0x3F8 + 7, 0xA5);
+        s_com1 = s_com1 && port_in(0x3F8 + 7) == 0xA5;
+    }
+    return s_com1;
+}
+
 static void com1_write(const char* s, size_t n) {
     size_t i;
+    if (!com1_present()) return;
     for (i = 0; i < n; i++) {
         int spin = 100000;
         if (s[i] == '\n') {
@@ -62,9 +79,61 @@ static void com1_write(const char* s, size_t n) {
     }
 }
 
+/* ---- log tail ring (the watchdog shows it on screen) ---- */
+#define TAIL_SIZE 4096
+static char s_tail[TAIL_SIZE];
+static volatile unsigned s_tail_pos;
+
+static void tail_write(const char* s, size_t n) {
+    size_t i;
+    for (i = 0; i < n; i++) s_tail[(s_tail_pos + i) % TAIL_SIZE] = s[i];
+    s_tail_pos += (unsigned)n;
+}
+
+size_t xbox_log_tail(char* out, size_t cap) {
+    unsigned end = s_tail_pos, len = end < TAIL_SIZE ? end : TAIL_SIZE, i;
+    if (len > cap - 1) len = (unsigned)cap - 1;
+    for (i = 0; i < len; i++) out[i] = s_tail[(end - len + i) % TAIL_SIZE];
+    out[len] = '\0';
+    return len;
+}
+
+/* ---- boot log file: E:\UDATA\4f430001\boot.log ----
+ * Real hardware has no serial port, so everything logged until the game has
+ * shown XBOX_BOOTLOG_FRAMES frames also goes to a file on the HDD, flushed
+ * per write so a hard freeze still leaves the last line on disk. */
+static HANDLE s_bootlog = INVALID_HANDLE_VALUE;
+
+void xbox_bootlog_open(void) {
+    s_bootlog = CreateFileA(XBOX_UDATA_DIR "boot.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
+                            FILE_ATTRIBUTE_NORMAL, NULL);
+}
+
+void xbox_bootlog_close(void) {
+    HANDLE h = s_bootlog;
+    s_bootlog = INVALID_HANDLE_VALUE;
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+}
+
+/* nxdk's winapi has no FlushFileBuffers; its HANDLEs are NT handles */
+void xbox_flush_file(HANDLE h) {
+    IO_STATUS_BLOCK iosb;
+    NtFlushBuffersFile(h, &iosb);
+}
+
+static void bootlog_write(const char* s, size_t n) {
+    DWORD w;
+    HANDLE h = s_bootlog;
+    if (h == INVALID_HANDLE_VALUE) return;
+    WriteFile(h, s, (DWORD)n, &w, NULL);
+    xbox_flush_file(h);
+}
+
 void xbox_log_write(const char* s, size_t n) {
     DWORD owner = s_log_owner;
     if (owner && owner != GetCurrentThreadId()) return;
+    tail_write(s, n);
+    bootlog_write(s, n);
     if (g_xbox_log) com1_write(s, n);
 }
 

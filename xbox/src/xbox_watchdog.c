@@ -1,13 +1,22 @@
 /* xbox_watchdog.c — hang dumper.
  *
- * A 1 Hz thread watches the presented-frame counter. If it stops for
- * XBOX_WATCHDOG_SECS, every thread in the process is dumped once to COM1:
- * state, wait reason, and each stack word that points into the XBE image
- * (a heuristic backtrace; frame pointers are not reliable under -O2).
- * Symbolize with: tools/xbox/sym.py < log. Costs nothing until it fires.
+ * A 1 Hz thread started first thing in main() watches the presented-frame
+ * counter. It fires once if no frame has been presented XBOX_WATCHDOG_BOOT_SECS
+ * after boot, or if frames stop for XBOX_WATCHDOG_SECS later. Every thread in
+ * the process is dumped: state, wait reason, and each stack word that points
+ * into the XBE image (a heuristic backtrace; frame pointers are not reliable
+ * under -O2). The report goes to COM1, to E:\UDATA\4f430001\hang.log, and —
+ * because real hardware has no serial port — onto the screen (pbkit's debug
+ * screen: the XVideo framebuffer the splash used). Symbolize the addresses
+ * with tools/xbox/sym.py. Costs nothing until it fires.
  * Kill switch: -DXBOX_WATCHDOG=0. */
 #include <windows.h>
 #include <xboxkrnl/xboxkrnl.h>
+#include <hal/debug.h>
+#include <pbkit/pbkit.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
 #include "xbox_io.h"
 
 #ifndef XBOX_WATCHDOG
@@ -16,9 +25,13 @@
 #ifndef XBOX_WATCHDOG_SECS
 #define XBOX_WATCHDOG_SECS 6
 #endif
+#ifndef XBOX_WATCHDOG_BOOT_SECS
+#define XBOX_WATCHDOG_BOOT_SECS 90   /* CD-R boots read ~27 MB at drive speed */
+#endif
 
 extern unsigned int pc_image_base, pc_image_end;
 unsigned int xbox_frame_count(void);
+void xbox_flush_file(HANDLE h);
 
 #define WD_MAX_THREADS 16
 #define WD_MAX_WORDS   40
@@ -55,45 +68,121 @@ static void snap_thread(Snap* o, PKTHREAD t, int self) {
     }
 }
 
-static void dump_all(void) {
+static char s_report[8192];
+static int s_rlen;
+
+static void rep(const char* fmt, ...) {
+    va_list ap;
+    int n;
+    va_start(ap, fmt);
+    n = vsnprintf(s_report + s_rlen, sizeof s_report - (size_t)s_rlen, fmt, ap);
+    va_end(ap);
+    if (n > 0) s_rlen += n;
+    if (s_rlen > (int)sizeof s_report - 1) s_rlen = (int)sizeof s_report - 1;
+}
+
+/* last `lines` lines of the log, each cut to `cols` */
+static void screen_tail(int lines, int cols) {
+    static char tail[4096];
+    char* p;
+    char* start[64];
+    int n = 0, i;
+    xbox_log_tail(tail, sizeof tail);
+    for (p = tail; *p;) {
+        if (n < 64) start[n++] = p;
+        else { memmove(start, start + 1, sizeof start - sizeof start[0]); start[63] = p; }
+        p = strchr(p, '\n');
+        if (!p) break;
+        *p++ = '\0';
+    }
+    for (i = n > lines ? n - lines : 0; i < n; i++) {
+        char line[128];
+        snprintf(line, sizeof line, "%.*s", cols, start[i]);
+        debugPrint("%s\n", line);
+    }
+}
+
+static void dump_all(const char* why) {
     PKTHREAD me = KeGetCurrentThread();
     PKPROCESS p = me->ApcState.Process;
     PLIST_ENTRY e;
     int i, j, n = 0;
+    HANDLE h;
     KIRQL old = KeRaiseIrqlToDpcLevel();   /* freeze the thread list while walking it */
     for (e = p->ThreadListHead.Flink; e != &p->ThreadListHead && n < WD_MAX_THREADS; e = e->Flink) {
         PKTHREAD t = CONTAINING_RECORD(e, KTHREAD, ThreadListEntry);
         snap_thread(&s_snap[n++], t, t == me);
     }
     KfLowerIrql(old);
-    xbox_logf("[WDOG] no frame for %d s at frame %u, dumping %d threads\n", XBOX_WATCHDOG_SECS, xbox_frame_count(), n);
+
+    s_rlen = 0;
+    rep("[WDOG] %s (frame %u), %d threads\n", why, xbox_frame_count(), n);
     for (i = 0; i < n; i++) {
         const Snap* o = &s_snap[i];
-        xbox_logf("[WDOG] thread %p%s state %u wait %u prio %d stack %p..%p\n", (void*)o->t,
-                  o->self ? " (watchdog)" : "", (unsigned)o->state, (unsigned)o->wait, (int)o->prio, o->sp, o->top);
-        if (!o->n) continue;
-        xbox_logf("[WDOG]   ");
-        for (j = 0; j < o->n; j++) xbox_logf("%08lx ", o->words[j]);
-        xbox_logf("\n");
+        rep("[WDOG] thread %p%s state %u wait %u prio %d\n[WDOG]  ", (void*)o->t, o->self ? " (watchdog)" : "",
+            (unsigned)o->state, (unsigned)o->wait, (int)o->prio);
+        for (j = 0; j < o->n; j++) rep(" %08lx", o->words[j]);
+        rep("\n");
     }
-    xbox_logf("[WDOG] end\n");
+    rep("[WDOG] end\n");
+    xbox_log_write(s_report, (size_t)s_rlen);
+
+    h = CreateFileA(XBOX_UDATA_DIR "hang.log", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+        static char tail[4096];
+        DWORD w;
+        size_t tl = xbox_log_tail(tail, sizeof tail);
+        WriteFile(h, tail, (DWORD)tl, &w, NULL);
+        WriteFile(h, s_report, (DWORD)s_rlen, &w, NULL);
+        xbox_flush_file(h);
+        CloseHandle(h);
+    }
+
+    /* on screen: what a hardware tester can photograph */
+    pb_show_debug_screen();
+    debugClearScreen();
+    debugPrint("OpenCrossing-Xbox: %s at frame %u\n", why, xbox_frame_count());
+    debugPrint("Log: E:\\UDATA\\4f430001\\hang.log + boot.log\n\n");
+    screen_tail(14, 76);
+    debugPrint("\n");
+    for (i = 0; i < n; i++) {
+        const Snap* o = &s_snap[i];
+        if (o->self) continue;
+        debugPrint("t%d s%u w%u:", i, (unsigned)o->state, (unsigned)o->wait);
+        for (j = 0; j < o->n && j < 8; j++) debugPrint(" %08lx", o->words[j]);
+        debugPrint("\n");
+    }
 }
 
+static volatile int s_disabled;
+
+/* the fatal error card owns the screen for good */
+void xbox_watchdog_disable(void) { s_disabled = 1; }
+
 static DWORD WINAPI watchdog(LPVOID arg) {
-    unsigned last = 0, still = 0, fired = 0;
+    unsigned last = 0, still = 0, secs = 0, fired = 0;
     (void)arg;
     for (;;) {
         unsigned f;
         Sleep(1000);
+        secs++;
+        if (s_disabled) continue;
         f = xbox_frame_count();
-        if (f != last || f == 0) {
+        if (f == 0) {
+            if (secs >= XBOX_WATCHDOG_BOOT_SECS && !fired) {
+                dump_all("no first frame after boot");
+                fired = 1;
+            }
+            continue;
+        }
+        if (f != last) {
             last = f;
             still = 0;
             fired = 0;
             continue;
         }
         if (++still >= XBOX_WATCHDOG_SECS && !fired) {
-            dump_all();
+            dump_all("frames stopped");
             fired = 1;
         }
     }

@@ -55,6 +55,13 @@ the user's Jupiter share `/Volumes/Gabe/AC-Xbox/` (commit in the `.src.json`).
 Build: release `xbox/build.sh` → `tools/make-xiso build-xbox/xbe/default.xbe
 <disc> ~/xemu/release/<name>.iso` → boot it in xemu → copy. M7 = user reports
 from the real box (AC97 audio, DVD/CD read speed, 64 MB, saves on E:).
+**HW test 1 result (CD-R, build a):** our splash shows, then black forever.
+No serial on hardware, so build b adds: COM1 probe (an absent UART could make
+every logged byte spin ~0.1 s), `E:\UDATA\4f430001\boot.log` (flushed per
+line until frame 600), and a boot-time watchdog (no first frame in 90 s, or
+frames stop 6 s) that writes `hang.log` and prints the log tail + thread
+stacks on screen. Checked: binary has no SSE2 (pentium3 target). HW test 2 is
+over FTP: deploy, then pull boot.log/hang.log.
 
 Resume recipe: `xbox/build.sh` then
 `OCX_ISO=<iso> harness/xbox/run.sh 150 "NV2A. frame 1200"` with

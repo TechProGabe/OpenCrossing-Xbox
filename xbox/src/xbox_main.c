@@ -103,6 +103,10 @@ void pc_platform_swap_buffers(void) {
     xbox_nv2a_present();
     s_frames++;
     if ((s_frames % 60) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
+    if (s_frames == 600) {
+        xbox_logf("[XBOX] 600 frames up, closing boot.log\n");
+        xbox_bootlog_close();
+    }
 }
 
 int pc_platform_poll_events(void) {
@@ -224,6 +228,8 @@ int main(void) {
         xbox_logf("[XBOX] warning: could not mount E: (saves disabled)\n");
     CreateDirectoryA("E:\\UDATA", NULL);
     CreateDirectoryA(XBOX_UDATA_ROOT, NULL);
+    xbox_bootlog_open();
+    xbox_watchdog_start();
 
     xbox_mem_log("boot");
     read_image_range();
@@ -248,11 +254,12 @@ int main(void) {
     xbox_mem_log("after assets");
     xbox_splash_progress(0.8f);
 
+    xbox_logf("[XBOX] stage: nv2a init\n");
     pc_platform_init();
-    xbox_watchdog_start();
     xbox_mem_log("after nv2a init");
     xbox_splash_progress(1.0f);
 
+    xbox_logf("[XBOX] stage: game entry\n");
     ac_entry();
     boot_main(0, NULL);
 
