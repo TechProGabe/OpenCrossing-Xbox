@@ -64,7 +64,14 @@ snap-back suppression; L3 dumps a 10 s stick trace to stickN.log; build h:
 43% radial, pc_pad per-axis deadzone bypassed, picked by replaying 4 traces).
 Leaf icon (user-confirmed in dashboard)
 ($$XTIMAGE + default.tbn).
-Open: per-controller deadzone (a good pad also gets 37% now).
+Open: per-controller deadzone (a good pad also gets 43% now).
+User prefs (keep): `borderless_acres = 1` (smooth camera, no acre-by-acre
+snapping — PC-port default, user likes it); Resetti enabled (default
+`disable_resetti = 0`; saves + reset code now flushed to the HDD on write).
+Open bug (HW): inventory menu background is white — the menu's `GXCopyTex`
+(m_play.c, 640x480 RGB565, non-PC_ENHANCEMENTS path in pc_gx.c) via our
+`glReadPixels`. Repro plan: user's save on D:\ of the test XISO (reads fall
+back to D:\) + autopad START in town + fbdump.
 
 **HW test 1 result (CD-R, build a):** our splash shows, then black forever.
 No serial on hardware, so build b adds: COM1 probe (an absent UART could make

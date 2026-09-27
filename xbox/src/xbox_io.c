@@ -30,6 +30,7 @@
 #undef vfprintf
 #undef puts
 #undef fread
+#undef fclose
 
 int g_xbox_log = XBOX_LOG_DEFAULT;
 /* nonzero = only this thread may log (fbdump holds it so other threads can't
@@ -285,11 +286,45 @@ int xbox_remove(const char* path) {
     return remove(xbox_resolve(path, XBOX_PATH_WRITE, p, sizeof p));
 }
 
+/* Saves must survive a power-off or IGR right after they are written: FATX
+ * caches both data and directory entries, and Resetti's "quit without saving"
+ * detection is exactly a save written at load time (pc_m_card.c arms the
+ * reset code and persists it). fclose flushes the file itself; rename (the
+ * save's temp -> real swap) flushes the whole volume, which covers the
+ * directory entries too. */
+int xbox_fclose(FILE* f) {
+    HANDLE h;
+    if (!f) return EOF;
+    fflush(f);
+    h = (HANDLE)((struct _PDCLIB_file_t*)f)->handle;
+    if (h && h != INVALID_HANDLE_VALUE) xbox_flush_file(h);
+    return fclose(f);
+}
+
+static void flush_volume(char drive) {
+    char path[] = "\\??\\X:";
+    ANSI_STRING name;
+    OBJECT_ATTRIBUTES oa;
+    IO_STATUS_BLOCK iosb;
+    HANDLE h;
+    path[4] = drive;
+    RtlInitAnsiString(&name, path);
+    InitializeObjectAttributes(&oa, &name, OBJ_CASE_INSENSITIVE, NULL, NULL);
+    if (NT_SUCCESS(NtOpenFile(&h, GENERIC_WRITE | SYNCHRONIZE, &oa, &iosb, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              FILE_SYNCHRONOUS_IO_NONALERT))) {
+        NtFlushBuffersFile(h, &iosb);
+        NtClose(h);
+    }
+}
+
 int xbox_rename(const char* from, const char* to) {
     char a[MAX_PATH], b[MAX_PATH];
+    int ok;
     xbox_resolve(from, XBOX_PATH_WRITE, a, sizeof a);
     xbox_resolve(to, XBOX_PATH_WRITE, b, sizeof b);
     /* Win32 MoveFile won't replace; POSIX rename does. */
     DeleteFileA(b);
-    return MoveFileA(a, b) ? 0 : -1;
+    ok = MoveFileA(a, b);
+    if (b[0] && b[1] == ':') flush_volume(b[0]);
+    return ok ? 0 : -1;
 }

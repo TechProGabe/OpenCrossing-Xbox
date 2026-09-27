@@ -51,6 +51,7 @@ size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f);
 FILE* xbox_fopen(const char* path, const char* mode);
 int   xbox_remove(const char* path);
 int   xbox_rename(const char* from, const char* to);
+int   xbox_fclose(FILE* f);
 int   xbox_printf(const char* fmt, ...);
 int   xbox_vprintf(const char* fmt, va_list ap);
 int   xbox_fprintf(FILE* f, const char* fmt, ...);
