@@ -265,6 +265,12 @@ const char* xbox_resolve(const char* in, int mode, char* out, size_t cap) {
             join(out, cap, XBOX_UDATA_DIR, in);
             break;
         default: /* XBOX_PATH_READ */
+#ifdef XBOX_DBG_SAVE_FROM_D
+            /* test runs: a save packed on the disc wins over the HDD copy a
+             * previous run left (harness OCX_STAGE_EXTRA) */
+            join(out, cap, XBOX_DISC_DIR, in);
+            if (strncmp(in, "save/", 5) == 0 && file_exists(out)) break;
+#endif
             join(out, cap, XBOX_UDATA_DIR, in);
             if (!file_exists(out)) join(out, cap, XBOX_DISC_DIR, in);
             break;

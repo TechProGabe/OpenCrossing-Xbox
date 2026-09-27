@@ -7,6 +7,8 @@
 #   OCX_XBE   default: build-xbox/xbe/default.xbe
 #   OCX_RUN   work dir (XISO + logs), default ~/xemu/run
 #   OCX_GUI=1 leave xemu running (don't kill at timeout)
+#   OCX_STAGE_EXTRA  dir whose contents are also packed onto the disc (e.g. a
+#             save/card_a/*.gci: the XBE reads D:\ when E:\UDATA lacks it)
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 secs="${1:-60}"; stop="${2:-__never__}"
@@ -14,8 +16,9 @@ xbe="${OCX_XBE:-$root/build-xbox/xbe/default.xbe}"
 run="${OCX_RUN:-$HOME/xemu/run}"
 iso="${OCX_ISO:-}"
 mkdir -p "$run/stage"
-rm -f "$run/stage/"*
+rm -rf "$run/stage/"*
 cp "$xbe" "$run/stage/default.xbe"
+[ -n "${OCX_STAGE_EXTRA:-}" ] && cp -R "$OCX_STAGE_EXTRA"/. "$run/stage/"
 if [ -n "$iso" ] && [ "$iso" != none ]; then ln -f "$iso" "$run/stage/$(basename "$iso")" 2>/dev/null || cp "$iso" "$run/stage/"; fi
 rm -f "$run/game.xiso"
 docker run --rm -v "$run":/run opencrossing-xbox:sdk \

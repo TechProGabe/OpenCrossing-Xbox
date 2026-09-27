@@ -68,10 +68,12 @@ Open: per-controller deadzone (a good pad also gets 43% now).
 User prefs (keep): `borderless_acres = 1` (smooth camera, no acre-by-acre
 snapping — PC-port default, user likes it); Resetti enabled (default
 `disable_resetti = 0`; saves + reset code now flushed to the HDD on write).
-Open bug (HW): inventory menu background is white — the menu's `GXCopyTex`
-(m_play.c, 640x480 RGB565, non-PC_ENHANCEMENTS path in pc_gx.c) via our
-`glReadPixels`. Repro plan: user's save on D:\ of the test XISO (reads fall
-back to D:\) + autopad START in town + fbdump.
+Fixed: inventory background went white after a few openings — each open's
+640x480 EFB grab reused one buffer, pc_gx_texture.c kept every old version
+cached (evicts only at 2048 entries), 2 MB each after NPOT padding, until the
+8 MB pool was full. Repro: user's GCS save (GameShark .gcs = 0x110 header +
+GCI) packed on the test XISO (`OCX_STAGE_EXTRA`, `-DXBOX_DBG_SAVE_FROM_D`) +
+autopad + fbdump; pool now levels at 6.1 MB, 11k frames clean.
 
 **HW test 1 result (CD-R, build a):** our splash shows, then black forever.
 No serial on hardware, so build b adds: COM1 probe (an absent UART could make
@@ -106,7 +108,9 @@ Memory branches (behaviour change, kill switch `-DXBOX_ARAM_FLAT=1`):
 | `src/static/jaudio_NES/internal/dvdthread.c` | `DVDT_LoadtoARAM_Main` | `xbox_aram_map_file`: audiorom.img served from disc, not copied (8.3 MB) |
 | `src/static/JSystem/JKernel/JKRAramArchive.cpp` | `JKRAramArchive::open` | `xbox_aram_map_entry`: uncompressed RARC data served from disc (~6.5 MB) |
 
-`pc/` edits: `pc/src/pc_disc.c` — `pc_disc_read` takes a mutex (fseek+fread
+`pc/` edits: `pc/src/pc_gx_texture.c` — `tex_cache_insert` drops older
+entries of the same large (>=128x128) buffer (EFB-grab leak; upstreamable).
+`pc/src/pc_disc.c` — `pc_disc_read` takes a mutex (fseek+fread
 race between DVD/audio/game threads; upstreamable bug fix, not Xbox-specific).
 `pc/include/pc_gx_internal.h` — `PC_GX_MAX_VERTS` is `#ifndef`-guarded
 so the Xbox build can pass 16384 (vertex batch 6 MB → 1.5 MB).

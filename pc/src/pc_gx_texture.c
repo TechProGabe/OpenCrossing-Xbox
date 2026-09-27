@@ -116,6 +116,30 @@ static TexCacheEntry* tex_cache_find(u32 data_ptr, int w, int h, u32 fmt, u32 tl
 
 static TexCacheEntry* tex_cache_insert(u32 data_ptr, int w, int h, u32 fmt, u32 tlut_name,
                                        u32 tlut_ptr, u32 tlut_hash, u32 data_hash, GLuint gl_tex) {
+    /* A large buffer re-filled with new contents (an EFB capture: the
+     * inventory's 640x480 screen grab reuses one buffer every time it opens)
+     * can never hit its old entry again, but that entry keeps its GL texture
+     * alive until the cache holds TEX_CACHE_SIZE entries. On a GPU with a
+     * small texture budget (Xbox: 8 MB pool, 2 MB per grab) the menu went
+     * white after a few openings. Drop older entries for the same buffer.
+     * Small textures keep them: an animation cycling contents in one buffer
+     * still hits its cached frames. */
+    if (w * h >= 128 * 128) {
+        int j = 0;
+        for (int i = 0; i < tex_cache_count; i++) {
+            TexCacheEntry* e = &tex_cache[i];
+            if (e->data_ptr == data_ptr && e->width == w && e->height == h && e->format == fmt &&
+                !e->external && e->gl_tex) {
+                for (int s = 0; s < 8; s++)
+                    if (g_gx.gl_textures[s] == e->gl_tex) g_gx.gl_textures[s] = 0;
+                glDeleteTextures(1, &e->gl_tex);
+                continue;
+            }
+            if (j != i) tex_cache[j] = tex_cache[i];
+            j++;
+        }
+        tex_cache_count = j;
+    }
     if (tex_cache_count >= TEX_CACHE_SIZE) {
         /* evict oldest half */
         int half = TEX_CACHE_SIZE / 2;
