@@ -135,22 +135,137 @@ static void dbg_audio(const s16* last) {
 }
 #endif
 
+/* --- MCPX APU output (xemu) ---
+ * macOS xemu never plays the AC97: it links no CoreAudio and xemu disables
+ * QEMU's SDL driver, so the ac97 voice goes to the `none` backend. What xemu
+ * does play is the APU voice processor (VP), mixed straight to its SDL output
+ * when "use DSP" is off (the default, monitor point MON_VP). So under xemu we
+ * run one looping 16-bit stereo buffer voice at 48 kHz (pitch 0) over a ring
+ * and refill the ring ahead of the voice's play cursor (CBO, kept in the voice
+ * struct in RAM). Real hardware needs a GP DSP program to route mixbins to the
+ * speakers, so it stays on AC97. xemu is detected by the QEMU codec's vendor
+ * ID (SigmaTel 0x8384; the Xbox's WM9709 reads 0x574D). Model: xemu
+ * hw/xbox/mcpx/apu/vp/vp.c. Kill switch: -DXBOX_AUDIO_APU=0. */
+#ifndef XBOX_AUDIO_APU
+#define XBOX_AUDIO_APU 1
+#endif
+#define APU ((volatile u8*)0xFE800000)
+#define APU_REG(o) (*(volatile u32*)(APU + (o)))
+#define APU_PIO(m, v) (*(volatile u32*)(APU + 0x20000 + (m)) = (v))
+#define APU_VOICE     64                       /* first 2D voice: no HRTF path */
+#define APU_RING_PAGES 16
+#define APU_RING_FRAMES (APU_RING_PAGES * 4096 / 4)   /* 16384 = 341 ms */
+#define APU_LEAD      (4 * XBOX_AUDIO_FRAMES)  /* keep ~85 ms written ahead */
+
+static int s_apu;                /* 1 = output through the APU voice */
+static u8* s_apu_mem;
+static s16* s_apu_ring;
+static volatile u32* s_apu_cbo;  /* voice PAR_OFFSET: low 24 bits = play cursor */
+static u32 s_apu_wp;             /* frames written, mod ring */
+
+static int apu_init(void) {
+    /* voices (65 x 0x80) | notifiers | SGE table | ring, one contiguous block */
+    const u32 voices = 3 * 4096, notify = 2 * 4096, sge = 4096;
+    const u32 size = voices + notify + sge + APU_RING_PAGES * 4096;
+    u32 i, pv, pn, ps, pr, *tab;
+    s_apu_mem = (u8*)MmAllocateContiguousMemoryEx(size, 0, 0xFFFFFFFF, 4096, PAGE_READWRITE);
+    if (!s_apu_mem) return 0;
+    memset(s_apu_mem, 0, size);
+    pv = MmGetPhysicalAddress(s_apu_mem);
+    pn = pv + voices;
+    ps = pn + notify;
+    pr = ps + sge;
+    tab = (u32*)(s_apu_mem + voices + notify);
+    for (i = 0; i < APU_RING_PAGES; i++) {
+        tab[2 * i] = pr + i * 4096;
+        tab[2 * i + 1] = 0;
+    }
+    s_apu_ring = (s16*)(s_apu_mem + voices + notify + sge);
+    s_apu_cbo = (volatile u32*)(s_apu_mem + APU_VOICE * 0x80 + 0x58);
+
+    APU_REG(0x1004) = 0;           /* IEN: polled */
+    APU_REG(0x202C) = pv;          /* VPVADDR */
+    APU_REG(0x2030) = ps;          /* VPSGEADDR */
+    APU_REG(0x2034) = ps;          /* VPSSLADDR (unused: buffer voice) */
+    APU_REG(0x115C) = pn;          /* FENADDR */
+    APU_REG(0x2054) = 0xFFFF;      /* TVL2D/3D/MP: empty lists */
+    APU_REG(0x2060) = 0xFFFF;
+    APU_REG(0x206C) = 0xFFFF;
+    APU_REG(0x1100) = 0;           /* FECTL: free running */
+    APU_REG(0x2000) = 1u << 3;     /* SECTL: XCNTMODE on */
+
+    APU_PIO(0x2F8, APU_VOICE);                               /* SET_CURRENT_VOICE */
+    APU_PIO(0x300, (1u << 5));                               /* VBIN: v0 -> bin 0, v1 -> bin 1 */
+    /* LOOP STEREO S16 B16, SAMPLES_PER_BLOCK = 2 (field is n-1): a PCM block
+     * is container x samples_per_block bytes and does NOT include the channel
+     * count, so stereo needs 2 or every frame steps 2 bytes (garbled audio) */
+    APU_PIO(0x304, (1u << 16) | (1u << 25) | (1u << 27) | (1u << 28) | (1u << 30));
+    APU_PIO(0x308, 0); APU_PIO(0x30C, 0); APU_PIO(0x310, 0); /* envelopes off (level 1.0) */
+    APU_PIO(0x314, 0); APU_PIO(0x318, 0);                    /* MISC: filter bypass */
+    APU_PIO(0x360, 0x000F000F);   /* VOLA: vol0 = vol1 = 0 dB; vol6/7 low nibbles F */
+    APU_PIO(0x364, 0xFFFFFFFF);   /* VOLB: vol2, vol3 muted */
+    APU_PIO(0x368, 0xFFFFFFFF);   /* VOLC: vol4, vol5 muted */
+    APU_PIO(0x36C, 0); APU_PIO(0x374, 0); APU_PIO(0x378, 0);
+    APU_PIO(0x37C, 0);                                       /* pitch 0 = 48 kHz */
+    APU_PIO(0x3A0, 0);                                       /* BUF_BASE */
+    APU_PIO(0x3A4, 0);                                       /* LBO */
+    APU_PIO(0x3DC, APU_RING_FRAMES - 1);                     /* EBO */
+    APU_PIO(0x3D8, 0);                                       /* CBO */
+    APU_PIO(0x120, 1u << 16);                                /* ANTECEDENT: 2D list top */
+    APU_PIO(0x124, APU_VOICE);                               /* VOICE_ON, envelopes OFF */
+    s_apu_wp = 0;
+    return 1;
+}
+
+/* frames the voice will play before reaching unwritten data */
+static u32 apu_lead(void) {
+    u32 cbo = *s_apu_cbo & 0xFFFFFF;
+    return (s_apu_wp + APU_RING_FRAMES - cbo) % APU_RING_FRAMES;
+}
+
+static void apu_pump(void) {
+    u32 lead = apu_lead();
+    if (lead > APU_RING_FRAMES / 2) {
+        /* underrun: the cursor passed the write point; restart just ahead of it */
+        u32 cbo = *s_apu_cbo & 0xFFFFFF;
+        s_apu_wp = ((cbo / XBOX_AUDIO_FRAMES) + 2) * XBOX_AUDIO_FRAMES % APU_RING_FRAMES;
+        lead = apu_lead();
+    }
+    while (lead < APU_LEAD) {
+        fill_48k(s_apu_ring + s_apu_wp * 2);
+        s_apu_wp = (s_apu_wp + XBOX_AUDIO_FRAMES) % APU_RING_FRAMES;
+        lead += XBOX_AUDIO_FRAMES;
+    }
+}
+
 static int pump_func(void* data) {
     (void)data;
     SDL_SetThreadPriority(SDL_THREAD_PRIORITY_HIGH);
     while (AGET(s_pump_run)) {
 #ifdef XBOX_DBG_AUDIO
-        dbg_audio(s_outbuf[(s_queued + XBOX_AUDIO_NBUF - 1) % XBOX_AUDIO_NBUF]);
+        if (!s_apu) dbg_audio(s_outbuf[(s_queued + XBOX_AUDIO_NBUF - 1) % XBOX_AUDIO_NBUF]);
+        else {
+            static u32 t0;
+            if (SDL_GetTicks() - t0 >= 2000) {
+                t0 = SDL_GetTicks();
+                printf("[AUDIO] apu cbo %u wp %u lead %u fill %d\n", (unsigned)(*s_apu_cbo & 0xFFFFFF),
+                       (unsigned)s_apu_wp, (unsigned)apu_lead(), pc_audio_get_buffer_fill());
+            }
+        }
 #endif
-        unsigned civ = ACI[0x114] & 31;
-        unsigned played = s_queued & 31;
-        unsigned ahead = (played - civ) & 31;
-        while (ahead < XBOX_AUDIO_NBUF - 1) {
-            s16* b = s_outbuf[s_queued % XBOX_AUDIO_NBUF];
-            fill_48k(b);
-            XAudioProvideSamples((unsigned char*)b, XBOX_AUDIO_FRAMES * 4, FALSE);
-            s_queued++;
-            ahead++;
+        if (s_apu) {
+            apu_pump();
+        } else {
+            unsigned civ = ACI[0x114] & 31;
+            unsigned played = s_queued & 31;
+            unsigned ahead = (played - civ) & 31;
+            while (ahead < XBOX_AUDIO_NBUF - 1) {
+                s16* b = s_outbuf[s_queued % XBOX_AUDIO_NBUF];
+                fill_48k(b);
+                XAudioProvideSamples((unsigned char*)b, XBOX_AUDIO_FRAMES * 4, FALSE);
+                s_queued++;
+                ahead++;
+            }
         }
         SDL_Delay(2);
     }
@@ -178,11 +293,16 @@ void AIInit(u8* stack) {
     *(volatile u16*)(ACI + 0x02) = 0x0000;   /* AC97_Master_Volume_Mute */
     *(volatile u16*)(ACI + 0x18) = 0x0000;   /* AC97_PCM_Out_Volume_Mute */
     s_queued = 0;
+    s_apu = XBOX_AUDIO_APU && *(volatile u16*)(ACI + 0x7C) == 0x8384 && apu_init();
     ASET(s_pump_run, 1);
-    s_pump_thread = SDL_CreateThread(pump_func, "AC97Pump", NULL);
-    XAudioPlay();
+    s_pump_thread = SDL_CreateThread(pump_func, "AudioPump", NULL);
+    if (!s_apu) XAudioPlay();
     audio_device = 1;
-    printf("[AUDIO] AC97 pump: 48 kHz, %d x %d frames, polled\n", XBOX_AUDIO_NBUF, XBOX_AUDIO_FRAMES);
+    if (s_apu)
+        printf("[AUDIO] xemu codec: output via APU voice %d, 48 kHz ring %d frames\n", APU_VOICE, APU_RING_FRAMES);
+    else
+        printf("[AUDIO] AC97 pump: 48 kHz, %d x %d frames, polled (codec %04x)\n", XBOX_AUDIO_NBUF, XBOX_AUDIO_FRAMES,
+               *(volatile u16*)(ACI + 0x7C));
 }
 
 void AIInitDMA(u32 addr, u32 size) {

@@ -71,7 +71,12 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   preempted inside it + high-priority AC97 pump spinning = whole game livelocked,
   randomly 5 s–minutes in. Use `__atomic_load_n/__atomic_store_n`.
 - **macOS xemu never plays AC97.** No CoreAudio linked, QEMU SDL driver
-  disabled → the ac97 voice goes to `none`. Only the MCPX APU is audible.
+  disabled → the ac97 voice goes to `none`. Only the MCPX APU is audible, so
+  `xbox_audio.c` uses an APU voice when the codec ID says xemu.
+- **APU PCM voices: `SAMPLES_PER_BLOCK` = channels − 1.** xemu's block size is
+  container × samples_per_block (no channel term); stereo with 0 steps 2 bytes
+  per frame → half-speed, garbled audio. Default `use_dsp=false` = MON_VP:
+  voices are heard without any GP DSP program (real hardware needs one).
   Verify guest audio instead: `-monitor unix:<sock>,server,nowait`, then
   `wavcapture <path> #default`. `-DXBOX_DBG_AUDIO` logs CIV/LVI/peak every 2 s.
 - **Include `<xboxkrnl/xboxkrnl.h>` before `pc_platform.h`.** The decomp's

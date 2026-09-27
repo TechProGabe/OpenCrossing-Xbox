@@ -11,13 +11,12 @@
   correctly on the NV2A backend (`xbox_nv2a.c` + `gx.vsh` + `xbox_tev_rc.c`)
   in xemu at 64 MB, ~180–220 draws/frame, 10–15 combiner programs, 0
   approximated. ~6 MB free at runtime (image 25.3 MB).
-- **Audio: correct on the guest, inaudible in macOS xemu** (2026-09-27).
-  `AIInit` unmutes the AC97 codec (xemu boots it muted); wavcapture of xemu's
-  audio backend shows the title music. But the macOS xemu build links no
-  CoreAudio and xemu disables QEMU's SDL driver, so the AC97 (QEMU ac97) goes
-  to the `none` backend. xemu only plays the **MCPX APU** (its own SDL3 path).
-  Real hardware plays AC97 (nxdk's audio sample path). → to hear it in xemu,
-  add an APU voice output path (next action 0).
+- **Audio works in xemu (user-confirmed by ear, 2026-09-27).** macOS xemu
+  can't play AC97 (no CoreAudio, QEMU SDL driver disabled → `none`), so under
+  xemu (AC97 codec vendor ID 0x8384 = QEMU SigmaTel) `xbox_audio.c` streams
+  through one looping MCPX APU VP voice (heard via xemu's MON_VP path). Real
+  hardware (WM9709, 0x574D) keeps the AC97 pump — unverified until M7.
+  Kill switch `-DXBOX_AUDIO_APU=0`.
 - **Random full hang fixed:** `SDL_Atomic*` spinlock priority-inversion livelock
   between game thread and AC97 pump (traps.md). Soak after fix: 9300 frames /
   4 min clean (before: hung at frame 180–1500 in 3 of 5 runs).
@@ -28,9 +27,7 @@
 
 ## Next action
 
-0. Audible in xemu: APU output path (VP voice streaming the 48 kHz ring into
-   mixbins 0/1; xemu `hw/xbox/mcpx/apu/vp/vp.c`), AC97 kept for hardware.
-   Investigate the rare black frame.
+0. Investigate the rare black frame (user report).
    Profile hot spots at the title (EIP sampling via monitor `info registers`):
    pdclib byte-loop `memset/memcpy/memmove/memcmp` (~45%) and `pb_cache_flush`
    (~20%) — replace with `rep movsd/stosd` versions, cut flushes.
