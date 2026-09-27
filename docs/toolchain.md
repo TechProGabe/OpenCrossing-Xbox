@@ -62,7 +62,7 @@ attached to each GitHub release.
 - `dev`: day-to-day work. Pushes run the CI build and keep the XBE as a
   workflow artifact.
 - `main`: what users get. Every push to `main` (normally a merge from `dev`)
-  builds the XBE and publishes a GitHub pre-release tagged `beta-<n>` with
+  builds the XBE and publishes a GitHub pre-release tagged `beta-<n>` (1, 2, 3... by count of earlier betas) with
   `OpenCrossing-Xbox-beta-<n>.zip` attached (`.github/workflows/build.yml`).
 
 Release zip contents: `OpenCrossing/default.xbe`, `OpenCrossing/default.tbn`,

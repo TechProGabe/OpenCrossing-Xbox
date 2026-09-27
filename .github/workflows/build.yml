@@ -42,12 +42,21 @@ jobs:
       - name: Build
         run: xbox/build.sh
 
+      # betas are numbered 1, 2, 3... by count of existing beta releases;
+      # other builds are named after the run
       - name: Package
         id: pkg
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          n="${GITHUB_RUN_NUMBER}"
-          name="OpenCrossing-Xbox-beta-${n}"
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+            n=$(( $(gh release list --limit 1000 --json tagName -q '[.[] | select(.tagName | startswith("beta-"))] | length') + 1 ))
+            name="OpenCrossing-Xbox-beta-${n}"
+          else
+            n="run${GITHUB_RUN_NUMBER}"
+            name="OpenCrossing-Xbox-${n}"
+          fi
           out="$RUNNER_TEMP/$name"
           mkdir -p "$out/OpenCrossing" "$out/tools"
           cp build-xbox/xbe/default.xbe build-xbox/xbe/default.tbn "$out/OpenCrossing/"
@@ -56,6 +65,7 @@ jobs:
           (cd "$out" && zip -qr "$RUNNER_TEMP/$name.zip" OpenCrossing tools)
           cp build-xbox/ac_xbox.map "$RUNNER_TEMP/ac_xbox.map"
           echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -70,7 +80,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          n="${GITHUB_RUN_NUMBER}"
+          n="${{ steps.pkg.outputs.n }}"
           short="${GITHUB_SHA::8}"
           cat > "$RUNNER_TEMP/notes.md" <<EOF
           Beta build ${n} from \`main\` at ${short}.
