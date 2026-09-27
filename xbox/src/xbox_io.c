@@ -298,6 +298,10 @@ int xbox_remove(const char* path) {
  * reset code and persists it). fclose flushes the file itself; rename (the
  * save's temp -> real swap) flushes the whole volume, which covers the
  * directory entries too. */
+/* FILE is nxdk pdclib's struct _PDCLIB_file_t (pdclib/_PDCLIB_int.h), whose
+ * first member is the kernel file handle (_PDCLIB_fd_t = void* on xbox). */
+_Static_assert(sizeof(((struct _PDCLIB_file_t*)0)->handle) == sizeof(HANDLE), "pdclib FILE handle is not a HANDLE");
+
 int xbox_fclose(FILE* f) {
     HANDLE h;
     if (!f) return EOF;
@@ -331,6 +335,7 @@ int xbox_rename(const char* from, const char* to) {
     /* Win32 MoveFile won't replace; POSIX rename does. */
     DeleteFileA(b);
     ok = MoveFileA(a, b);
+    /* xbox_resolve always NUL-terminates; resolved HDD paths are "E:\\..." */
     if (b[0] && b[1] == ':') flush_volume(b[0]);
     return ok ? 0 : -1;
 }
