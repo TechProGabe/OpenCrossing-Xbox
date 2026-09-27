@@ -1,4 +1,7 @@
 #include <dolphin/os/OSCache.h>
+#ifdef TARGET_XBOX
+extern "C" int xbox_aram_map_entry(long entryNum, u32 file_off, u32 aram, u32 len);
+#endif
 #include <string.h>
 
 #include "JSystem/JKernel/JKRAram.h"
@@ -217,6 +220,14 @@ bool JKRAramArchive::open(long entryNum) {
 #ifdef TARGET_PC
                 OSReport("[PC] RARC: loading %u bytes of file data to ARAM at %u\n",
                          aramSize, mBlock->getAddress());
+#endif
+#ifdef TARGET_XBOX
+                /* Xbox: an uncompressed archive's ARAM image is a byte range of
+                 * the disc file, so map it (xbox/src/xbox_aram.c) instead of
+                 * holding ~6.7 MB of archives resident. */
+                if (mCompression != 0 ||
+                    !xbox_aram_map_entry(entryNum, mem->header_length + mem->file_data_offset,
+                                         mBlock->getAddress(), mem->file_data_length))
 #endif
                 JKRDvdToAram(entryNum, mBlock->getAddress(), EXPAND_SWITCH_DECOMPRESS,
                              mem->header_length + mem->file_data_offset, 0);

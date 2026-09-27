@@ -23,6 +23,7 @@
 #include "xbox_io.h"
 #include "xbox_splash.h"
 #include "dirent.h"
+#include "xbox_nv2a.h"
 
 SDL_Window*   g_pc_window = NULL;
 SDL_GLContext g_pc_gl_context = NULL;
@@ -52,7 +53,6 @@ void pc_model_viewer_cleanup(void) {}
 unsigned int pc_image_base = 0;
 unsigned int pc_image_end  = 0;
 
-extern int xbox_gl_stub_load(void);
 
 /* ---- texture packs: not supported on Xbox (no spare RAM for HD textures) ---- */
 void pc_texture_pack_init(void) {}
@@ -71,7 +71,11 @@ void pc_platform_init(void) {
     if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
         xbox_logf("[XBOX] SDL_Init failed: %s\n", SDL_GetError());
     }
-    xbox_gl_stub_load();
+    if (!xbox_nv2a_init()) {
+        static const char* const lines[] = { "The NV2A graphics backend failed to start.", "See the COM1 log for details.", NULL };
+        xbox_splash_error("Graphics init failed", lines);
+    }
+    xbox_gl_nv2a_load();
     pc_gx_init();
 }
 
@@ -94,6 +98,7 @@ static unsigned int s_frames;
 
 void pc_platform_swap_buffers(void) {
     pc_gx_draw_pending();
+    xbox_nv2a_present();
     s_frames++;
     if ((s_frames % 60) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
 }
@@ -218,6 +223,7 @@ int main(void) {
     CreateDirectoryA("E:\\UDATA", NULL);
     CreateDirectoryA(XBOX_UDATA_ROOT, NULL);
 
+    xbox_mem_log("boot");
     read_image_range();
     xbox_logf("[XBOX] image %08x-%08x\n", pc_image_base, pc_image_end);
 
@@ -229,12 +235,19 @@ int main(void) {
 
     pc_settings_load();
     pc_keybindings_load();
-    pc_platform_init();
-    xbox_splash_progress(0.2f);
 
+    /* Assets BEFORE the GPU backend: pc_assets_init() holds the compressed
+     * (6 MB) and decompressed (15.6 MB) REL at once, then frees both. The
+     * NV2A texture pool, vertex ring and framebuffers come after that peak. */
     if (!pc_disc_init()) fatal_bad_disc(disc_name);
-    xbox_splash_progress(0.4f);
+    xbox_splash_progress(0.3f);
+    xbox_mem_log("before assets");
     if (!pc_assets_init()) fatal_no_assets();
+    xbox_mem_log("after assets");
+    xbox_splash_progress(0.8f);
+
+    pc_platform_init();
+    xbox_mem_log("after nv2a init");
     xbox_splash_progress(1.0f);
 
     ac_entry();

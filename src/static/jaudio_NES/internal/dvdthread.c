@@ -168,6 +168,19 @@ extern s32 DVDT_LoadtoARAM_Main(void* arg) {
         }
     }
 
+#ifdef TARGET_XBOX
+    /* Xbox: ARAM is an address space (xbox/src/xbox_aram.c). Map the file's
+     * range to the disc image instead of copying 8.3 MB of audiorom.img. */
+    {
+        extern int xbox_aram_map_file(const char* name, u32 src, u32 dst, u32 length);
+        if (xbox_aram_map_file(call->fileName, call->src, call->dst, call->length)) {
+            DVDClose(&finfo);
+            __DoFinish(call, len);
+            return 0;
+        }
+    }
+#endif
+
     while (call->length != 0) {
         u32 readSize;
         u8* buf = ADVD_BUFFER[buffer_load];

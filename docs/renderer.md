@@ -1,37 +1,64 @@
-# Renderer plan
+# Renderer
 
-Pipeline (unchanged from PC port): game N64 DLs → **emu64** (game's own
-N64→GX translator, `src/static/libforest/emu64/`) → GX calls → `pc_gx*`
-(batching, state dedup, strip→tri, whole-batch AABB cull, texture decode +
-cache) → backend. Only the backend changes.
+Pipeline: game N64 DLs → **emu64** (`src/static/libforest/emu64/`) → GX calls
+→ `pc/src/pc_gx*.c` (unmodified: batching, state dedup, AABB cull, texture
+decode + cache) → **GL 3.3 subset** → `xbox/src/xbox_nv2a.c` → pbkit
+pushbuffer → NV2A.
 
-## What transfers from `pc/`
+`pc_gx.c` loads GL through glad; `xbox_gl_nv2a_load()` fills those glad
+pointers with the shim, so `pc/` has no Xbox branches. Only `pc_gx_tev.c`
+(GLSL) is replaced, by `xbox_gx_tev.c` (one program id).
 
-Pure C, keep: batch buffer, cull (60–80% of batches offscreen — the big win),
-state dedup, 10 GC texture decoders + content-hash cache, TLUT `is_be` handling.
-Dies: `pc_gx_tev.c` (TEV → GLSL), shader disk cache, GL 3.3 VBO/FBO code,
-`pc_texture_pack.c`, `pc_model_viewer.c`.
+## Pieces
 
-## M3 — bring-up on pbgl (fixed-function)
+| file | job |
+|---|---|
+| `xbox/src/xbox_nv2a.c` | GL shim: uniform table, textures, vertex ring, state → NV097 methods, present |
+| `xbox/shaders/gx.vsh` | the one vertex program (NV2A asm → `gx_vsh.inl` via `tools/xbox/build_shaders.sh`) |
+| `xbox/src/xbox_tev_rc.c` | TEV config → register-combiner program (cached per config) |
+| `xbox/include/xbox_nv2a.h` | shared types, constant-reference tags |
 
-- GL 1.x immediate-ish / client arrays via pbgl.
-- TEV: reuse the DC sibling's **101-config table** (`docs/ref/dc/tev-map-table.md`)
-  — every TEV config seen in a full playthrough mapped to fixed-function. On
-  Xbox, `GL_ARB_texture_env_combine`-style multi-stage (if pbgl exposes it)
-  beats the DC's 1-TMU approximations.
-- Lighting: NV2A fixed-function T&L can do GC's 8 lights (verify attenuation
-  model vs `pc/shaders/default.vert`); CPU fallback exists in DC's `dc_gx.c`.
-- EFB copies (`GXCopyTex`): per-callsite strategy, render-to-texture on NV2A.
+## Vertex program (`gx.vsh`)
 
-## M6 — xgu + register combiners
+- Constants from c96: projection with the viewport folded in (96–99), MV rows
+  (100–102), normal rows (103–105), k=(0,1,.5,0) (106), material/ambient,
+  flags, fog (start, 1/(end−start)), 8 light dirs + colours, 3 texgen stages.
+- Per-vertex GC channel-0 lighting (the GameCube lights per vertex too).
+- Fog factor → `oSpecular.w` (V1.a), read by the final combiner.
+- Texgen per TEV stage: tc0 or normal × tex matrix, × NPOT pad scale.
 
-- Generate combiner programs from TEV state at runtime (≤3 stages → ≤8
-  combiner stages), cache by TEV hash (same key PC uses for shader variants).
-- Vertex programs for GC lighting + texgen if fixed-function falls short.
-- Textures: swizzled on NV2A; DXT for large static textures if RAM needs it.
+## Combiners (`xbox_tev_rc.c`)
 
-## Open questions
+- PREV = R0; REG0–2 allocated from R1/T3/V1.rgb; T0–T2 = stage textures;
+  V0 = rasterised colour.
+- A TEV stage is one NV2A stage when its lerp collapses (modulate/replace/
+  decal), else two. Constants: C0/C1 per stage, resolved per draw.
+- Final combiner: `lerp(fog, PREV, fog colour)`, alpha = PREV.a.
+- Unsupported configs set `approximated` (counted in the frame log).
 
-- Does pbgl expose multitexture combine + enough state for the 101 configs?
-- Alpha compare (TEV alpha test with two refs + logic op) → NV2A alpha test
-  covers one ref; the DC `tev-map-alpha.md` workarounds apply.
+## Textures
+
+RGBA8 from `pc_gx_texture.c` → A8R8G8B8 **swizzled**, NPOT padded to POT by
+edge replication, texcoords rescaled in the vertex program. 8 MB contiguous
+pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
+
+## Register values that bit us (see traps.md)
+
+- `TEXTURE_FORMAT` bit 3 = 1 (border from colour).
+- `SPECULAR_ENABLE` 1 + `LIGHT_CONTROL` `ALPHA_FROM_MATERIAL_SPECULAR`.
+- `FRONT_FACE` CCW.
+
+## Debug knobs (compile-time, `XBOX_CMAKE_ARGS="'-DCMAKE_C_FLAGS=…'"`)
+
+| knob | effect |
+|---|---|
+| `XBOX_FBDUMP_EVERY=N` | screenshot every N frames over COM1 + frame stats |
+| `XBOX_DBG_TEVLOG` | log every new TEV config and its combiner words |
+| `XBOX_DBG_DRAWLOG=N` | log every draw of frame N (state, texture, first vertex) |
+| `XBOX_DBG_RC_TEX` | every draw outputs raw T0 (isolates TEV from geometry) |
+| `XBOX_DBG_NOFOG` / `XBOX_DBG_NOCULL` | force fog / culling off |
+
+## Not yet
+
+Tex swap tables, indirect textures, EFB copies (`GXCopyTex`), the NES
+emulator's GL path (skipped, logged once), 16-bit texture formats.

@@ -28,3 +28,17 @@ textures on top.
 5. `-Os` for cold TUs (DC measured big `.text` savings).
 
 Each lever gets a kill switch. Record measurements here.
+
+## Measured (xemu, 64 MB, title demo, 2026-09-27)
+
+| item | size | knob |
+|---|---|---|
+| XBE image (incl. BSS) | 25.3 MB | `PC_GX_MAX_VERTS=16384` cut `g_gx` by 4.5 MB |
+| main arena | 6 MB | `XBOX_ARENA_BYTES` |
+| ARAM | sparse 32 KB pages; audiorom + RARC data disc-mapped → ~0 resident | `XBOX_ARAM_FLAT=1` restores flat 16 MB |
+| ARAM disc cache | 48 × 32 KB = 1.5 MB LRU (≈93% hits at title) | `XBOX_ARAM_CACHE_SLOTS` |
+| NV2A texture pool | 8 MB contiguous (title uses ~0.8 MB) | `xbox_nv2a.c` |
+| vertex ring / pushbuffer | 1 MB / 1 MB | `xbox_nv2a.c` |
+| **free at runtime** | **~5.9 MB** | |
+
+Order matters: `pc_assets_init` (REL + Yaz0 peak) runs before NV2A init.

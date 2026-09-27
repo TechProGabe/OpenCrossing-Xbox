@@ -65,19 +65,19 @@ The Xbox is a 32-bit little-endian x86 machine, which is the same ABI the upstre
 ## Roadmap
 
 - [x] **M0** Repo: PC-port base + latest decomp head, docs
-- [ ] **M1** nxdk toolchain, hello XBE in xemu, `src/` compiles
-- [ ] **M2** Boots headless to the town
-- [ ] **M3** First pixels (fixed-function renderer)
+- [x] **M1** nxdk toolchain, hello XBE in xemu, `src/` compiles
+- [x] **M2** Boots headless, main loop runs
+- [x] **M3** First pixels — title demo renders on the NV2A (vertex program + register combiners)
 - [ ] **M4** Controller, music, saves
 - [ ] **M5** Fits stock 64 MB
-- [ ] **M6** Register-combiner TEV, hardware T&L, stable 30 fps
+- [ ] **M6** Renderer fidelity (swap tables, indirect, EFB copies) + stable 30 fps
 - [ ] **M7** Real hardware + first release (HDD folder + burnable XISO)
 
 Details: [`docs/PLAN.md`](docs/PLAN.md) · status: [`docs/STATE.md`](docs/STATE.md)
 
 ## Building from source (developers)
 
-Coming with M1: nxdk in Docker, `xbox/` build scripts, xemu run loop. See [`docs/toolchain.md`](docs/toolchain.md).
+`xbox/build-image.sh` (once) → `xbox/build.sh` → `build-xbox/xbe/default.xbe`; `harness/xbox/run.sh` runs it in xemu. See [`docs/toolchain.md`](docs/toolchain.md).
 
 ## Legal
 

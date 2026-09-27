@@ -42,30 +42,39 @@ static voidpf z_alloc(voidpf o, uInt n, uInt sz) { (void)o; return calloc(n, sz)
 static void z_free(voidpf o, voidpf p) { (void)o; free(p); }
 
 void xbox_fbdump(const void* fb, int w, int h, int bpp, int pitch) {
+    /* streamed: a 1.2 MB frame never fits the 64 MB heap in one piece */
+    static unsigned char out[32 * 1024 + 64];
     z_stream zs;
-    uLong cap = (uLong)(pitch * h) + (uLong)(pitch * h) / 1000 + 64;
-    unsigned char* z = (unsigned char*)malloc(cap);
-    int prev = g_xbox_log;
-    if (!z) { xbox_logf("[FBDUMP] ERROR no memory\n"); return; }
+    size_t have = 0;   /* bytes in out[] not yet base64'd */
+    int prev = g_xbox_log, rc, y;
     memset(&zs, 0, sizeof zs);
     zs.zalloc = z_alloc;
     zs.zfree = z_free;
-    if (deflateInit(&zs, 6) != Z_OK) { free(z); xbox_logf("[FBDUMP] ERROR deflateInit\n"); return; }
-    zs.next_in = (Bytef*)fb;
-    zs.avail_in = (uInt)(pitch * h);
-    zs.next_out = z;
-    zs.avail_out = (uInt)cap;
-    if (deflate(&zs, Z_FINISH) != Z_STREAM_END) {
-        deflateEnd(&zs);
-        free(z);
-        xbox_logf("[FBDUMP] ERROR deflate\n");
-        return;
-    }
+    if (deflateInit2(&zs, 1, Z_DEFLATED, 9, 1, Z_DEFAULT_STRATEGY) != Z_OK) { xbox_logf("[FBDUMP] ERROR deflateInit\n"); return; }
     g_xbox_log = 1;
+    xbox_log_exclusive(1);
     xbox_logf("[FBDUMP] BEGIN %d %d %d %d\n", w, h, bpp, pitch);
-    emit_b64(z, zs.total_out);
+    for (y = 0; y <= h; y++) {
+        int flush = y == h ? Z_FINISH : Z_NO_FLUSH;
+        zs.next_in = y < h ? (Bytef*)fb + (size_t)y * (size_t)pitch : (Bytef*)fb;
+        zs.avail_in = y < h ? (uInt)pitch : 0;
+        do {
+            size_t emit;
+            zs.next_out = out + have;
+            zs.avail_out = (uInt)(32 * 1024 - have);
+            rc = deflate(&zs, flush);
+            have = 32 * 1024 - zs.avail_out;
+            /* base64 whole 57-byte lines only; keep the tail for the next pass */
+            emit = rc == Z_STREAM_END ? have : have - have % 57;
+            if (emit) {
+                emit_b64(out, emit);
+                memmove(out, out + emit, have - emit);
+                have -= emit;
+            }
+        } while (zs.avail_out == 0 || (flush == Z_FINISH && rc != Z_STREAM_END));
+    }
     xbox_logf("[FBDUMP] END\n");
+    xbox_log_exclusive(0);
     g_xbox_log = prev;
     deflateEnd(&zs);
-    free(z);
 }

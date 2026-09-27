@@ -30,7 +30,12 @@
 #define PC_SCREEN_HEIGHT  PC_GC_HEIGHT
 #define PC_WINDOW_TITLE   "Animal Crossing"
 
-#define PC_MAIN_MEMORY_SIZE   (24 * 1024 * 1024)
+/* XBOX: the GC arena. 24 MB on PC is mostly idle headroom; the Dreamcast
+ * sibling boots the town with 2.7 MB. Knob: -DXBOX_ARENA_BYTES. */
+#ifndef XBOX_ARENA_BYTES
+#define XBOX_ARENA_BYTES      (6 * 1024 * 1024)
+#endif
+#define PC_MAIN_MEMORY_SIZE   XBOX_ARENA_BYTES
 #define PC_ARAM_SIZE          (16 * 1024 * 1024)   /* XBOX: M5 lever, docs/memory.md */
 #define PC_FIFO_SIZE          (256 * 1024)
 

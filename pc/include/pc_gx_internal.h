@@ -44,7 +44,9 @@ extern "C" {
 /* DIRTY() is defined below g_gx - it also bumps per-group sequence counters */
 
 /* --- Vertex buffer --- */
+#ifndef PC_GX_MAX_VERTS
 #define PC_GX_MAX_VERTS       65536
+#endif
 #define PC_GX_MAX_ATTRIB_SIZE 64
 #define PC_GX_MAX_ATTR        26
 #define PC_GX_MAX_VTXFMT      8

@@ -24,6 +24,8 @@ enum { XBOX_PATH_READ, XBOX_PATH_WRITE, XBOX_PATH_DISC };
 const char* xbox_resolve(const char* in, int mode, char* out, size_t cap);
 
 void xbox_log_write(const char* s, size_t n);
+void xbox_log_exclusive(int on);
+void xbox_mem_log(const char* where);
 int  xbox_logf(const char* fmt, ...);
 int  xbox_vlogf(const char* fmt, va_list ap);
 

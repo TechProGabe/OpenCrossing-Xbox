@@ -19,4 +19,9 @@ RUN git clone --recursive https://github.com/XboxDev/nxdk.git /usr/src/nxdk \
 ENV NXDK_DIR=/usr/src/nxdk
 RUN cd /usr/src/nxdk && make tools -j$(nproc)
 RUN bash -c 'eval $(/usr/src/nxdk/bin/activate -s); cd /usr/src/nxdk && make NXDK_ONLY=y NXDK_SDL=y NXDK_CXX=y -j$(nproc)'
+# nxdk's Cg compiler (tools/cg/linux/cgc) is an i386 binary; on arm64 hosts it
+# runs under the VM's qemu-i386 binfmt and only needs the i386 runtime.
+RUN dpkg --add-architecture i386 && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libc6:i386 libstdc++6:i386 \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /src

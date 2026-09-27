@@ -30,7 +30,18 @@ def main():
             hdr = list(map(int, body.split()[1:5])); cur = []
         elif body == "END" and cur is not None:
             w, h, bpp, pitch = hdr
-            pix = zlib.decompress(base64.b64decode("".join(cur)))
+            raw = base64.b64decode("".join(cur))
+            try:
+                pix = zlib.decompress(raw)
+            except zlib.error as e:
+                # a line mangled on the wire (another thread logging mid-dump)
+                print("frame corrupt (%s), skipped" % e)
+                cur = None
+                continue
+            if len(pix) < h * pitch:
+                print("frame truncated (%d of %d bytes), skipped" % (len(pix), h * pitch))
+                cur = None
+                continue
             rows = []
             for y in range(h):
                 r = pix[y * pitch:(y * pitch) + w * (bpp // 8)]

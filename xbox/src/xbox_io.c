@@ -14,6 +14,7 @@
  * `-device lpc47m157 -serial ...` and real hardware ignores (no SuperIO on a
  * retail board: the LSR reads 0xFF, so the busy-wait never spins). */
 #include <windows.h>
+#include <xboxkrnl/xboxkrnl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +31,11 @@
 #undef puts
 
 int g_xbox_log = XBOX_LOG_DEFAULT;
+/* nonzero = only this thread may log (fbdump holds it so other threads can't
+ * splice text into the middle of a base64 line) */
+static volatile DWORD s_log_owner;
+
+void xbox_log_exclusive(int on) { s_log_owner = on ? GetCurrentThreadId() : 0; }
 
 /* ---- COM1 ---- */
 static inline unsigned char port_in(unsigned short p) {
@@ -56,6 +62,8 @@ static void com1_write(const char* s, size_t n) {
 }
 
 void xbox_log_write(const char* s, size_t n) {
+    DWORD owner = s_log_owner;
+    if (owner && owner != GetCurrentThreadId()) return;
     if (g_xbox_log) com1_write(s, n);
 }
 
@@ -121,6 +129,18 @@ char* getcwd(char* buf, size_t size) {
     if (!buf || size < 4) return NULL;
     strcpy(buf, "D:\\");
     return buf;
+}
+
+/* ---- memory ---- */
+void xbox_mem_log(const char* where) {
+    MM_STATISTICS st;
+    memset(&st, 0, sizeof st);
+    st.Length = sizeof st;
+    if (MmQueryStatistics(&st) >= 0)
+        xbox_logf("[MEM] %-18s free %5u KB of %5u KB (image %u KB, virt %u KB, pool %u KB)\n", where,
+                  (unsigned)(st.AvailablePages * 4), (unsigned)(st.TotalPhysicalPages * 4),
+                  (unsigned)(st.ImagePagesCommitted * 4), (unsigned)(st.VirtualMemoryBytesCommitted / 1024),
+                  (unsigned)(st.PoolPagesCommitted * 4));
 }
 
 /* ---- paths ---- */

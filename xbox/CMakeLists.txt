@@ -23,6 +23,7 @@ add_compile_definitions(
     NDEBUG
     BUGFIXES
     _LANGUAGE_C
+    PC_GX_MAX_VERTS=16384   # 65536 x 96 B = 6 MB of BSS on PC; see docs/memory.md
 )
 
 add_compile_options(
@@ -126,10 +127,10 @@ set(DECOMP_FLAGS
 # ---------------------------------------------------------------------------
 set(PC_REUSED
     pc_gx.c pc_gx_texture.c pc_gbi_runtime.c pc_os.c pc_dvd.c
-    pc_card.c pc_vi.c pc_aram.c pc_misc.c pc_mtx.c pc_m_card.c pc_save_bswap.c
+    pc_card.c pc_vi.c pc_misc.c pc_mtx.c pc_m_card.c pc_save_bswap.c
     pc_settings.c pc_profiler.c pc_pause_menu.c pc_settings_menu.c pc_menu_util.c
     pc_text_draw.c pc_nes_fixnes.c pc_stubs.c pc_stubs_cpp.cpp pc_assets.c pc_disc.c
-    pc_pad.c pc_audio.c pc_keybindings.c pc_typing.c)
+    pc_pad.c pc_keybindings.c pc_typing.c)
 list(TRANSFORM PC_REUSED PREPEND "${PC_DIR}/src/")
 list(APPEND PC_REUSED "${DECOMP_ROOT}/src/static/dolphin/pad/Padclamp.c")
 
@@ -174,7 +175,7 @@ else()
         $ENV{NXDK_DIR}/lib/libnxdk_automount_d.lib)
     # -include:_automount_d_drive pulls in nxdk's D: -> XBE-folder mount
     # (the nxdk Makefile does this; without it D:\ lists nothing).
-    target_link_options(ac_xbox PRIVATE -stack:1048576 -include:_automount_d_drive)
+    target_link_options(ac_xbox PRIVATE -stack:1048576 -include:_automount_d_drive -map:${CMAKE_BINARY_DIR}/ac_xbox.map)
     add_custom_command(TARGET ac_xbox POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/xbe
         COMMAND $ENV{NXDK_DIR}/tools/cxbe/cxbe "-OUT:${CMAKE_BINARY_DIR}/xbe/default.xbe"

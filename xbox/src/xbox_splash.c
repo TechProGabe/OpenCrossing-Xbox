@@ -127,7 +127,8 @@ void xbox_splash_show(void) {
         int v = 40 + (215 * step) / 16;
         fill_bg(TITLE_Y, TITLE_Y + GLYPH_H * TITLE_ZOOM);
         draw_centered(SPLASH_TEXT, TITLE_Y, TITLE_ZOOM, rgb(v, v, v));
-        XVideoWaitForVBlank();
+        /* no XVideoWaitForVBlank(): it hooks the GPU IRQ, and pb_init() then
+         * fails with -4 when the NV2A backend starts */
         Sleep(30);
     }
     xbox_logf("[XBOX] splash: %s\n", SPLASH_TEXT);
