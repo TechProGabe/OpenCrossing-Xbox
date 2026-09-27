@@ -65,6 +65,21 @@ snap-back suppression; L3 dumps a 10 s stick trace to stickN.log; build h:
 Leaf icon (user-confirmed in dashboard)
 ($$XTIMAGE + default.tbn).
 Open: per-controller deadzone (a good pad also gets 43% now).
+
+**Known bugs (fix later):**
+- **Freeze on lightning (HW, 2026-09-27, build i).** Rain → heavy rain
+  (thunderstorm, Jun–Aug only) → froze when lightning struck. No `hang.log`,
+  so the 1 Hz TIME_CRITICAL watchdog never fired (or the user power-cycled
+  within ~6 s): likely a whole-box hang (CPU stuck at raised IRQL, or a
+  stalled device access), not a stuck game thread. perf.log was clean up to
+  min 10 (60 fps). Lightning = `aWeather_MakeKaminari`
+  (`src/actor/ac_weather.c`): flash via `regist_effect_light` (light colour
+  only, CPU side), thunder SFX `sAdo_SysTrgStart(0x424)` 65 frames later.
+  Suspects: thunder SFX path (first use of its wave data, audio thread, polled
+  ACI) or a GPU fault handled in pbkit's ISR/DPC. Next: repro in xemu with
+  the RTC set to summer + heavy rain forced; ask whether the flash or the
+  thunder came first and how long the user waited.
+- Save load + inventory background confirmed OK on HW (build i).
 User prefs (keep): `borderless_acres = 1` (smooth camera, no acre-by-acre
 snapping — PC-port default, user likes it); Resetti enabled (default
 `disable_resetti = 0`; saves + reset code now flushed to the HDD on write).
