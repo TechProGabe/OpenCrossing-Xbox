@@ -1,125 +1,95 @@
-# Animal Crossing PC Port
+<div align="center">
 
-A native PC port of Animal Crossing (GameCube) built on top of the [ac-decomp](https://github.com/ACreTeam/ac-decomp) decompilation project.
+# 🍃 OpenCrossing-Xbox
 
-The game's original C code runs natively on x86, with a custom translation layer replacing the GameCube's GX graphics API with OpenGL 3.3.
+**Animal Crossing (GameCube) running natively on the original Xbox.**
+No emulator. The decompiled game code runs on the Xbox's Pentium III and draws with the NV2A.
 
-This repository does not contain any game assets or assembly whatsoever. An existing copy of the game is required.
+![platform](https://img.shields.io/badge/platform-Original%20Xbox%20(2001)-107C10?style=flat-square)
+![ram](https://img.shields.io/badge/RAM-stock%2064%20MB-2ea44f?style=flat-square)
+![sdk](https://img.shields.io/badge/SDK-nxdk-blue?style=flat-square)
+![status](https://img.shields.io/badge/status-early%20WIP-orange?style=flat-square)
+![game](https://img.shields.io/badge/game-GAFE01%20USA%20Rev%200-lightgrey?style=flat-square)
 
-Supported versions: GAFE01_00: Rev 0 (USA)
+</div>
 
-## Quick Start (Pre-built Release)
+---
 
-Pre-built releases are available on the [Releases](https://github.com/flyngmt/ACGC-PC-Port/releases) page. No build tools required.
+## What this is
 
-1. Download and extract the latest release zip
-2. Place your disc image in the `rom/` folder
-3. Run `AnimalCrossing.exe`
+Nintendo's 2001 village sim, rebuilt from the [ACreTeam decompilation](https://github.com/ACreTeam/ac-decomp) and compiled as a native Xbox executable (`default.xbe`). It is the third [OpenCrossing](https://github.com/GabeConway) port:
 
-The game reads all assets directly from the disc image at startup. No extraction or preprocessing step is needed.
+| port | hardware | status |
+|---|---|---|
+| [OpenCrossing-Anbernic](https://github.com/GabeConway/OpenCrossing-Anbernic) | H700 handhelds, ~60 fps | playable |
+| [OpenCrossing-Dreamcast](https://github.com/GabeConway/OpenCrossing-Dreamcast) | stock 16 MB Dreamcast | walks the town on real hardware |
+| **OpenCrossing-Xbox** | stock 64 MB original Xbox | 🚧 bootstrapping |
 
-## Building from Source
+As far as we know it is the first Animal Crossing port to the original Xbox. We searched GitHub and the web on 2026-09-27 and found none.
 
-Only needed if you want to modify the code. Otherwise, use the [pre-built release](https://github.com/flyngmt/ACGC-PC-Port/releases) above.
+## How you'll play it (once released)
 
-### Requirements
+No compiling.
 
-- **MSYS2** (https://www.msys2.org/)
-- **Animal Crossing (USA) disc image** (ISO, GCM, or CISO format)
+1. Download the release zip and unpack it. It contains a folder with `default.xbe` in it.
+2. Copy that folder to your Xbox, e.g. `E:\Games\OpenCrossing\` (FTP from a softmodded/modchipped box, or into an xemu HDD image).
+3. Put **your own** Animal Crossing disc image (`.iso`, `.gcm` or `.ciso`) in the same folder, next to `default.xbe`:
 
-### MSYS2 Packages
+   ```
+   E:\Games\OpenCrossing\
+   ├── default.xbe
+   └── Animal Crossing.iso     ← yours, any filename
+   ```
+4. Launch it from your dashboard.
 
-Open **MSYS2 MINGW32** from your Start menu and install:
+**Prefer a disc?** Run the included `make-xiso` script on your computer. It packs `default.xbe` and your disc image into one XISO you can burn to a DVD-R (modded Xbox with a DVD-R-friendly drive) or load in xemu with *Load Disc*. The script runs locally on your own files, and no game data ever comes from us.
 
-```bash
-pacman -S mingw-w64-i686-gcc mingw-w64-i686-cmake mingw-w64-i686-SDL2 mingw-w64-i686-make
+The game reads its assets directly from your disc image at startup. There is no extraction step. Saves always go to the HDD (`E:\UDATA\`, the normal Xbox save location, even when booting from disc) in the GameCube `.gci` format, so they carry across the OpenCrossing ports and the PC port.
+
+## How it works
+
+```
+ your disc image (.iso/.gcm/.ciso) ──► runtime disc reader (FST, Yaz0, DOL/REL assets)
+                                              │
+ decompiled game C ──► N64 display lists ──► emu64 (Nintendo's own N64→GX layer)
+                                              │ GX calls
+                                              ▼
+                     pc_gx: batching · frustum cull · texture decode + cache
+                                              │
+                                              ▼
+                     NV2A backend: fixed-function (pbgl) → register combiners (xgu)
 ```
 
-### Build Steps
+The Xbox is a 32-bit little-endian x86 machine, which is the same ABI the upstream PC port already targets. The game logic, emu64, culling, texture decoders, disc reader and save code compile unchanged. The port work is in the seams: video, audio, input, memory, and translating the GameCube TEV into NV2A register combiners. A TEV stage maps onto a combiner stage almost one-to-one.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/flyngmt/ACGC-PC-Port.git
-   cd ACGC-PC-Port
-   ```
+## Roadmap
 
-2. Build (from **MSYS2 MINGW32** shell):
-   ```bash
-   ./build_pc.sh
-   ```
+- [x] **M0** Repo: PC-port base + latest decomp head, docs
+- [ ] **M1** nxdk toolchain, hello XBE in xemu, `src/` compiles
+- [ ] **M2** Boots headless to the town
+- [ ] **M3** First pixels (fixed-function renderer)
+- [ ] **M4** Controller, music, saves
+- [ ] **M5** Fits stock 64 MB
+- [ ] **M6** Register-combiner TEV, hardware T&L, stable 30 fps
+- [ ] **M7** Real hardware + first release (HDD folder + burnable XISO)
 
-3. Place your disc image in the `rom/` folder:
-   ```
-   pc/build32/bin/rom/YourGame.ciso
-   ```
+Details: [`docs/PLAN.md`](docs/PLAN.md) · status: [`docs/STATE.md`](docs/STATE.md)
 
-4. Run:
-   ```bash
-   pc/build32/bin/AnimalCrossing.exe
-   ```
+## Building from source (developers)
 
-## Controls
+Coming with M1: nxdk in Docker, `xbox/` build scripts, xemu run loop. See [`docs/toolchain.md`](docs/toolchain.md).
 
-Keyboard bindings are customizable via `keybindings.ini` (next to the executable). Mouse buttons (Mouse1/Mouse2/Mouse3) can also be assigned.
+## Legal
 
-### Keyboard (defaults)
+This repo contains **no game assets, no ROM data and no Nintendo code**. It contains the decompiled C source (CC0, ACreTeam) and port code (MIT). You need your own legally obtained copy of *Animal Crossing* (GAFE01, USA Rev 0). Do not open issues asking for ROMs.
 
-| Key | Action |
-|-----|--------|
-| WASD | Move (left stick) |
-| Arrow Keys | Camera (C-stick) |
-| Space | A button |
-| Left Shift | B button |
-| Enter | Start |
-| X | X button |
-| Y | Y button |
-| Q / E | L / R triggers |
-| Z | Z trigger |
-| I / J / K / L | D-pad (up/left/down/right) |
-
-### Gamepad
-
-SDL2 game controllers are supported with automatic hotplug detection. Button mapping follows the standard GameCube layout.
-
-## Command Line Options
-
-| Flag | Description |
-|------|-------------|
-| `--verbose` | Enable diagnostic logging |
-| `--no-framelimit` | Disable frame limiter (unlocked FPS) |
-| `--model-viewer [index]` | Launch debug model viewer (structures, NPCs, fish) |
-| `--time HOUR` | Override in-game hour (0-23) |
-
-## Settings
-
-Graphics settings are stored in `settings.ini` and can be edited manually or through the in-game options menu:
-
-- Resolution (up to 4K)
-- Fullscreen toggle
-- VSync
-- MSAA (anti-aliasing)
-- Texture Loading/Caching (No need to enable if you aren't using a texture pack)
-
-## Texture Packs
-
-Custom textures can be placed in `texture_pack/`. Dolphin-compatible format (XXHash64, DDS).
-
-I highly recommend the following texture pack from the talented artists of Animal Crossing community.
-
-[HD Texture Pack](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-23-feb-22nd-2026)
-
-## Save Data
-
-Save files are stored in `save/` using the standard GCI format, compatible with Dolphin emulator saves. Place a Dolphin GCI export in the save directory to import an existing save.
+Not affiliated with or endorsed by Nintendo or Microsoft. *Animal Crossing* is a trademark of Nintendo. *Xbox* is a trademark of Microsoft.
 
 ## Credits
 
-This project would not be possible without the work of the [ACreTeam](https://github.com/ACreTeam) decompilation team. Their complete C decompilation of Animal Crossing is the foundation this port is built on.
+- **[ACreTeam](https://github.com/ACreTeam/ac-decomp)**: the 100% decompilation everything here stands on.
+- **[flyngmt/ACGC-PC-Port](https://github.com/flyngmt/ACGC-PC-Port)** and its contributors: the PC port this repo descends from (GX→GL layer, runtime disc reader, dt fixes, fixNES integration).
+- **[XboxDev/nxdk](https://github.com/XboxDev/nxdk)**, **[pbgl](https://github.com/fgsfdsfgs/pbgl)**, **[xemu](https://xemu.app)**, **[xdvdfs](https://github.com/antangelo/xdvdfs)**: the open Xbox toolchain, emulator and disc packer.
+- AI tools (Claude) were used in developing this port.
 
-## AI Notice
-
-AI tools such as Claude were used in this project (PC port code only).
-
-## FAQ
-
-See [FAQ](FAQ.md) for more info.
+See [LICENSE](LICENSE) (CC0 decomp + MIT port layer).

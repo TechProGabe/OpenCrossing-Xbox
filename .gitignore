@@ -47,3 +47,16 @@ temp/
 include/PR/
 include/gcc/
 include/compiler/gcc/stdlib.h
+
+# OpenCrossing-Xbox: never commit ROM, save, BIOS or disk-image material
+*.iso
+*.gcm
+*.ciso
+*.cso
+*.rvz
+*.gci
+*.xiso
+*.xbe
+*.qcow2
+*.bin
+rom/
