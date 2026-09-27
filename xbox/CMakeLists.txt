@@ -134,6 +134,13 @@ set(PC_REUSED
 list(TRANSFORM PC_REUSED PREPEND "${PC_DIR}/src/")
 list(APPEND PC_REUSED "${DECOMP_ROOT}/src/static/dolphin/pad/Padclamp.c")
 
+# Debug: scripted pad input from PADRead call N on (xbox/src/xbox_autopad.c).
+set(XBOX_AUTOPAD "" CACHE STRING "debug: inject START/A presses from this PADRead call on")
+if(XBOX_AUTOPAD)
+    set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS "PADRead=xbox_pad_read_real")
+    set_property(SOURCE "${XBOX_DIR}/src/xbox_autopad.c" APPEND PROPERTY COMPILE_DEFINITIONS "XBOX_DBG_AUTOPAD=${XBOX_AUTOPAD}")
+endif()
+
 file(GLOB XBOX_SOURCES CONFIGURE_DEPENDS "${XBOX_DIR}/src/*.c" "${XBOX_DIR}/src/*.cpp")
 list(APPEND XBOX_SOURCES "${PC_DIR}/lib/glad/src/gl.c")
 

@@ -57,6 +57,8 @@ pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
 | `XBOX_DBG_DRAWLOG=N` | log every draw of frame N (state, texture, first vertex) |
 | `XBOX_DBG_RC_TEX` | every draw outputs raw T0 (isolates TEV from geometry) |
 | `XBOX_DBG_NOFOG` / `XBOX_DBG_NOCULL` | force fog / culling off |
+| `-DXBOX_AUTOPAD=N` (CMake var, not a C flag) | scripted START/A presses from PADRead call N (`xbox_autopad.c`) |
+| `XBOX_DBG_AUDIO` | audio DMA/APU cursor + peak every 2 s |
 
 ## Not yet
 

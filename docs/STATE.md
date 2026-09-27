@@ -31,7 +31,11 @@
    Profile hot spots at the title (EIP sampling via monitor `info registers`):
    pdclib byte-loop `memset/memcpy/memmove/memcmp` (~45%) and `pb_cache_flush`
    (~20%) — replace with `rep movsd/stosd` versions, cut flushes.
-1. Drive input past the title (controller path in `xbox_main.c`) → town.
+1. ✅ In-game (2026-09-27): title → K.K. intro → train with Rover → name
+   entry → phone call, driven by `-DXBOX_AUTOPAD=<call>` (scripted START/A,
+   `xbox_autopad.c`; cadence mirrors the DC port's DC_AUTOSTART). User plays
+   it by hand in xemu: "running well", high fps, rare hitch + rare black frame.
+   Seen: train-window scenery renders as blocky green/white squares.
 2. Renderer fidelity: swap tables, indirect textures, EFB copies, NES path.
 3. Perf pass (DC opt lists, docs/perf.md), then real hardware.
 
