@@ -62,5 +62,5 @@ pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
 
 ## Not yet
 
-Tex swap tables, indirect textures, EFB copies (`GXCopyTex`), the NES
-emulator's GL path (skipped, logged once), 16-bit texture formats.
+See `known-issues.md`: the NES emulator's GL path (skipped, logged once),
+TEV swap tables, indirect textures.

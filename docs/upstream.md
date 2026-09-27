@@ -4,7 +4,7 @@
 
 | remote | repo | role |
 |---|---|---|
-| `origin` | GabeConway/OpenCrossing-Xbox (private) | this repo |
+| `origin` | GabeConway/OpenCrossing-Xbox | this repo |
 | `upstream-pc` | flyngmt/ACGC-PC-Port | platform layer + game fixes. **History shared** — we are a descendant of its `master` |
 | `decomp` | ACreTeam/ac-decomp | game source of truth. **No shared history** (PC port squashed its import) |
 

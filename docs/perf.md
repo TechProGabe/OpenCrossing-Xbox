@@ -33,7 +33,18 @@ numbers are SH-4 numbers.
 - `-march=pentium3` is set by `nxdk-cc`; SSE1 available for `pc_mtx.c` hot paths.
 - Baseline: upstream PC port builds everything at `-O2` on x86 and is correct there.
 
-## Plan
+## Measured
 
-M1–M5: whole tree `-O2` (upstream-proven). M5: switch cold TUs to `-Os` if RAM
-needs it. M6: add the `-O3` hot list, measure in xemu, confirm on hardware.
+Whole tree at `-O2`; no per-TU profiles yet (not needed so far).
+
+- Pass 1 (xemu, title demo, 2 min): 4620 → 5400 frames. Two changes:
+  word-at-a-time `mem*` in `xbox_mem.c` (pdclib's byte loops were ~45% of
+  CPU; kill switch `XBOX_FAST_MEM`) and one pushbuffer block across draws
+  (`XBOX_PB_KICK`, was two `pb_cache_flush` per draw).
+- Real hardware (retail Xbox, `perf.log`, 10 min in town): 57–60 fps average
+  at the 60 fps cap, CPU 15–16 ms per frame, a handful of frames over 33 ms
+  per minute (scene loads).
+- `[HITCH]` lines (frame over 40 ms, `XBOX_HITCH_MS`) say where a slow frame
+  went: CPU, GPU + flip, texture uploads, file reads.
+
+Next lever: present waits for GPU idle every frame (`known-issues.md`).

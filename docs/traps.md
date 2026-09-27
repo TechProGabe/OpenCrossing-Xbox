@@ -84,7 +84,7 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   (`XboxKrnlVersion`, …) become definitions → duplicate symbols at link.
 - **Real hardware has no COM1** (retail board; what the absent port reads is
   up to board + modchip). `xbox_io.c` probes the UART scratch register and
-  stays silent without one; `boot.log` (until frame 600) and `hang.log` in
+  stays silent without one; `boot.log` (until frame 120) and `hang.log` in
   `E:\UDATA\4f430001\` plus the watchdog's on-screen report replace it.
 - **nxdk winapi has no `FlushFileBuffers`:** use `NtFlushBuffersFile` (its
   HANDLEs are NT handles) — `xbox_flush_file()`.

@@ -2,7 +2,7 @@
  *
  * PATHS. pc/ uses relative paths ("save/card_a", "settings.ini", "." for the
  * disc scan). The Xbox has no working directory, so every relative path is
- * resolved here (docs/PLAN.md "Distribution"):
+ * resolved here (docs/architecture.md "Files on the console"):
  *   - reads of the disc image, and directory scans of "."  -> D:\ (the XBE's
  *     own folder: HDD install, burned DVD or xemu disc alike)
  *   - everything the game writes (saves, settings)         -> E:\UDATA\<id>\

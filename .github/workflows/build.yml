@@ -1,0 +1,90 @@
+# Builds default.xbe on every push and pull request. A push to main also
+# publishes it as a numbered beta pre-release (docs/toolchain.md).
+name: build
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  xbe:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # nxdk from source takes ~10 minutes; the layer cache keeps later runs short
+      - name: SDK image
+        uses: docker/build-push-action@v6
+        with:
+          context: xbox/docker
+          tags: opencrossing-xbox:sdk
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pillow (dashboard icon)
+        run: python3 -m pip install pillow
+
+      - name: Build
+        run: xbox/build.sh
+
+      - name: Package
+        id: pkg
+        run: |
+          set -euo pipefail
+          n="${GITHUB_RUN_NUMBER}"
+          name="OpenCrossing-Xbox-beta-${n}"
+          out="$RUNNER_TEMP/$name"
+          mkdir -p "$out/OpenCrossing" "$out/tools"
+          cp build-xbox/xbe/default.xbe build-xbox/xbe/default.tbn "$out/OpenCrossing/"
+          cp tools/make-xiso tools/gc_trim_ciso.py tools/gcs_to_gci.py "$out/tools/"
+          chmod +x "$out/tools/"*
+          (cd "$out" && zip -qr "$RUNNER_TEMP/$name.zip" OpenCrossing tools)
+          cp build-xbox/ac_xbox.map "$RUNNER_TEMP/ac_xbox.map"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.name }}
+          path: |
+            ${{ runner.temp }}/${{ steps.pkg.outputs.name }}.zip
+            ${{ runner.temp }}/ac_xbox.map
+
+      - name: Publish beta
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          n="${GITHUB_RUN_NUMBER}"
+          short="${GITHUB_SHA::8}"
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          Beta build ${n} from \`main\` at ${short}.
+
+          Download \`OpenCrossing-Xbox-beta-${n}.zip\`, then follow the install steps in the [README](https://github.com/${GITHUB_REPOSITORY}#download). You need your own Animal Crossing (USA, GAFE01) disc image.
+
+          \`ac_xbox.map\` is only for reading crash logs.
+
+          Known issues: [docs/known-issues.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/known-issues.md)
+          EOF
+          gh release create "beta-${n}" \
+            --target "$GITHUB_SHA" \
+            --title "Beta ${n}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --prerelease \
+            "$RUNNER_TEMP/${{ steps.pkg.outputs.name }}.zip" \
+            "$RUNNER_TEMP/ac_xbox.map"

@@ -1,95 +1,141 @@
-<div align="center">
+# OpenCrossing-Xbox
 
-# 🍃 OpenCrossing-Xbox
+OpenCrossing-Xbox runs Animal Crossing (GameCube, USA) natively on an original Xbox. It is not an emulator: the decompiled game code is compiled for the Xbox's Pentium III and draws with its NV2A GPU. It runs at 60 fps on a stock 64 MB console.
 
-**Animal Crossing (GameCube) running natively on the original Xbox.**
-No emulator. The decompiled game code runs on the Xbox's Pentium III and draws with the NV2A.
+Status: beta. The game is mostly playable, but it still crashes now and then and has bugs (see [Known issues](#known-issues)). Save often.
 
-![platform](https://img.shields.io/badge/platform-Original%20Xbox%20(2001)-107C10?style=flat-square)
-![ram](https://img.shields.io/badge/RAM-stock%2064%20MB-2ea44f?style=flat-square)
-![sdk](https://img.shields.io/badge/SDK-nxdk-blue?style=flat-square)
-![status](https://img.shields.io/badge/status-early%20WIP-orange?style=flat-square)
-![game](https://img.shields.io/badge/game-GAFE01%20USA%20Rev%200-lightgrey?style=flat-square)
+You need your own copy of the game. This project ships no game data.
 
-</div>
+Other OpenCrossing ports: [OpenCrossing-Anbernic](https://github.com/GabeConway/OpenCrossing-Anbernic) (H700 handhelds) and [OpenCrossing-Dreamcast](https://github.com/GabeConway/OpenCrossing-Dreamcast).
 
----
+## What you need
 
-## What this is
+- A modded original Xbox (softmod or modchip) that can run homebrew. On a HDD install you also need a way to copy files to it, usually FTP from your dashboard (UnleashX, XBMC4Xbox, EvolutionX and others include a server).
+- A controller. The Duke and the Controller S both work.
+- A disc image of Animal Crossing for GameCube, USA version (game ID GAFE01, Rev 0), dumped from your own disc. `.iso`, `.gcm` and `.ciso` all work, with any filename. Other regions and Rev 1 are not supported.
 
-Nintendo's 2001 village sim, rebuilt from the [ACreTeam decompilation](https://github.com/ACreTeam/ac-decomp) and compiled as a native Xbox executable (`default.xbe`). It is the third [OpenCrossing](https://github.com/GabeConway) port:
+You can also play it in [xemu](https://xemu.app) (see below).
 
-| port | hardware | status |
+## Download
+
+Go to the [Releases](../../releases) page and download the newest `OpenCrossing-Xbox-beta-<n>.zip`. Every build is a beta for now. Unzip it. You get:
+
+```
+OpenCrossing/
+  default.xbe      the game
+  default.tbn      dashboard icon
+tools/
+  make-xiso        packs the game and your disc image into a burnable ISO
+  gc_trim_ciso.py  shrinks your disc image to the ~28 MB the game reads
+  gcs_to_gci.py    converts a GameCube save export for use on the Xbox
+```
+
+Then pick one of the three ways to play.
+
+## Option 1: install to the Xbox hard drive
+
+This is the easiest way, and loading is fastest.
+
+1. Put your disc image in the `OpenCrossing` folder, next to `default.xbe`. It can have any name.
+2. Connect to your Xbox with an FTP client such as FileZilla. Your dashboard shows the Xbox's IP address; the default login on most dashboards is user `xbox`, password `xbox`.
+3. Copy the whole `OpenCrossing` folder to wherever your dashboard looks for games or applications, for example `E:\Games\` or `F:\Applications\`.
+4. Launch OpenCrossing from the dashboard. You should see the leaf icon.
+
+The full 1.4 GB disc image works fine. To save space, shrink it first with `python3 tools/gc_trim_ciso.py "Animal Crossing.iso" AnimalCrossing.ciso` and copy the `.ciso` instead (about 28 MB).
+
+```
+E:\Games\OpenCrossing\
+  default.xbe
+  default.tbn
+  Animal Crossing.iso    (yours)
+```
+
+## Option 2: burn a disc
+
+`make-xiso` packs `default.xbe` and your disc image into one Xbox ISO. It trims the image first, so the result is about 35 MB and fits on a CD-R.
+
+1. Install the requirements: `bash`, `python3` and [xdvdfs](https://github.com/antangelo/xdvdfs) (download a release binary or run `cargo install xdvdfs-cli`, and make sure `xdvdfs` is on your PATH). On Windows, run the script from WSL or Git Bash.
+2. Run:
+
+   ```sh
+   tools/make-xiso OpenCrossing/default.xbe "Animal Crossing.iso" OpenCrossing.iso
+   ```
+
+   Add `--full` before the XBE path to keep the untrimmed image (about 1.5 GB, needs a DVD-R).
+3. Burn `OpenCrossing.iso` to a CD-R or DVD-R at a low speed (for example with ImgBurn), as a plain image, without converting it.
+4. Put the disc in your modded Xbox and launch it from the dashboard's disc option.
+
+Not every Xbox DVD drive reads burned discs. Samsung drives are usually the most forgiving, Thomson drives the least. If yours won't read the disc, use Option 1.
+
+## Option 3: xemu
+
+Build the ISO as in Option 2 and load it in xemu with Machine > Load Disc. Set xemu's memory to 64 MB. Sound works, but your saves go to xemu's virtual hard drive.
+
+## Saves and settings
+
+Saves go to the hard drive in every mode, including discs, at `E:\UDATA\4f430001\save\card_a\`. They use the GameCube `.gci` format. You can move them back to Dolphin, or to the [PC port](https://github.com/flyngmt/ACGC-PC-Port).
+
+To continue a town from your GameCube or Dolphin:
+
+1. Export the save. Dolphin's memory card manager gives you a `.gci`. GameShark and GC Memcard Manager exports are `.gcs`.
+2. Convert it: `python3 tools/gcs_to_gci.py mysave.gcs`. This writes `DobutsunomoriP_MURA.gci`. A `.gci` from Dolphin can be copied as it is.
+3. Launch the game once so it creates its folders. Then FTP the `.gci` to `E:\UDATA\4f430001\save\card_a\`, replacing the file there.
+
+Settings live in `E:\UDATA\4f430001\settings.ini`. Edit the file over FTP. The useful ones are:
+
+| setting | default | what it does |
 |---|---|---|
-| [OpenCrossing-Anbernic](https://github.com/GabeConway/OpenCrossing-Anbernic) | H700 handhelds, ~60 fps | playable |
-| [OpenCrossing-Dreamcast](https://github.com/GabeConway/OpenCrossing-Dreamcast) | stock 16 MB Dreamcast | walks the town on real hardware |
-| **OpenCrossing-Xbox** | stock 64 MB original Xbox | 🚧 bootstrapping |
+| `disable_resetti` | 0 | 1 turns off Mr. Resetti |
+| `borderless_acres` | 1 | 0 brings back the original acre-by-acre camera |
+| `disable_shop_visitor_req` | 0 | 1 lets Nook upgrade to Nookington's without a visitor from another town |
+| `master_volume` | 100 | 0 to 100 |
+| `stick_deadzone` | 12 | percent; on the Xbox the left stick always uses at least 43 |
 
-As far as we know it is the first Animal Crossing port to the original Xbox. We searched GitHub and the web on 2026-09-27 and found none.
+## Controls
 
-## How you'll play it (once released)
+| Xbox | GameCube |
+|---|---|
+| A, B, X, Y | A, B, X, Y |
+| Start | Start |
+| Black button | Z |
+| Left / right trigger | L / R |
+| Left stick | control stick |
+| Right stick | C-stick |
+| D-pad | D-pad |
+| Back | pause menu |
 
-No compiling.
+Buttons can be remapped in `E:\UDATA\4f430001\keybindings.ini`.
 
-1. Download the release zip and unpack it. It contains a folder with `default.xbe` in it.
-2. Copy that folder to your Xbox, e.g. `E:\Games\OpenCrossing\` (FTP from a softmodded/modchipped box, or into an xemu HDD image).
-3. Put **your own** Animal Crossing disc image (`.iso`, `.gcm` or `.ciso`) in the same folder, next to `default.xbe`:
+## Known issues
 
-   ```
-   E:\Games\OpenCrossing\
-   ├── default.xbe
-   └── Animal Crossing.iso     ← yours, any filename
-   ```
-4. Launch it from your dashboard.
+- The game can occasionally crash and freeze the console (seen twice so far, cause unknown). Save often. If it keeps happening when Mr. Resetti appears, set `disable_resetti = 1` in `settings.ini`.
+- The left stick has a large deadzone (43%). It was tuned on a worn controller, so a controller in good shape needs a bigger push before your character starts walking.
+- The NES games inside the game do not display.
 
-**Prefer a disc?** Run the included `make-xiso` script on your computer. It packs `default.xbe` and your disc image into one XISO (trimmed to ~30 MB, so a CD-R is enough) you can burn to a CD-R or DVD-R (modded Xbox with a drive that reads it) or load in xemu with *Load Disc*. The script runs locally on your own files, and no game data ever comes from us.
+The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `boot.log`, `perf.log` and `hang.log` from `E:\UDATA\4f430001\` if they exist.
 
-The game reads its assets directly from your disc image at startup. There is no extraction step. Saves always go to the HDD (`E:\UDATA\`, the normal Xbox save location, even when booting from disc) in the GameCube `.gci` format, so they carry across the OpenCrossing ports and the PC port.
+## Building from source
 
-## How it works
+You need Docker, Python 3 and Pillow.
 
+```sh
+xbox/build-image.sh   # once: builds the nxdk SDK image, about 10 minutes
+xbox/build.sh         # writes build-xbox/xbe/default.xbe
 ```
- your disc image (.iso/.gcm/.ciso) ──► runtime disc reader (FST, Yaz0, DOL/REL assets)
-                                              │
- decompiled game C ──► N64 display lists ──► emu64 (Nintendo's own N64→GX layer)
-                                              │ GX calls
-                                              ▼
-                     pc_gx: batching · frustum cull · texture decode + cache
-                                              │
-                                              ▼
-                     NV2A backend: fixed-function (pbgl) → register combiners (xgu)
-```
 
-The Xbox is a 32-bit little-endian x86 machine, which is the same ABI the upstream PC port already targets. The game logic, emu64, culling, texture decoders, disc reader and save code compile unchanged. The port work is in the seams: video, audio, input, memory, and translating the GameCube TEV into NV2A register combiners. A TEV stage maps onto a combiner stage almost one-to-one.
-
-## Roadmap
-
-- [x] **M0** Repo: PC-port base + latest decomp head, docs
-- [x] **M1** nxdk toolchain, hello XBE in xemu, `src/` compiles
-- [x] **M2** Boots headless, main loop runs
-- [x] **M3** First pixels — title demo renders on the NV2A (vertex program + register combiners)
-- [ ] **M4** Controller, music, saves
-- [ ] **M5** Fits stock 64 MB
-- [ ] **M6** Renderer fidelity (swap tables, indirect, EFB copies) + stable 30 fps
-- [ ] **M7** Real hardware + first release (HDD folder + burnable XISO)
-
-Details: [`docs/PLAN.md`](docs/PLAN.md) · status: [`docs/STATE.md`](docs/STATE.md)
-
-## Building from source (developers)
-
-`xbox/build-image.sh` (once) → `xbox/build.sh` → `build-xbox/xbe/default.xbe`; `harness/xbox/run.sh` runs it in xemu. See [`docs/toolchain.md`](docs/toolchain.md).
+See [docs/toolchain.md](docs/toolchain.md) for testing in xemu and on hardware, and [docs/architecture.md](docs/architecture.md) for how the port works. Development happens on the `dev` branch; `main` is released as a beta on every push.
 
 ## Legal
 
-This repo contains **no game assets, no ROM data and no Nintendo code**. It contains the decompiled C source (CC0, ACreTeam) and port code (MIT). You need your own legally obtained copy of *Animal Crossing* (GAFE01, USA Rev 0). Do not open issues asking for ROMs.
+This repository contains no game assets, no ROM data and no Nintendo code. It holds the decompiled C source (CC0, ACreTeam) and port code (MIT). You need your own legally obtained copy of Animal Crossing. Do not open issues asking for ROMs.
 
-Not affiliated with or endorsed by Nintendo or Microsoft. *Animal Crossing* is a trademark of Nintendo. *Xbox* is a trademark of Microsoft.
+Not affiliated with or endorsed by Nintendo or Microsoft. Animal Crossing is a trademark of Nintendo. Xbox is a trademark of Microsoft.
 
 ## Credits
 
-- **[ACreTeam](https://github.com/ACreTeam/ac-decomp)**: the 100% decompilation everything here stands on.
-- **[flyngmt/ACGC-PC-Port](https://github.com/flyngmt/ACGC-PC-Port)** and its contributors: the PC port this repo descends from (GX→GL layer, runtime disc reader, dt fixes, fixNES integration).
-- **[XboxDev/nxdk](https://github.com/XboxDev/nxdk)**, **[pbgl](https://github.com/fgsfdsfgs/pbgl)**, **[xemu](https://xemu.app)**, **[xdvdfs](https://github.com/antangelo/xdvdfs)**: the open Xbox toolchain, emulator and disc packer.
+- [ACreTeam/ac-decomp](https://github.com/ACreTeam/ac-decomp), the decompilation this is built on.
+- [flyngmt/ACGC-PC-Port](https://github.com/flyngmt/ACGC-PC-Port) and its contributors, for the PC port this repo descends from (GX to GL layer, runtime disc reader, frame-rate fixes, NES integration).
+- [XboxDev/nxdk](https://github.com/XboxDev/nxdk), [xemu](https://xemu.app) and [xdvdfs](https://github.com/antangelo/xdvdfs): the open Xbox toolchain, emulator and ISO packer.
 - AI tools (Claude) were used in developing this port.
 
-See [LICENSE](LICENSE) (CC0 decomp + MIT port layer).
+See [LICENSE](LICENSE).
