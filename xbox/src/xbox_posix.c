@@ -22,16 +22,23 @@ DIR* opendir(const char* path_in) {
     const char* path = xbox_resolve(path_in, strncmp(path_in, "save", 4) == 0 ? XBOX_PATH_WRITE : XBOX_PATH_DISC, rp, sizeof rp);
     size_t n = strlen(path);
     DIR* d;
-    if (n + 3 > sizeof pat) return NULL;
+    if (n + 5 > sizeof pat) return NULL;
     memcpy(pat, path, n);
     if (n && path[n - 1] != '\\' && path[n - 1] != '/') pat[n++] = '\\';
+    /* nxdk wants the "*.*" form (its winapi_filefind sample); bare "*" fails with 2 */
+    pat[n++] = '*';
+    pat[n++] = '.';
     pat[n++] = '*';
     pat[n] = '\0';
     for (char* p = pat; *p; p++) if (*p == '/') *p = '\\';
     d = (DIR*)calloc(1, sizeof *d);
     if (!d) return NULL;
     d->h = FindFirstFileA(pat, &d->fd);
-    if (d->h == INVALID_HANDLE_VALUE) { free(d); return NULL; }
+    if (d->h == INVALID_HANDLE_VALUE) {
+        xbox_logf("[XBOX] opendir(%s): FindFirstFile(%s) failed, err=%lu\n", path_in, pat, (unsigned long)GetLastError());
+        free(d);
+        return NULL;
+    }
     d->first = 1;
     return d;
 }

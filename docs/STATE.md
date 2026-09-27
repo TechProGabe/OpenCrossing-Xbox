@@ -8,11 +8,16 @@
 - **M1 done:** every TU (~3,990) compiles under nxdk (clang 21), links, and
   `default.xbe` (8.6 MB file, image `0x10000-0x1D23118` = 29 MB incl. BSS)
   boots in xemu. Splash + missing-disc screen verified by screenshot.
-- Headless GL: `pc_gx*.c` run against `xbox_gl_stub.c` (no pixels yet).
+- **M2 (headless) mostly done:** with the ISO beside the XBE the game parses
+  the disc (14,495 assets), mounts forest_1st/2nd + famicom archives into
+  ARAM, opens audio, scans saves in UDATA and runs its main loop — 900 frames
+  in ~20 s in xemu at 64 MB (`pc_gx*` against `xbox_gl_stub.c`, no pixels).
+  Arena lands at `0x7E7D3108` (above the N64 segment range).
 
 ## Next action
 
-M2: boot with the ISO, headless, until the scene log reaches the town.
+M3: NV2A backend (pbkit/xgu) behind `pc_gx.c` → first pixels. Then drive
+input to confirm the town scene.
 
 ## `src/` + `include/` TARGET_XBOX branch ledger
 

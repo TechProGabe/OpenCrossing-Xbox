@@ -36,3 +36,8 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
 - **No cwd on Xbox.** Relative paths go through `xbox_resolve()`: disc reads →
   `D:\`, writes → `E:\UDATA\4f430001\`.
 - **cxbe has no TitleID flag.** UDATA dir name is fixed in `xbox_io.h`.
+- **D: is only mounted if `libnxdk_automount_d.lib` is linked with
+  `-include:_automount_d_drive`** (nxdk's Makefile does it; our CMake must too).
+  Without it `FindFirstFile("D:\\*")` fails with 2 while nothing else looks wrong.
+- **pdclib printf prints nothing for `%f`** (logs show `total=ms`). Log-only for now.
+- **`pc_gx_tev.c` is not built** — `xbox/src/xbox_gx_tev.c` replaces it (no GLSL).

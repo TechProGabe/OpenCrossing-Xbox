@@ -125,7 +125,7 @@ set(DECOMP_FLAGS
 # Platform: pc/src files reused as-is, plus xbox/src replacements.
 # ---------------------------------------------------------------------------
 set(PC_REUSED
-    pc_gx.c pc_gx_tev.c pc_gx_texture.c pc_gbi_runtime.c pc_os.c pc_dvd.c
+    pc_gx.c pc_gx_texture.c pc_gbi_runtime.c pc_os.c pc_dvd.c
     pc_card.c pc_vi.c pc_aram.c pc_misc.c pc_mtx.c pc_m_card.c pc_save_bswap.c
     pc_settings.c pc_profiler.c pc_pause_menu.c pc_settings_menu.c pc_menu_util.c
     pc_text_draw.c pc_nes_fixnes.c pc_stubs.c pc_stubs_cpp.cpp pc_assets.c pc_disc.c
@@ -170,8 +170,11 @@ else()
         $ENV{NXDK_DIR}/lib/libSDL2.lib
         $ENV{NXDK_DIR}/lib/libpbkit.lib
         $ENV{NXDK_DIR}/lib/libzlib.lib
-        $ENV{NXDK_DIR}/lib/winmm.lib)
-    target_link_options(ac_xbox PRIVATE -stack:1048576)
+        $ENV{NXDK_DIR}/lib/winmm.lib
+        $ENV{NXDK_DIR}/lib/libnxdk_automount_d.lib)
+    # -include:_automount_d_drive pulls in nxdk's D: -> XBE-folder mount
+    # (the nxdk Makefile does this; without it D:\ lists nothing).
+    target_link_options(ac_xbox PRIVATE -stack:1048576 -include:_automount_d_drive)
     add_custom_command(TARGET ac_xbox POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/xbe
         COMMAND $ENV{NXDK_DIR}/tools/cxbe/cxbe "-OUT:${CMAKE_BINARY_DIR}/xbe/default.xbe"
