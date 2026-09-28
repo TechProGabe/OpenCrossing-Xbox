@@ -154,7 +154,11 @@ list(APPEND PC_REUSED "${DECOMP_ROOT}/src/static/dolphin/pad/Padclamp.c")
 
 # pc_pad.c's stick reads go through xbox/src/xbox_pad_axis.c (spike filter).
 set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS
-    "SDL_GameControllerGetAxis=xbox_controller_axis")
+    "SDL_GameControllerGetAxis=xbox_controller_axis"
+    # its per-axis stick deadzone reads a copy with the left stick's zeroed
+    # (the radial one in xbox_pad_axis.c replaces it), so the real setting
+    # is never overwritten
+    "g_pc_settings=g_xbox_pad_settings")
 
 # Debug: scripted pad input from PADRead call N on (xbox/src/xbox_autopad.c).
 set(XBOX_AUTOPAD "" CACHE STRING "debug: inject START/A presses from this PADRead call on")
@@ -183,6 +187,13 @@ set_source_files_properties(${FIXNES_SOURCES} PROPERTIES
 
 set_source_files_properties(${GAME_C_SOURCES} ${GAME_CXX_SOURCES} PROPERTIES
     COMPILE_OPTIONS "${DECOMP_FLAGS}")
+# The PC branch of src/data declares every texture as a tentative definition
+# (u8 name[size], filled from the disc at boot). clang's MS ABI gives those
+# alignment 1, so textures landed at odd addresses (docs/traps.md). As COFF
+# common symbols lld aligns them naturally, up to 32 bytes, as GCC does.
+set(DATA_C_SOURCES ${GAME_C_SOURCES})
+list(FILTER DATA_C_SOURCES INCLUDE REGEX ".*/src/data/.*")
+set_property(SOURCE ${DATA_C_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -fcommon)
 # CMake does not know nxdk-cxx is clang, so it won't add -x c++ for LANGUAGE CXX .c files.
 set_source_files_properties(${CXX_FROM_C} PROPERTIES
     COMPILE_OPTIONS "-xc++;-Wno-register;${DECOMP_FLAGS}")

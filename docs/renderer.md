@@ -62,12 +62,20 @@ pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
 | `XBOX_DBG_AUDIO` | audio DMA/APU cursor + peak every 2 s |
 | `XBOX_DBG_WEATHER=N` | force the weather (1 rain, 2 snow) |
 | `XBOX_DBG_CRASH_FRAME=N` | fault on purpose at frame N (tests `xbox_crash.c`) |
+| `XBOX_DBG_NES_TEST=N` | draw RGB565 colour bars through the NES screen path from frame N (120 frames) |
 
 Kill switches (default on): `XBOX_PB_GUARD=0` (no mid-frame pushbuffer
 restart), `XBOX_VC_DELTA=0` (upload all 41 vertex-constant rows per draw
 instead of the changed ones), `XBOX_CRASH_GUARD=0`, `XBOX_LASTLOG_SECS=0`.
 
+## The NES screen
+
+`pc_nes_fixnes.c` uploads the NES frame (256×224 RGB565, red in the low
+bits) with `glTexImage2D` and draws it with its own GLSL program. The shim
+converts RGB565 to A8R8G8B8 on upload and draws any non-GX program as
+`blit_draw`: a viewport-sized quad sampling texture unit 0 through the GX
+vertex program (identity matrices) and a one-stage "output T0" combiner.
+
 ## Not yet
 
-See `known-issues.md`: the NES emulator's GL path (skipped, logged once),
-TEV swap tables, indirect textures.
+See `known-issues.md`: TEV swap tables, indirect textures.

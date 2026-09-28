@@ -89,7 +89,7 @@ Settings live in `E:\UDATA\4f430001\settings.ini`. Edit the file over FTP. The u
 | `borderless_acres` | 1 | 0 brings back the original acre-by-acre camera |
 | `disable_shop_visitor_req` | 0 | 1 lets Nook upgrade to Nookington's without a visitor from another town |
 | `master_volume` | 100 | 0 to 100 |
-| `stick_deadzone` | 12 | percent; on the Xbox the left stick always uses at least 43 |
+| `stick_deadzone` | 12 | percent; C-stick only on the Xbox (the left stick uses `controller.ini`) |
 
 ## Controls
 
@@ -106,10 +106,12 @@ Settings live in `E:\UDATA\4f430001\settings.ini`. Edit the file over FTP. The u
 
 Buttons can be remapped in `E:\UDATA\4f430001\keybindings.ini`.
 
+The left stick's dead zone is in `E:\UDATA\4f430001\controller.ini` (created on first launch). The default of 43% suits a worn controller whose stick doesn't return to the centre. If your controller is in good shape, set `stick_deadzone = 15` or `20` so small pushes register sooner.
+
 ## Known issues
 
-- The left stick has a large deadzone (43%). It was tuned on a worn controller, so a controller in good shape needs a bigger push before your character starts walking.
-- The NES games inside the game do not display.
+- The left stick has a large dead zone (43%) by default, tuned on a worn controller. Lower it in `controller.ini` (see Controls).
+- The NES games inside the game are new in this build and not yet tested on a console.
 
 The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
 

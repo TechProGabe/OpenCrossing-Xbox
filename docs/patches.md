@@ -47,4 +47,12 @@ flyngmt/ACGC-PC-Port.
 | `pc/src/pc_gx_texture.c` | `pc_gx_load_tex_obj_impl` checks the image pointer (`#ifdef TARGET_XBOX`, `xbox_tex_ptr_ok`) | a texture pointer into unmapped memory faults the console; it is drawn without the image and logged instead (belt and braces behind the `seg2k0` fix) |
 
 `pc/src/pc_pad.c` is compiled with `SDL_GameControllerGetAxis` renamed to
-`xbox_controller_axis` (`xbox/CMakeLists.txt`); the file itself is untouched.
+`xbox_controller_axis` and `g_pc_settings` renamed to `g_xbox_pad_settings`
+(a copy with the left stick's per-axis deadzone zeroed, so the radial one in
+`xbox_pad_axis.c` replaces it without overwriting the saved setting;
+`xbox/CMakeLists.txt`); the file itself is untouched.
+
+`src/data/**` is compiled with `-fcommon` (`xbox/CMakeLists.txt`): the PC
+branch declares textures as tentative definitions, which then become COFF
+common symbols that lld aligns up to 32 bytes; without it they could sit at
+odd addresses (`docs/traps.md`).

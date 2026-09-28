@@ -98,7 +98,28 @@ static volatile unsigned int s_frames;
 
 unsigned int xbox_frame_count(void) { return s_frames; }
 
+#ifdef XBOX_DBG_NES_TEST
+/* test the NES screen path (pc_nes_fixnes.c -> xbox_nv2a.c blit): from frame
+ * XBOX_DBG_NES_TEST, draw 120 frames of RGB565 colour bars over the game */
+extern void pc_fixnes_render_frame(uint16_t* fb);
+static void nes_test_frame(unsigned f) {
+    static uint16_t fb[256 * 240];
+    int x, y;
+    if (f < XBOX_DBG_NES_TEST || f >= XBOX_DBG_NES_TEST + 120) return;
+    for (y = 0; y < 240; y++)
+        for (x = 0; x < 256; x++) {
+            unsigned bar = (unsigned)x / 32, v = (unsigned)y * 31 / 239;
+            unsigned r = (bar & 1) ? v : 0, g = (bar & 2) ? v * 2 : 0, b = (bar & 4) ? v : 0;
+            fb[y * 256 + x] = (uint16_t)(r | (g << 5) | (b << 11));   /* red in the low bits */
+        }
+    pc_fixnes_render_frame(fb);
+}
+#endif
+
 void pc_platform_swap_buffers(void) {
+#ifdef XBOX_DBG_NES_TEST
+    nes_test_frame(s_frames);
+#endif
     pc_gx_draw_pending();
     xbox_nv2a_present();
     s_frames++;

@@ -549,10 +549,17 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
                          GLenum fmt, GLenum type, const void* data) {
     GLuint id = s_bound[s_active_unit];
     XTex* t;
-    int pw, ph, x, y;
+    int pw, ph, x, y, bpp;
     uint32_t* dst;
     const uint8_t* src = (const uint8_t*)data;
-    (void)target; (void)ifmt; (void)border; (void)fmt; (void)type;
+    (void)target; (void)ifmt; (void)border;
+    /* pc_gx_texture.c uploads RGBA8; the NES screen (pc_nes_fixnes.c) is
+     * RGB565 with red in the low bits. Anything else is uploaded white rather
+     * than read with the wrong pixel size. */
+    if (fmt == GL_RGBA && type == GL_UNSIGNED_BYTE) bpp = 4;
+    else if (fmt == GL_RGB && type == GL_UNSIGNED_SHORT_5_6_5_REV) bpp = 2;
+    else if (fmt == GL_RGB && type == GL_UNSIGNED_BYTE) bpp = 3;
+    else { bpp = 4; src = NULL; }
     if (level != 0 || !id || !s_tex[id].used || w <= 0 || h <= 0 || w > 1024 || h > 1024) return;
     t = &s_tex[id];
     if (t->mem) { defer_free(t->mem); t->mem = NULL; }
@@ -568,13 +575,20 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
     for (y = 0; y < ph; y++) {
         int sy = y < h ? y : h - 1;   /* pad by edge replication */
         uint32_t yo = swz_y[y];
-        const uint8_t* row = src ? src + (size_t)sy * (size_t)w * 4 : NULL;
+        const uint8_t* row = src ? src + (size_t)sy * (size_t)w * (size_t)bpp : NULL;
         for (x = 0; x < pw; x++) {
             int sx = x < w ? x : w - 1;
             uint32_t argb = 0xFFFFFFFFu;
-            if (row) {
+            if (row && bpp == 4) {
                 const uint8_t* p = row + sx * 4;
                 argb = ((uint32_t)p[3] << 24) | ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
+            } else if (row && bpp == 2) {
+                uint32_t v = (uint32_t)row[sx * 2] | ((uint32_t)row[sx * 2 + 1] << 8);
+                uint32_t r = v & 31, g = (v >> 5) & 63, b = v >> 11;
+                argb = 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
+            } else if (row) {
+                const uint8_t* p = row + sx * 3;
+                argb = 0xFF000000u | ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
             }
             dst[yo | swz_x[x]] = argb;
         }
@@ -1002,8 +1016,10 @@ static void emit_vconsts(const XTevCfg* c, const float scale[3][2]) {
     s_vc_valid = 1;
 }
 
+static int s_fixed_last[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+
 static void emit_fixed(void) {
-    static int last[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+    int* last = s_fixed_last;
     int v;
     if (last[0] != G.depth_test) put1(NV097_SET_DEPTH_TEST_ENABLE, (uint32_t)(last[0] = G.depth_test));
     if (last[1] != G.depth_func) put1(NV097_SET_DEPTH_FUNC, (uint32_t)(last[1] = G.depth_func));
@@ -1084,6 +1100,96 @@ static int prim_count(GLenum mode, int count) {
 
 static int s_logged_nes;
 
+/* The one non-GX program is pc_nes_fixnes.c's: a quad covering the viewport
+ * that samples texture unit 0 (uv 0,0 at the top left). Drawn here with the
+ * GX vertex program fed identity matrices and a one-stage "output T0"
+ * combiner; the GX uniforms are put back afterwards and the fixed-state
+ * shadow is dropped, so the next GX draw re-sends everything it needs. */
+static const XRcProg k_blit_rc = {
+    1,
+    { 0x08200000u }, { 0x00000c00u },   /* rgb: T0 x 1 -> R0 */
+    { 0x18301010u }, { 0x00000c00u },   /* alpha: T0.a x 1 -> R0 */
+    0x00000c00u, 0x00001c80u,           /* final: R0.rgb, R0.a */
+    { { 0 } }, { 0 }, 0
+};
+
+static void blit_draw(void) {
+    static const float quad[6][4] = {   /* x, y, u, v (NDC, y up) */
+        { -1, -1, 0, 1 }, { 1, -1, 1, 1 }, { 1, 1, 1, 0 },
+        { -1, -1, 0, 1 }, { 1, 1, 1, 0 }, { -1, 1, 0, 0 },
+    };
+    static const int saved_u[] = { U_PROJ, U_MV, U_NRM, U_LCFG0, U_LCFG1, U_CHANCOL, U_TCSRC, U_TMEN, U_TGSRC, U_FOGEN };
+    static UVal save[sizeof saved_u / sizeof saved_u[0]][16 * 4];
+    XTevCfg cfg;
+    float scale[3][2];
+    uint32_t start;
+    int i;
+    GLuint tex = s_bound[0];
+
+    if (!tex || !s_tex[tex].used || !s_tex[tex].mem) {
+        if (!s_logged_nes++) xbox_logf("[NV2A] non-GX draw without a texture skipped (program %u)\n", s_program);
+        return;
+    }
+    frame_open();
+    pb_budget();
+    pb_open();
+
+    for (i = 0; i < (int)(sizeof saved_u / sizeof saved_u[0]); i++) memcpy(save[i], s_uv[saved_u[i]], sizeof save[i]);
+    for (i = 0; i < (int)(sizeof saved_u / sizeof saved_u[0]); i++) memset(s_uv[saved_u[i]], 0, sizeof s_uv[0]);
+    for (i = 0; i < 4; i++) { UF(U_PROJ, 0, i * 5) = 1.0f; }
+    for (i = 0; i < 3; i++) { UF(U_MV, 0, i * 5) = 1.0f; UF(U_NRM, 0, i * 4) = 1.0f; }
+    for (i = 0; i < 4; i++) { UF(U_CHANCOL, 0, i) = 1.0f; UF(U_CHANCOL, 1, i) = 1.0f; }
+
+    memset(&cfg, 0, sizeof cfg);
+    cfg.nstages = 1;
+    cfg.st[0].use_tex = 1;
+
+    put1(NV097_SET_DEPTH_TEST_ENABLE, 0);
+    put1(NV097_SET_DEPTH_MASK, 0);
+    put1(NV097_SET_BLEND_ENABLE, 0);
+    put1(NV097_SET_CULL_FACE_ENABLE, 0);
+    put1(NV097_SET_ALPHA_TEST_ENABLE, 0);
+    put1(NV097_SET_COLOR_MASK, 0x01010101);
+    {
+        int x = G.vx, y = SCR_H - (G.vy + G.vh), w = G.vw, h = G.vh;
+        if (x < 0) { w += x; x = 0; }
+        if (y < 0) { h += y; y = 0; }
+        if (x + w > SCR_W) w = SCR_W - x;
+        if (y + h > SCR_H) h = SCR_H - y;
+        if (w <= 0 || h <= 0) { x = y = 0; w = h = 1; }
+        put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)x | ((uint32_t)(x + w) << 16));
+        put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)y | ((uint32_t)(y + h) << 16));
+    }
+    memset(s_fixed_last, 0xFF, sizeof s_fixed_last);   /* -1: resend on the next GX draw */
+
+    emit_textures(&cfg, scale);
+    emit_vconsts(&cfg, scale);
+    emit_combiners(&k_blit_rc);
+
+    ring_reserve(6);
+    start = s_ring_pos;
+    for (i = 0; i < 6; i++) {
+        XVtx* d = &s_ring[start + i];
+        d->pos[0] = quad[i][0];
+        d->pos[1] = quad[i][1];
+        d->pos[2] = 0.0f;
+        d->nrm[0] = d->nrm[1] = 0.0f;
+        d->nrm[2] = 1.0f;
+        d->col[0] = d->col[1] = d->col[2] = d->col[3] = 0xFF;
+        d->tc[0] = quad[i][2];
+        d->tc[1] = quad[i][3];
+    }
+    s_ring_pos += 6;
+    put1(NV097_SET_BEGIN_END, NV097_SET_BEGIN_END_OP_TRIANGLES);
+    P[0] = (1u << 18) | NV2A_SUPPRESS_COMMAND_INCREMENT(NV097_DRAW_ARRAYS);
+    P[1] = (5u << 24) | start;
+    P += 2;
+    put1(NV097_SET_BEGIN_END, NV097_SET_BEGIN_END_OP_END);
+
+    for (i = 0; i < (int)(sizeof saved_u / sizeof saved_u[0]); i++) memcpy(s_uv[saved_u[i]], save[i], sizeof save[i]);
+    s_draws++;
+}
+
 static void draw(GLenum mode, int count) {
     const uint8_t* src = (const uint8_t*)s_array_data;
     XTevCfg cfg;
@@ -1093,11 +1199,11 @@ static void draw(GLenum mode, int count) {
     uint32_t start;
     uint32_t prim;
 
-    if (count <= 0 || !src) return;
     if (s_program != s_uber_prog) {
-        if (!s_logged_nes++) xbox_logf("[NV2A] draw with non-GX program %u skipped (NES path not ported)\n", s_program);
+        blit_draw();
         return;
     }
+    if (count <= 0 || !src) return;
     frame_open();
     if ((uint32_t)count > s_ring_cap) count = (int)s_ring_cap;
     count = prim_count(mode, count);

@@ -25,6 +25,8 @@
 #include <SDL.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "xbox_io.h"
 #include "pc_settings.h"
 
@@ -34,6 +36,10 @@
 #ifndef XBOX_STICK_DZ
 #define XBOX_STICK_DZ 43    /* radial %: playtest pad rests up to 41% off centre */
 #endif
+
+/* pc_pad.c reads this instead of g_pc_settings (xbox/CMakeLists.txt): a copy
+ * with the left stick's per-axis deadzone zeroed, refreshed every PADRead */
+PCSettings g_xbox_pad_settings;
 #ifndef XBOX_STICK_SNAPBACK
 #define XBOX_STICK_SNAPBACK 1
 #endif
@@ -135,15 +141,58 @@ static Sint16 s_out_ly;
 static float s_hold_x, s_hold_y;   /* direction of the last strong push */
 static unsigned s_hold_frame;
 
+/* Per-controller radial deadzone: E:\UDATA\4f430001\controller.ini,
+ * "stick_deadzone = N" (percent, 0-60), written with the default on first
+ * boot. The default suits the worn playtest pad; a controller in good shape
+ * wants 15-20. Why not calibrate automatically: a worn stick's rest position
+ * moves after every release (18-41% on the playtest pad) and a steady gentle
+ * tilt looks the same as a rest, so any learned value can undershoot and
+ * walk the character on its own (replayed on the hardware traces). */
+static int s_dz_pct = -1;
+
+static void load_controller_ini(void) {
+    static const char k_default[] =
+        "; OpenCrossing-Xbox controller settings\r\n"
+        "; stick_deadzone: left stick dead zone in percent (0-60). 43 suits a worn\r\n"
+        "; controller whose stick doesn't centre; one in good shape feels better at 15-20.\r\n"
+        "stick_deadzone = 43\r\n";
+    char buf[512];
+    DWORD n = 0;
+    HANDLE h;
+    const char* p;
+    s_dz_pct = XBOX_STICK_DZ;
+    h = CreateFileA(XBOX_UDATA_DIR "controller.ini", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+        h = CreateFileA(XBOX_UDATA_DIR "controller.ini", GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL,
+                        NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            WriteFile(h, k_default, sizeof k_default - 1, &n, NULL);
+            xbox_flush_file(h);
+            CloseHandle(h);
+        }
+        return;
+    }
+    if (!ReadFile(h, buf, sizeof buf - 1, &n, NULL)) n = 0;
+    CloseHandle(h);
+    buf[n] = '\0';
+    for (p = buf; (p = strstr(p, "stick_deadzone")) != NULL; p++) {
+        const char* q = p + 14;
+        int v;
+        if (p != buf && p[-1] != '\n') continue;   /* a comment mentioning it */
+        while (*q == ' ' || *q == '\t' || *q == '=') q++;
+        if (*q < '0' || *q > '9') continue;
+        v = atoi(q);
+        if (v >= 0 && v <= 60) s_dz_pct = v;
+        break;
+    }
+    xbox_logf("[PAD] left stick deadzone %d%% (controller.ini)\n", s_dz_pct);
+}
+
 static void shape_left(Sint16 lx, Sint16 ly, Sint16* ox, Sint16* oy) {
-    /* this radial deadzone replaces pc_pad.c's per-axis one, which on top of
-     * it snapped gentle diagonals onto an axis: take the user's value (if
-     * higher) once, then zero pc_pad.c's for every later PADRead */
-    static int user_dz = -1;
     float dz;
-    if (user_dz < 0) user_dz = g_pc_settings.stick_deadzone;
-    g_pc_settings.stick_deadzone = 0;
-    dz = (float)(user_dz > XBOX_STICK_DZ ? user_dz : XBOX_STICK_DZ) * 327.67f;
+    if (s_dz_pct < 0) load_controller_ini();
+    dz = (float)s_dz_pct * 327.67f;
     float x = lx, y = ly, m = sqrtf(x * x + y * y);
     unsigned f = xbox_frame_count();
     *ox = *oy = 0;
@@ -170,6 +219,8 @@ Sint16 xbox_controller_axis(SDL_GameController* gc, SDL_GameControllerAxis axis)
     Sint16 v = SDL_GameControllerGetAxis(gc, axis);
     /* pc_pad.c reads LEFTX then LEFTY back to back: shape the pair on X */
     if (axis == SDL_CONTROLLER_AXIS_LEFTX) {
+        g_xbox_pad_settings = g_pc_settings;   /* for the next PADRead */
+        g_xbox_pad_settings.stick_deadzone = 0;
         Sint16 ly = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY), ox;
         s_raw_lx = v;
         check_swing(v, ly);

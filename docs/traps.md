@@ -101,10 +101,14 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   (every section offset shifted; kernel refused the XBE silently).
 - **`u8` texture arrays can sit at odd addresses.** clang's MS-ABI target
   gives a `u8[]` alignment 1 (GCC on Linux pads big arrays to 32), so a
-  texture like `obj_s_douzou_b3_tex_pic_i4` lands at `…469`. The runtime GBI
+  texture like `obj_s_douzou_b3_tex_pic_i4` landed at `…469`. Runtime GBI
   macros turn odd pointers into tokens (`pc_gbi_runtime.c`, `0x02F00000 +
-  2n`); anything that stores one must unpack it (`seg2k0` didn't for segment
-  bases: whole-console crash when the station statues were drawn).
+  2n`) that `seg2k0` didn't unpack for segment bases (whole-console crash
+  when the station statues were drawn); static display lists carry no tag,
+  so `seg2k0` dropped the low bit (texture shifted a byte). Fixed twice:
+  `seg2k0` unpacks tokens, and `src/data` builds with `-fcommon` so the
+  arrays are aligned. Keep both. You can't tell a static display list by
+  its address: game-built ones in BSS buffers are in the image too.
 - **Freed memory is gone on the Xbox.** A PC keeps freed/unused heap pages
   readable; the Xbox kernel decommits them, so a stale or bogus pointer that
   "worked" on PC is a page fault here, and every thread runs in kernel mode:
