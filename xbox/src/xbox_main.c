@@ -24,6 +24,7 @@
 #include "xbox_splash.h"
 #include "dirent.h"
 #include "xbox_nv2a.h"
+#include "xbox_settings.h"
 
 SDL_Window*   g_pc_window = NULL;
 SDL_GLContext g_pc_gl_context = NULL;
@@ -79,19 +80,18 @@ void pc_platform_init(void) {
     pc_gx_init();
 }
 
-extern void PADCleanup(void);
-
+/* Quit Game (title or pause menu) ends the game loop; src/main.c then calls
+ * this and exit(0). nxdk's exit reboots, which relaunches a disc or shows
+ * the boot animation, so go to the dashboard directly instead. Saves are
+ * already flushed on close; xbox_quit_to_dashboard stops the sound and USB
+ * before the launch (the quick reboot doesn't). */
 void pc_platform_shutdown(void) {
-    pc_audio_shutdown();
-    pc_audio_mq_shutdown();
-    PADCleanup();
-    pc_gx_shutdown();
-    SDL_Quit();
+    xbox_quit_to_dashboard();
 }
 
+/* the logical screen follows the widescreen setting (xbox_settings.c) */
 void pc_platform_update_window_size(void) {
-    g_pc_window_w = PC_SCREEN_WIDTH;
-    g_pc_window_h = PC_SCREEN_HEIGHT;
+    xbox_settings_apply();
 }
 
 static volatile unsigned int s_frames;
@@ -297,14 +297,12 @@ static int main_body(void* arg) {
 
     xbox_logf("[XBOX] stage: nv2a init\n");
     pc_platform_init();
+    xbox_settings_apply();   /* 720p is decided at GPU init: always 16:9 */
     xbox_mem_log("after nv2a init");
     xbox_splash_progress(1.0f);
 
     xbox_logf("[XBOX] stage: game entry\n");
     ac_entry();
-    boot_main(0, NULL);
-
-    pc_disc_shutdown();
-    pc_platform_shutdown();
+    boot_main(0, NULL);   /* doesn't return: src/main.c quits through pc_platform_shutdown */
     return 0;
 }

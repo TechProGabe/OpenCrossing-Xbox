@@ -6,6 +6,8 @@ extern "C" {
 #endif
 void xbox_splash_show(void);
 void xbox_splash_progress(float f);
+/* before anything else changes the video mode (xbox_nv2a.c, 720p) */
+void xbox_splash_release(void);
 /* lines: NULL-terminated. Never returns. */
 void xbox_splash_error(const char* title, const char* const* lines);
 #ifdef __cplusplus

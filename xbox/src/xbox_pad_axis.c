@@ -29,12 +29,10 @@
 #include <string.h>
 #include "xbox_io.h"
 #include "pc_settings.h"
+#include "xbox_settings.h"
 
 #ifndef XBOX_PAD_MEDIAN
 #define XBOX_PAD_MEDIAN 0   /* hardware traces showed no spikes; costs a frame */
-#endif
-#ifndef XBOX_STICK_DZ
-#define XBOX_STICK_DZ 43    /* radial %: playtest pad rests up to 41% off centre */
 #endif
 
 /* pc_pad.c reads this instead of g_pc_settings (xbox/CMakeLists.txt): a copy
@@ -131,7 +129,7 @@ static void trace_dump(void) {
  * Picked by replaying four hardware traces (tools: scratch stick_sim.py):
  * 43% radial -> 0 phantom frames at rest, 0 missed pushes; an adaptive
  * "learn the rest point" variant was worse (8 phantom frames).
- *  - radial deadzone (max of XBOX_STICK_DZ and settings stick_deadzone) on
+ *  - radial deadzone (g_xbox_settings.stick_deadzone, below) on
  *    the stick vector, zeroing both axes inside it and rescaling the rest so
  *    the whole tilt range past it still maps onto walk..run;
  *  - snap-back suppression: within 12 frames of being held past 70% in some
@@ -141,38 +139,24 @@ static Sint16 s_out_ly;
 static float s_hold_x, s_hold_y;   /* direction of the last strong push */
 static unsigned s_hold_frame;
 
-/* Per-controller radial deadzone: E:\UDATA\4f430001\controller.ini,
- * "stick_deadzone = N" (percent, 0-60), written with the default on first
- * boot. The default suits the worn playtest pad; a controller in good shape
- * wants 15-20. Why not calibrate automatically: a worn stick's rest position
- * moves after every release (18-41% on the playtest pad) and a steady gentle
- * tilt looks the same as a rest, so any learned value can undershoot and
- * walk the character on its own (replayed on the hardware traces). */
-static int s_dz_pct = -1;
-
-static void load_controller_ini(void) {
-    static const char k_default[] =
-        "; OpenCrossing-Xbox controller settings\r\n"
-        "; stick_deadzone: left stick dead zone in percent (0-60). 43 suits a worn\r\n"
-        "; controller whose stick doesn't centre; one in good shape feels better at 15-20.\r\n"
-        "stick_deadzone = 43\r\n";
+/* Left stick radial dead zone: g_xbox_settings.stick_deadzone (percent, 0-60,
+ * settings.ini [Xbox], editable in Options > Controls). The default suits the
+ * worn playtest pad; a controller in good shape wants 15-20. Why not calibrate
+ * automatically: a worn stick's rest position moves after every release
+ * (18-41% on the playtest pad) and a steady gentle tilt looks the same as a
+ * rest, so any learned value can undershoot and walk the character on its own
+ * (replayed on the hardware traces).
+ *
+ * It used to live in E:\UDATA\4f430001\controller.ini; xbox_settings.c takes
+ * that value over once, on the first boot whose settings.ini lacks it. */
+int xbox_controller_ini_deadzone(void) {
     char buf[512];
     DWORD n = 0;
     HANDLE h;
     const char* p;
-    s_dz_pct = XBOX_STICK_DZ;
     h = CreateFileA(XBOX_UDATA_DIR "controller.ini", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                     FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) {
-        h = CreateFileA(XBOX_UDATA_DIR "controller.ini", GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL,
-                        NULL);
-        if (h != INVALID_HANDLE_VALUE) {
-            WriteFile(h, k_default, sizeof k_default - 1, &n, NULL);
-            xbox_flush_file(h);
-            CloseHandle(h);
-        }
-        return;
-    }
+    if (h == INVALID_HANDLE_VALUE) return -1;
     if (!ReadFile(h, buf, sizeof buf - 1, &n, NULL)) n = 0;
     CloseHandle(h);
     buf[n] = '\0';
@@ -183,16 +167,39 @@ static void load_controller_ini(void) {
         while (*q == ' ' || *q == '\t' || *q == '=') q++;
         if (*q < '0' || *q > '9') continue;
         v = atoi(q);
-        if (v >= 0 && v <= 60) s_dz_pct = v;
+        if (v >= 0 && v <= 60) return v;
         break;
     }
-    xbox_logf("[PAD] left stick deadzone %d%% (controller.ini)\n", s_dz_pct);
+    return -1;
+}
+
+/* The open controller, looked up in SDL's own list each time: pc_pad.c
+ * closes its handle when a pad is unplugged, so a cached pointer could
+ * dangle. For the Options readout and rumble preview only. */
+static SDL_GameController* open_controller(void) {
+    int i;
+    for (i = 0; i < SDL_NumJoysticks(); i++) {
+        SDL_GameController* gc = SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(i));
+        if (gc) return gc;
+    }
+    return NULL;
+}
+
+/* left stick tilt now, percent of full (Options shows it live so the dead
+ * zone can be set just above where the stick rests). Read from SDL, not from
+ * the last PADRead: the paused game may not poll the pad. */
+int xbox_left_stick_pct(void) {
+    SDL_GameController* gc = open_controller();
+    float x, y, m;
+    if (!gc) return 0;
+    x = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX);
+    y = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY);
+    m = sqrtf(x * x + y * y);
+    return m >= 32767.0f ? 100 : (int)(m / 327.67f);
 }
 
 static void shape_left(Sint16 lx, Sint16 ly, Sint16* ox, Sint16* oy) {
-    float dz;
-    if (s_dz_pct < 0) load_controller_ini();
-    dz = (float)s_dz_pct * 327.67f;
+    float dz = (float)g_xbox_settings.stick_deadzone * 327.67f;
     float x = lx, y = ly, m = sqrtf(x * x + y * y);
     unsigned f = xbox_frame_count();
     *ox = *oy = 0;
@@ -246,4 +253,30 @@ Sint16 xbox_controller_axis(SDL_GameController* gc, SDL_GameControllerAxis axis)
         return v;
     }
     return med3(h[0], h[1], h[2]);
+}
+
+/* pc_pad.c's rumble goes through here (SDL_GameControllerRumble renamed,
+ * xbox/CMakeLists.txt): scaled by the rumble setting, 0 = off. nxdk's SDL
+ * sends the XID rumble report (usbh_xid_rumble) and stops it when the
+ * duration runs out. */
+int xbox_controller_rumble(SDL_GameController* gc, Uint16 lo, Uint16 hi, Uint32 ms) {
+    static int s_logged;
+    int pct = g_xbox_settings.rumble;
+    if (pct <= 0) lo = hi = 0;
+    else if (pct < 100) {
+        lo = (Uint16)((Uint32)lo * (Uint32)pct / 100u);
+        hi = (Uint16)((Uint32)hi * (Uint32)pct / 100u);
+    }
+    if ((lo || hi) && !s_logged) {
+        s_logged = 1;
+        xbox_logf("[PAD] first rumble (strength %d%%)\n", pct);
+    }
+    return SDL_GameControllerRumble(gc, lo, hi, ms);
+}
+
+/* a short buzz at pct, so the Options rumble row can be felt while set */
+void xbox_rumble_preview(int pct) {
+    SDL_GameController* gc = open_controller();
+    Uint16 v = (Uint16)(65535u * (Uint32)(pct < 0 ? 0 : pct > 100 ? 100 : pct) / 100u);
+    if (gc) SDL_GameControllerRumble(gc, v, v, 250);
 }

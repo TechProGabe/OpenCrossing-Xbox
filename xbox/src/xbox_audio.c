@@ -487,5 +487,6 @@ void pc_audio_shutdown(void) {
         s_pump_thread = NULL;
     }
     aci_run(0);
+    if (s_apu) APU_PIO(0x128, APU_VOICE);   /* VOICE_OFF */
     audio_device = 0;
 }

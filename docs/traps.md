@@ -123,3 +123,39 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   at the head when a frame nears the end (`XBOX_PB_GUARD`).
 - **Worn Duke/S sticks rest 18–35% off centre and overshoot on release:** a
   12% per-axis deadzone reads that as walking. Measure with the L3 stick trace.
+- **Quit never returns to `main_body`.** `src/main.c` (TARGET_PC) calls
+  `pc_platform_shutdown()` then `exit(0)` after the game loop; nxdk's exit
+  reboots (a disc relaunches itself). The Xbox `pc_platform_shutdown` goes
+  to the dashboard instead.
+- **`XLaunchXBE` doesn't reset the devices.** It quick-reboots into the next
+  XBE while anything still doing DMA keeps going. pbkit stops the GPU from a
+  shutdown notification; nothing stops the AC97 (it loops its last buffer)
+  or the USB host controller (OHCI writes its frame counter and done queue
+  to RAM every millisecond; SDL's joystick quit leaves it running on
+  purpose). On hardware the second quit in one power-on hung on a looping
+  sound, then error 21. `leave_game` (`xbox_settings.c`) stops both first.
+- **Out-of-range float to integer is undefined behaviour, and clang uses
+  it.** `(s16)32768.0f` folds to poison, and code whose result depends on
+  it is deleted, silently and with no warning (`-w` hides nothing here;
+  there is none). The GameCube wraps it. `include/m_lib.h` converts through
+  `int` (`patches.md`). To check for more: emit `-O0 -Xclang
+  -disable-O0-optnone -S -emit-llvm` for every TU and grep for `poison`.
+- **The PC settings writer rewrites all of `settings.ini`.** Keys it doesn't
+  know are dropped; `xbox_settings.c` appends `[Xbox]` after every save.
+- **PADRead runs about twice per frame.** Autopad script call numbers are
+  PADRead calls, not frames; menu cooldowns (8-15 frames) need ~40 calls
+  between presses.
+- **xemu EEPROM video flags are at 0x94** (0x90 is the language), in the
+  encoder-settings bit layout (0x00020000 = 720p, 0x00080000 = 480p,
+  0x00010000 = widescreen); the user-section checksum at 0x60 covers
+  0x64-0xBF. xemu runs a copy via `-config_path` (`toolchain.md`).
+- **NV2x colour and depth widths should match.** 16-bit colour (720p) is
+  paired with Z16, not pbkit's fixed Z24S8. xemu accepts the mismatch, so it
+  proves nothing here. pbkit's `pb_erase_depth_stencil_buffer` writes
+  `0xffffff00` (Z24S8 layout); for Z16 the shim clears with its own value.
+- **XVideoSetMode frees the previous XVideo framebuffer.** Anything holding
+  the old pointer (the splash) must drop it first (`xbox_splash_release`).
+- **CMake caches every `-D` option in the build dir.** A test build with
+  `-DXBOX_WIDESCREEN=OFF` left the next "release" builds without it.
+  `xbox/build.sh` passes each option's default on every run; add new
+  options there too.

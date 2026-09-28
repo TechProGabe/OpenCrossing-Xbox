@@ -15,7 +15,10 @@ Here:
   - interrupt-time register waits give up after OCX_SPIN_MAX polls;
   - the DPC loop runs at most 64 rounds, and once ocx_pb_irq_off is set
     (an interrupt storm, decided in xbox_nv2a.c) it stops re-enabling the
-    GPU interrupt so threads can run and the watchdog can report.
+    GPU interrupt so threads can run and the watchdog can report;
+  - the depth format can be set before pb_init (pb_DepthFmt no longer static,
+    Z16 sized and scaled): 720p pairs a 16-bit colour buffer with Z16, as
+    NV2x wants matching colour and depth widths (xbox_nv2a.c video_select).
 Every replacement must match exactly once, or the build fails.
 """
 import re
@@ -85,5 +88,13 @@ sub(r'\}while\(more\);\n\n    VIDEOREG\(NV_PMC_INTR_EN_0\)=NV_PMC_INTR_EN_0_INTA
     "}while(more && ++ocx_rounds < 64);\n"
     "\n    if (more) ocx_pb_gpu_fault(3, VIDEOREG(NV_PMC_INTR_0), VIDEOREG(NV_PGRAPH_INTR), VIDEOREG(NV_PFIFO_INTR_0), 0);\n"
     "    if (!ocx_pb_irq_off) VIDEOREG(NV_PMC_INTR_EN_0)=NV_PMC_INTR_EN_0_INTA_HARDWARE;")
+
+# settable depth format (Z16 for the 16-bit 720p mode)
+sub(r'static unsigned int pb_DepthFmt = NV097_SET_SURFACE_FORMAT_ZETA_Z24S8;',
+    "unsigned int pb_DepthFmt = NV097_SET_SURFACE_FORMAT_ZETA_Z24S8;")
+sub(r'int DepthBpp = 32;\n    assert\(pb_DepthFmt == NV097_SET_SURFACE_FORMAT_ZETA_Z24S8\);\n    pb_ZScale = \(float\)0xFFFFFF;',
+    "int DepthBpp = pb_DepthFmt == NV097_SET_SURFACE_FORMAT_ZETA_Z16 ? 16 : 32;\n"
+    "    assert(pb_DepthFmt == NV097_SET_SURFACE_FORMAT_ZETA_Z24S8 || pb_DepthFmt == NV097_SET_SURFACE_FORMAT_ZETA_Z16);\n"
+    "    pb_ZScale = pb_DepthFmt == NV097_SET_SURFACE_FORMAT_ZETA_Z16 ? (float)0xFFFF : (float)0xFFFFFF;")
 
 open(out_path, "w", encoding="utf-8").write(src)

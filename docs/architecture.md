@@ -54,7 +54,9 @@ pointers with the shim, so `pc/` needs no Xbox branches. Only `pc_gx_tev.c`
 | `xbox_nv2a.c`, `xbox_tev_rc.c`, `shaders/gx.vsh` | renderer (`renderer.md`) |
 | `xbox_aram.c` | sparse ARAM with disc-backed regions (`memory.md`) |
 | `xbox_audio.c` | own polled AC97 driver on hardware, APU voice under xemu |
-| `xbox_pad_axis.c` | left-stick shaping for worn controllers, stick trace |
+| `xbox_pad_axis.c` | left-stick shaping for worn controllers, stick trace, rumble scaling |
+| `xbox_settings.c` | `[Xbox]` section of `settings.ini`, logical screen size, quit / restart |
+| `xbox_settings_menu.c` | the Options page (title screen and pause menu), replaces `pc_settings_menu.c` |
 | `xbox_watchdog.c` | hang reporter (screen + `hang.log`), rolling `last.log` |
 | `xbox_crash.c` | CPU exception reporter (screen + `crash.log`) |
 | `xbox_mem.c` | word-at-a-time `mem*` (pdclib's are byte loops) |
@@ -68,14 +70,48 @@ or from a disc. `xbox_main.c` scans it for the first `.iso`, `.gcm` or
 Everything written goes to `E:\UDATA\4f430001\` in every launch mode (a disc
 is read-only): `settings.ini`, `keybindings.ini`, `save/card_a/*.gci` and
 the logs (`boot.log`, `last.log`, `crash.log`, `hang.log`, `perf.log`,
-`input.log`, `stickN.log`).
-Saves use the GameCube `.gci` format, so they move between this port,
-Dolphin, the PC port and the other OpenCrossing ports.
+`input.log`, `stickN.log`). Saves use the GameCube `.gci` format, so they
+move between this port, Dolphin, the PC port and the other OpenCrossing
+ports.
 
 Saves are flushed to disk on close, and the volume is flushed on rename.
 FATX caches directory entries, and Mr. Resetti's "quit without saving" check
 is a save written at load time, so an unflushed save would get the player
 lectured after a clean power-off.
+
+`settings.ini` is the PC port's file plus an `[Xbox]` section
+(`xbox_stick_deadzone`, `rumble`, `video_720p`, `widescreen` (default 0 =
+4:3), and the menu-less `gpu_overlap` test switch). The PC writer
+rewrites the whole file, so `xbox_settings.c` appends the section after
+every save. The left stick dead zone used to live in `controller.ini`; the
+first boot without `xbox_stick_deadzone` takes that value over, and the old
+file is no longer read.
+
+## Options menu
+
+The title screen shows upstream's Start Game / Options / Quit Game menu
+(`ac_animal_logo.c`), and Back opens the pause menu (Resume / Settings /
+Quit Game) in game. Both drive the Options page in `xbox_settings_menu.c`:
+
+| tab | rows |
+|---|---|
+| Video | Output (480i/480p as the dashboard allows, or 720p; needs a restart), Widescreen (4:3 default, 16:9, Auto = dashboard; 16:9 draws more of the scene and costs frame time), Texture filter |
+| Audio | Master volume |
+| Controls | Stick deadzone (radial, 0-60%, live stick readout), C-stick deadzone, Rumble (0-100%), Buttons (controller rebinding) |
+| Gameplay | Resetti, Shop upgrade (Singleplayer by default on the Xbox: the visitor Nookington's wants needs a second town in `save/card_b`; switched once on the first boot without an `[Xbox]` section), Borderless acres, NES aspect |
+
+Quit Game goes back to the dashboard (`XLaunchXBE(NULL)`; nxdk's `exit`
+reboots, which relaunches a disc). Applying a new output offers a restart
+(`XLaunchXBE` of `D:\<this xbe>`). Both first stop the sound and the USB
+host controller (`leave_game`, `traps.md`).
+
+## Screen size
+
+`pc_gx.c` draws into a logical screen of `g_pc_window_w` x `g_pc_window_h`:
+640x480, or 854x480 for 16:9, where its hor+ correction widens the 3D view
+and pillarboxes 2D art. The GL shim scales viewports, scissors and read-backs
+onto the real framebuffer: 854x480 onto 640x480 is the anamorphic squeeze a
+16:9 TV undoes; 720p is 1280x720 and always 16:9 (`renderer.md`).
 
 ## Distribution
 
@@ -95,3 +131,13 @@ never an XISO.
   `gx.vsh` is NV2A assembly.
 - nxdk's `hal/audio`: its interrupt handler froze real hardware
   (`traps.md`).
+- 720p at 32-bit colour: three 1280x720x32 framebuffers and the depth
+  buffer need ~9.8 MB more than 480, over what's free on 64 MB. 720p runs
+  at 16-bit colour (dithered) with Z16 depth and a smaller texture pool
+  (`memory.md`).
+- Automatic stick dead zone calibration: replayed on the hardware stick
+  traces, a worn stick's rest point moves after every release (18-41%), so
+  a learned value undershoots and walks the character on its own. The dead
+  zone is a setting with a live stick readout instead.
+- Turning on `PC_ENHANCEMENTS` for the whole tree: it also changes gameplay
+  (camera, fog, player, submenus). Only the files listed in `patches.md` get it.

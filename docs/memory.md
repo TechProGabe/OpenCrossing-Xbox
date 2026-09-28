@@ -42,3 +42,20 @@ Each lever gets a kill switch. Record measurements here.
 | **free at runtime** | **~5.9 MB** | |
 
 Order matters: `pc_assets_init` (REL + Yaz0 peak) runs before NV2A init.
+
+## 720p (xemu, 64 MB, title demo, 2026-09-28)
+
+| | 480 (640x480x32, Z24S8) | 720p (1280x720x16, Z16) |
+|---|---|---|
+| free before GPU init | 35.7 MB | 35.7 MB |
+| free after GPU init | 20.6 MB | 20.7 MB |
+| texture pool | 8 MB | 5 MB |
+| free at the title demo | 5.5 MB | 5.6 MB |
+
+Framebuffers: 3 colour + 1 depth. 720p at 32-bit colour would need ~9.8 MB
+more than 480, so it runs at R5G6B5 with Z16 (+2.5 MB), plus 0.6 MB for the
+bigger XVideo buffer, minus 3 MB of texture pool. `video_select`
+(`xbox_nv2a.c`) only switches when `XBOX_720P_MIN_FREE_KB` (32 MB) is free
+before GPU init, and falls back to 480 if the allocations fail. The smaller
+pool is the risk: judge it on hardware (`perf.log` tex KB, `[NV2A] texture
+pool full` lines) in town, houses and the museum.

@@ -34,8 +34,16 @@ extern "C" {
 
 /* radians -> short angle */
 #define RAD2SHORT_ANGLE(rad) ((s16)(int)((rad) * (65536.0f / (2.0f * F_PI))))
+#if defined(TARGET_PC)
+/* Through int first, like the GameCube's fctiwz: (s16)32768.0f is undefined
+ * behaviour in C, and clang folds it to poison and deletes the code that uses
+ * it (DEG2SHORT_ANGLE(180) broke furniture placement). int -> s16 wraps. */
+#define RAD2SHORTANGLE(rad) ((s16)(int)((32768.0f / F_PI) * ((f32)(rad))))
+#define RAD2SHORT_ANGLE2(rad) ((s16)(int)((rad) * (65536.0f / (2.0f * F_PI))))
+#else
 #define RAD2SHORTANGLE(rad) ((s16)((32768.0f / F_PI) * ((f32)(rad))))
 #define RAD2SHORT_ANGLE2(rad) ((s16)((rad) * (65536.0f / (2.0f * F_PI))))
+#endif
 
 /* short angle -> radians */
 #define SHORT2RAD_ANGLE(s) ((((f32)(s)) / (65536.0f / (2.0f * F_PI))))
@@ -43,7 +51,11 @@ extern "C" {
 #define SHORTANGLE2RAD(sangle) ((F_PI / 32768.0f) * ((f32)(sangle)))
 
 /* degrees -> short angle */
+#if defined(TARGET_PC)
+#define DEG2SHORT_ANGLE(deg) ((s16)(int)((deg) * (65536.0f / 360.0f)))
+#else
 #define DEG2SHORT_ANGLE(deg) ((s16)((deg) * (65536.0f / 360.0f)))
+#endif
 #define DEG2SHORT_ANGLE2(deg) ((int)((deg) * (65536.0f / 360.0f)))
 #define DEG2SHORT_ANGLE3(deg) ((deg) * (65536.0f / 360.0f))
 

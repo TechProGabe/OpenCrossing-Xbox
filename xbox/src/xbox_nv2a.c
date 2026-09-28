@@ -26,10 +26,21 @@
 #include "xbox_io.h"
 #include "xbox_nv2a.h"
 #include "xbox_fbdump.h"
+#include "xbox_settings.h"
+#include "xbox_splash.h"
+#include <pbkit/pbkit_framebuffer.h>
 
-#define SCR_W 640
-#define SCR_H 480
-#define ZMAX  16777215.0f
+/* The real framebuffer: 640x480, or 1280x720 when this boot runs at 720p.
+ * pc_gx.c works in a logical screen of g_pc_window_w x g_pc_window_h (640x480,
+ * or 854x480 for 16:9); gl_viewport/gl_scissor/gl_read_pixels scale between
+ * the two (xbox_settings.c). */
+static int s_fbw = 640, s_fbh = 480, s_fb_bpp = 32;
+#define SCR_W s_fbw
+#define SCR_H s_fbh
+/* depth range of the zeta surface: Z24S8, or Z16 at 720p (video_select) */
+static float s_zmax = 16777215.0f;
+#define ZMAX s_zmax
+extern unsigned int pb_DepthFmt;   /* settable: tools/xbox/patch_pbkit.py */
 
 #define SETF(x) (*(const uint32_t*)&(x))
 
@@ -37,6 +48,7 @@
 #define XBOX_FBDUMP_EVERY 0
 #endif
 int g_xbox_fbdump_every = XBOX_FBDUMP_EVERY;
+int g_xbox_fbdump_once;   /* one screenshot at the next present (xbox_autopad.c) */
 static uint32_t s_n_da, s_n_de, s_n_bd, s_n_clr, s_n_null, s_n_clr_frame;
 
 /* ======================================================================
@@ -162,7 +174,12 @@ static void um4(GLint l, GLsizei n, GLboolean tr, const GLfloat* m) { (void)n; u
 #ifndef XBOX_VTX_RING_BYTES
 #define XBOX_VTX_RING_BYTES (1024 * 1024)
 #endif
+/* at 720p the framebuffers take ~3 MB more; the pool gives it back */
+#ifndef XBOX_TEX_POOL_720P_BYTES
+#define XBOX_TEX_POOL_720P_BYTES (5 * 1024 * 1024)
+#endif
 #define POOL_ALIGN 128
+static uint32_t s_pool_bytes = XBOX_TEX_POOL_BYTES;
 
 typedef struct Blk { uint32_t off, size; int free; struct Blk* next; } Blk;
 static uint8_t* s_pool;
@@ -170,9 +187,9 @@ static Blk* s_blocks;
 static uint32_t s_pool_used, s_pool_peak;
 
 static void pool_init(void) {
-    s_pool = (uint8_t*)MmAllocateContiguousMemoryEx(XBOX_TEX_POOL_BYTES, 0, MAXRAM, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    s_pool = (uint8_t*)MmAllocateContiguousMemoryEx(s_pool_bytes, 0, MAXRAM, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
     s_blocks = (Blk*)calloc(1, sizeof(Blk));
-    s_blocks->size = XBOX_TEX_POOL_BYTES;
+    s_blocks->size = s_pool_bytes;
     s_blocks->free = 1;
 }
 
@@ -284,7 +301,7 @@ static struct {
     float clear_d;
 } G = {
     0, GL_LESS, 1, 0, GL_ONE, GL_ZERO, GL_FUNC_ADD, 0, GL_BACK, 0x01010101,
-    0, 0, 0, SCR_W, SCR_H, 0, 0, SCR_W, SCR_H, 0.0f, 1.0f, {0, 0, 0, 0}, 1.0f
+    0, 0, 0, 640, 480, 0, 0, 640, 480, 0.0f, 1.0f, {0, 0, 0, 0}, 1.0f
 };
 
 /* ======================================================================
@@ -518,6 +535,7 @@ static void release_deferred(void) {
  *    one slow frame instead of a white one). */
 extern void pc_gx_texture_shutdown(void);   /* drops the cache and pc_gx's bindings */
 extern void pc_gx_texture_bind_cache_invalidate(void);
+extern void pc_gx_efb_capture_cleanup(void);
 static void* tex_alloc(uint32_t bytes, int w, int h) {
     void* p = pool_alloc(bytes);
     if (p) return p;
@@ -530,6 +548,12 @@ static void* tex_alloc(uint32_t bytes, int w, int h) {
               s_pool_used / 1024);
     pc_gx_texture_shutdown();
     pc_gx_texture_bind_cache_invalidate();
+#if XBOX_WIDESCREEN
+    /* pc_gx.c (PC_ENHANCEMENTS) keeps up to 4 full-res EFB copies as GL
+     * textures, 2 MB each for a screen grab; the cache drop doesn't free
+     * them. The game re-copies on its next GXCopyTex. */
+    pc_gx_efb_capture_cleanup();
+#endif
     release_deferred();
     return pool_alloc(bytes);
 }
@@ -620,8 +644,31 @@ static void gl_color_mask(GLboolean r, GLboolean g, GLboolean b, GLboolean a) {
     G.cmask = (r ? NV097_SET_COLOR_MASK_RED_WRITE_ENABLE : 0) | (g ? NV097_SET_COLOR_MASK_GREEN_WRITE_ENABLE : 0) |
               (b ? NV097_SET_COLOR_MASK_BLUE_WRITE_ENABLE : 0) | (a ? NV097_SET_COLOR_MASK_ALPHA_WRITE_ENABLE : 0);
 }
-static void gl_scissor(GLint x, GLint y, GLsizei w, GLsizei h) { G.sx = x; G.sy = y; G.sw = w; G.sh = h; }
-static void gl_viewport(GLint x, GLint y, GLsizei w, GLsizei h) { G.vx = x; G.vy = y; G.vw = w; G.vh = h; }
+/* v * num / den rounded to nearest, also for negative v (viewports that start
+ * off-screen): C division truncates toward zero */
+static int scale_round(int v, int num, int den) {
+    long long n = (long long)v * num * 2 + den, d = (long long)den * 2;
+    return (int)(n >= 0 ? n / d : -((-n + d - 1) / d));
+}
+
+/* logical (pc_gx) -> framebuffer pixels; edges are rounded so abutting
+ * rectangles stay abutting */
+static void to_fb(GLint x, GLint y, GLsizei w, GLsizei h, int* ox, int* oy, int* ow, int* oh) {
+    extern int g_pc_window_w, g_pc_window_h;
+    int lw = g_pc_window_w > 0 ? g_pc_window_w : 640, lh = g_pc_window_h > 0 ? g_pc_window_h : 480;
+    int x0, y0, x1, y1;
+    if (lw == SCR_W && lh == SCR_H) {
+        *ox = x; *oy = y; *ow = w; *oh = h;
+        return;
+    }
+    x0 = scale_round(x, SCR_W, lw);
+    x1 = scale_round(x + w, SCR_W, lw);
+    y0 = scale_round(y, SCR_H, lh);
+    y1 = scale_round(y + h, SCR_H, lh);
+    *ox = x0; *oy = y0; *ow = x1 - x0; *oh = y1 - y0;
+}
+static void gl_scissor(GLint x, GLint y, GLsizei w, GLsizei h) { to_fb(x, y, w, h, &G.sx, &G.sy, &G.sw, &G.sh); }
+static void gl_viewport(GLint x, GLint y, GLsizei w, GLsizei h) { to_fb(x, y, w, h, &G.vx, &G.vy, &G.vw, &G.vh); }
 static void gl_depth_range(GLdouble n, GLdouble f) { G.dn = (float)n; G.df = (float)f; }
 static void gl_clear_color(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {
     G.clear_c[0] = r; G.clear_c[1] = g; G.clear_c[2] = b; G.clear_c[3] = a;
@@ -658,9 +705,24 @@ static void gl_clear(GLbitfield mask) {
     if (mask & GL_COLOR_BUFFER_BIT) {
         uint32_t c = ((uint32_t)f2b(G.clear_c[3]) << 24) | ((uint32_t)f2b(G.clear_c[0]) << 16) |
                      ((uint32_t)f2b(G.clear_c[1]) << 8) | f2b(G.clear_c[2]);
+        /* the clear value is in the surface's own format */
+        if (s_fb_bpp == 16) c = ((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F);
         pb_fill(x, y, w, h, c);
     }
-    if (mask & GL_DEPTH_BUFFER_BIT) pb_erase_depth_stencil_buffer(x, y, w, h);
+    if (mask & GL_DEPTH_BUFFER_BIT) {
+        if (pb_DepthFmt == NV097_SET_SURFACE_FORMAT_ZETA_Z16) {
+            /* pb_erase_depth_stencil_buffer's 0xffffff00 is Z24S8; in Z16 its
+             * low half (0xff00) would clear to 0.996, not the far plane */
+            uint32_t* p = pb_begin();
+            p = pb_push1(p, NV097_SET_CLEAR_RECT_HORIZONTAL, (uint32_t)((x + w - 1) << 16) | (uint32_t)x);
+            p = pb_push1(p, NV097_SET_CLEAR_RECT_VERTICAL, (uint32_t)((y + h - 1) << 16) | (uint32_t)y);
+            p = pb_push1(p, NV097_SET_ZSTENCIL_CLEAR_VALUE, 0xFFFFFFFFu);
+            p = pb_push1(p, NV097_CLEAR_SURFACE, NV097_CLEAR_SURFACE_Z);
+            pb_end(p);
+        } else {
+            pb_erase_depth_stencil_buffer(x, y, w, h);
+        }
+    }
 }
 
 static void wait_idle(void) {
@@ -668,7 +730,11 @@ static void wait_idle(void) {
     while (pb_busy()) {}
 }
 
+/* x, y, w, h are logical (pc_gx) pixels; each samples the framebuffer pixel
+ * under its centre, so a 720p or 16:9 screen reads back at logical size */
 static void gl_read_pixels(GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, GLenum type, void* out) {
+    extern int g_pc_window_w, g_pc_window_h;
+    int lw = g_pc_window_w > 0 ? g_pc_window_w : 640, lh = g_pc_window_h > 0 ? g_pc_window_h : 480;
     const uint8_t* fb;
     uint32_t pitch;
     int r, c;
@@ -680,12 +746,22 @@ static void gl_read_pixels(GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, G
     pitch = pb_back_buffer_pitch();
     /* GL: origin bottom-left, rows bottom-up */
     for (r = 0; r < h; r++) {
-        int sy = SCR_H - 1 - (y + r);
+        int ly = y + r, sy = SCR_H - 1 - (int)(((long long)ly * 2 + 1) * SCR_H / (2 * lh));
         for (c = 0; c < w; c++) {
-            int sx = x + c;
+            int lx = x + c, sx = (int)(((long long)lx * 2 + 1) * SCR_W / (2 * lw));
             uint8_t* d = o + ((size_t)r * w + c) * 4;
-            if (sx < 0 || sx >= SCR_W || sy < 0 || sy >= SCR_H) { d[0] = d[1] = d[2] = 0; d[3] = 255; continue; }
-            {
+            if (lx < 0 || lx >= lw || ly < 0 || ly >= lh || sx >= SCR_W || sy < 0) {
+                d[0] = d[1] = d[2] = 0; d[3] = 255;
+                continue;
+            }
+            if (s_fb_bpp == 16) {
+                uint32_t v = *(const uint16_t*)(fb + (size_t)sy * pitch + (size_t)sx * 2);
+                uint32_t r5 = v >> 11, g6 = (v >> 5) & 63, b5 = v & 31;
+                d[0] = (uint8_t)((r5 << 3) | (r5 >> 2));
+                d[1] = (uint8_t)((g6 << 2) | (g6 >> 4));
+                d[2] = (uint8_t)((b5 << 3) | (b5 >> 2));
+                d[3] = 255;
+            } else {
                 const uint8_t* p = fb + (size_t)sy * pitch + (size_t)sx * 4;
                 d[0] = p[2]; d[1] = p[1]; d[2] = p[0]; d[3] = p[3];
             }
@@ -1370,8 +1446,27 @@ static void setup_state(void) {
     PB_END();
 }
 
+/* CPU/GPU overlap: xbox_nv2a_present queues the flip without waiting for the
+ * GPU, and the next frame's game logic (game_main, before emu64 issues any GL
+ * call) runs while the GPU still draws. The first GL call of the next frame
+ * lands here: drain the GPU, then free last frame's textures and restart the
+ * pushbuffer and vertex ring at their heads, as before. Kill switch:
+ * -DXBOX_GPU_OVERLAP=0 (drain in present, as before). */
+#ifndef XBOX_GPU_OVERLAP
+#define XBOX_GPU_OVERLAP 1
+#endif
+/* also settings.ini [Xbox] gpu_overlap = 0 at runtime (read once at init: the
+ * two modes can't be switched between a present and the next frame_open) */
+static int s_overlap;
+static unsigned long long s_drain_ticks;   /* GPU wait moved here: hitch_log counts it as gpu */
 static void frame_open(void) {
     if (s_frame_open) return;
+    if (s_overlap) {
+        unsigned long long t0 = xbox_ticks();
+        wait_idle();
+        s_drain_ticks += xbox_ticks() - t0;
+        release_deferred();
+    }
     pb_reset();
     s_pb_base = pb_begin();
     pb_target_back_buffer();
@@ -1379,27 +1474,106 @@ static void frame_open(void) {
     s_frame_open = 1;
 }
 
+/* 720p (Options > Video > Output): 1280x720 at 16-bit colour (R5G6B5, the
+ * NV2A dithers) with a Z16 depth buffer, so it fits: 3 x 1.8 MB colour +
+ * 1.8 MB depth is ~2.5 MB over 640x480x32 + Z24S8, plus 0.6 MB for the
+ * bigger XVideo (splash / debug screen) buffer, paid back by a 5 MB texture
+ * pool (8 MB at 480): about even. Measured in xemu (2026-09-28): 20.7 MB
+ * free after GPU init and 5.6 MB at the title demo, the same as 480. The
+ * guard below only catches a console that is already short. Only when the
+ * dashboard allows 720p on this AV pack; otherwise the 640x480 mode the
+ * splash set stays. */
+#ifndef XBOX_720P_MIN_FREE_KB
+#define XBOX_720P_MIN_FREE_KB (32 * 1024)
+#endif
+int g_xbox_video_720p;
+static void video_select(void) {
+    unsigned free_kb;
+    /* 720p is drawn through the 16:9 logical screen (pc_gx.c with
+     * PC_ENHANCEMENTS); without it the picture would be stretched */
+    if (!XBOX_WIDESCREEN || !g_xbox_settings_boot.video_720p) return;
+    if (!xbox_video_720p_allowed()) {
+        xbox_logf("[NV2A] 720p asked for but not allowed (dashboard or AV cable): staying at 480\n");
+        return;
+    }
+    free_kb = xbox_mem_free_kb();
+    if (free_kb < XBOX_720P_MIN_FREE_KB) {
+        xbox_logf("[NV2A] 720p needs %u KB free, have %u KB: staying at 480\n", XBOX_720P_MIN_FREE_KB, free_kb);
+        return;
+    }
+    xbox_splash_release();   /* XVideoSetMode frees the splash's buffer */
+    if (!XVideoSetMode(1280, 720, 16, REFRESH_DEFAULT)) {
+        xbox_logf("[NV2A] XVideoSetMode 1280x720x16 failed: back to 640x480\n");
+        XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);
+        return;
+    }
+    pb_set_color_format(NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5, false);
+    /* NV2x wants colour and depth of the same width: Z16 with R5G6B5 */
+    pb_DepthFmt = NV097_SET_SURFACE_FORMAT_ZETA_Z16;
+    s_zmax = 65535.0f;
+    s_pool_bytes = XBOX_TEX_POOL_720P_BYTES;
+    g_xbox_video_720p = 1;
+}
+
+/* back to the standard mode when 720p can't start (pb_init or the texture
+ * pool / vertex ring allocations fail): a console must never be stuck on
+ * the "Graphics init failed" screen because of a saved setting */
+static void video_standard(void) {
+    XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);
+    pb_set_color_format(NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8, false);
+    pb_DepthFmt = NV097_SET_SURFACE_FORMAT_ZETA_Z24S8;
+    s_zmax = 16777215.0f;
+    s_pool_bytes = XBOX_TEX_POOL_BYTES;
+    g_xbox_video_720p = 0;
+}
+
 int xbox_nv2a_init(void) {
     int err;
+    s_overlap = XBOX_GPU_OVERLAP && g_xbox_settings_boot.gpu_overlap;
+    video_select();
     pb_size(1024 * 1024);
-    err = pb_init();
-    if (err) {
-        xbox_logf("[NV2A] pb_init failed: %d\n", err);
-        return 0;
-    }
-    pb_show_front_screen();
-    pool_init();
-    s_ring_cap = XBOX_VTX_RING_BYTES / sizeof(XVtx);
-    s_ring = (XVtx*)MmAllocateContiguousMemoryEx(XBOX_VTX_RING_BYTES, 0, MAXRAM, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
-    if (!s_pool || !s_ring) {
+    for (;;) {
+        err = pb_init();
+        if (err) {
+            xbox_logf("[NV2A] pb_init failed: %d\n", err);
+            if (!g_xbox_video_720p) return 0;
+            video_standard();
+            continue;
+        }
+        pool_init();
+        s_ring = (XVtx*)MmAllocateContiguousMemoryEx(XBOX_VTX_RING_BYTES, 0, MAXRAM, 0,
+                                                     PAGE_READWRITE | PAGE_WRITECOMBINE);
+        if (s_pool && s_ring) break;
         xbox_logf("[NV2A] contiguous alloc failed (pool=%p ring=%p)\n", s_pool, s_ring);
-        return 0;
+        if (!g_xbox_video_720p) return 0;
+        if (s_pool) MmFreeContiguousMemory(s_pool);
+        if (s_ring) MmFreeContiguousMemory(s_ring);
+        free(s_blocks);
+        s_pool = NULL;
+        s_ring = NULL;
+        s_blocks = NULL;
+        pb_kill();
+        video_standard();
     }
+    if (g_xbox_video_720p == 0 && g_xbox_settings_boot.video_720p)
+        xbox_logf("[NV2A] running at 480\n");
+    pb_show_front_screen();
+    s_fbw = (int)pb_back_buffer_width();
+    s_fbh = (int)pb_back_buffer_height();
+    s_fb_bpp = g_xbox_video_720p ? 16 : 32;
+    if (g_xbox_video_720p) {
+        /* R5G6B5 wants dithering, or skies and fog band */
+        uint32_t* p = pb_begin();
+        p = pb_push1(p, NV097_SET_DITHER_ENABLE, 1);
+        pb_end(p);
+    }
+    s_ring_cap = XBOX_VTX_RING_BYTES / sizeof(XVtx);
     frame_open();
     load_vertex_program();
     setup_attributes();
     setup_state();
-    xbox_logf("[NV2A] up: tex pool %u KB, vertex ring %u verts\n", XBOX_TEX_POOL_BYTES / 1024, s_ring_cap);
+    xbox_logf("[NV2A] up: %dx%d %d-bit, tex pool %u KB, vertex ring %u verts, gpu overlap %d\n", s_fbw, s_fbh,
+              s_fb_bpp, s_pool_bytes / 1024, s_ring_cap, s_overlap);
     return 1;
 }
 
@@ -1454,8 +1628,12 @@ static void perf_account(unsigned t10, unsigned cpu10) {
 static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
     static unsigned long long t_last;
     unsigned long long f = xbox_ticks_per_sec() / 1000;
+    /* with the overlap, the wait for last frame's GPU work happened inside
+     * this frame (frame_open): count it as gpu, not cpu */
+    unsigned long long cpu_ticks = t_enter - t_last > s_drain_ticks ? t_enter - t_last - s_drain_ticks : 0;
+    s_drain_ticks = 0;
     if (XBOX_HITCH_MS && t_last) {
-        unsigned total = (unsigned)((t_done - t_last) / f), cpu = (unsigned)((t_enter - t_last) / f);
+        unsigned total = (unsigned)((t_done - t_last) / f), cpu = (unsigned)(cpu_ticks / f);
         if (total >= XBOX_HITCH_MS || s_draws < 3)
             xbox_logf("[HITCH] frame %u: %u ms (cpu %u, gpu+flip %u) draws %u clears %u | tex %u / %u ms | "
                       "fread %u / %u KB / %u ms\n",
@@ -1463,7 +1641,7 @@ static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
                       (unsigned)(g_xfs.tex_ticks / f), g_xfs.fread_n, (unsigned)(g_xfs.fread_bytes / 1024),
                       (unsigned)(g_xfs.fread_ticks / f));
     }
-    if (t_last) perf_account((unsigned)((t_done - t_last) * 10 / f), (unsigned)((t_enter - t_last) * 10 / f));
+    if (t_last) perf_account((unsigned)((t_done - t_last) * 10 / f), (unsigned)(cpu_ticks * 10 / f));
     t_last = t_done;
     memset(&g_xfs, 0, sizeof g_xfs);
     s_n_clr_frame = 0;
@@ -1481,12 +1659,16 @@ int xbox_nv2a_state(char* buf, int cap) {
 
 void xbox_nv2a_present(void) {
     unsigned long long t_enter = xbox_ticks();
+    int dump;
     frame_open();
     pb_note_peak();
-    wait_idle();
-    gpu_fault_log(s_frame);
     s_frame++;
-    if (g_xbox_fbdump_every > 0 && (s_frame % (uint32_t)g_xbox_fbdump_every) == 0) {
+    dump = (g_xbox_fbdump_every > 0 && (s_frame % (uint32_t)g_xbox_fbdump_every) == 0) || g_xbox_fbdump_once;
+    g_xbox_fbdump_once = 0;
+    if (s_overlap && !dump) pb_close();   /* kick; frame_open drains */
+    else wait_idle();
+    gpu_fault_log(s_frame - 1);
+    if (dump) {
         xbox_logf("[NV2A] frame %u draws=%u approx=%u rc=%d pool=%uKB peak=%uKB\n", s_frame, s_draws,
                   s_approx_draws, s_rc_count, s_pool_used / 1024, s_pool_peak / 1024);
         xbox_logf("[NV2A] calls: drawarrays=%u drawelems=%u bufdata=%u clear=%u nulldata=%u prog=%u\n",
@@ -1502,7 +1684,7 @@ void xbox_nv2a_present(void) {
         xbox_mem_log("frame");
         { extern void xbox_aram_log(void); xbox_aram_log(); }
         { extern int pc_audio_get_buffer_fill(void); xbox_logf("[AUDIO] fill=%d\n", pc_audio_get_buffer_fill()); }
-        xbox_fbdump(pb_back_buffer(), SCR_W, SCR_H, 32, (int)pb_back_buffer_pitch());
+        xbox_fbdump(pb_back_buffer(), SCR_W, SCR_H, s_fb_bpp, (int)pb_back_buffer_pitch());
     }
     while (pb_finished()) {}
     /* pbkit triple-buffers but only refuses a flip once its ready table is
@@ -1519,11 +1701,13 @@ void xbox_nv2a_present(void) {
     }
 #endif
     hitch_log(t_enter, xbox_ticks());
-    release_deferred();
     s_frame_open = 0;
     s_draws = 0;
     s_approx_draws = 0;
-    frame_open();
+    if (!s_overlap) {
+        release_deferred();
+        frame_open();
+    }
 }
 
 /* ======================================================================

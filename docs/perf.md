@@ -47,4 +47,7 @@ Whole tree at `-O2`; no per-TU profiles yet (not needed so far).
 - `[HITCH]` lines (frame over 40 ms, `XBOX_HITCH_MS`) say where a slow frame
   went: CPU, GPU + flip, texture uploads, file reads.
 
-Next lever: present waits for GPU idle every frame (`known-issues.md`).
+- CPU/GPU overlap (2026-09-28, `gpu_overlap = 1` in `settings.ini`, off by
+  default): present no longer waits for the GPU; the drain moves to the next
+  frame's first GL call, so game logic overlaps the GPU (`renderer.md`). Not
+  measured on hardware yet.

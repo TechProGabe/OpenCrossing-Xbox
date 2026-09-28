@@ -81,15 +81,18 @@ To continue a town from your GameCube or Dolphin:
 2. Convert it: `python3 tools/gcs_to_gci.py mysave.gcs`. This writes `DobutsunomoriP_MURA.gci`. A `.gci` from Dolphin can be copied as it is.
 3. Launch the game once so it creates its folders. Then FTP the `.gci` to `E:\UDATA\4f430001\save\card_a\`, replacing the file there.
 
-Settings live in `E:\UDATA\4f430001\settings.ini`. Edit the file over FTP. The useful ones are:
+Settings are in **Options** on the title screen, or **Settings** in the pause menu (Back button):
 
-| setting | default | what it does |
-|---|---|---|
-| `disable_resetti` | 0 | 1 turns off Mr. Resetti |
-| `borderless_acres` | 1 | 0 brings back the original acre-by-acre camera |
-| `disable_shop_visitor_req` | 0 | 1 lets Nook upgrade to Nookington's without a visitor from another town |
-| `master_volume` | 100 | 0 to 100 |
-| `stick_deadzone` | 12 | percent; C-stick only on the Xbox (the left stick uses `controller.ini`) |
+| tab | settings |
+|---|---|
+| Video | Output (480i/480p, or experimental 720p with a component cable and 720p enabled in the dashboard; needs a restart), Widescreen (4:3, 16:9, or Auto to follow the dashboard), texture filter |
+| Audio | master volume |
+| Controls | left and right stick dead zones, rumble strength, button remapping |
+| Gameplay | Mr. Resetti, shop upgrade (Singleplayer lets Nook upgrade to Nookington's without a visitor from another town), borderless acres (Off brings back the original acre-by-acre camera), NES aspect |
+
+They are saved to `E:\UDATA\4f430001\settings.ini`, which you can also edit over FTP.
+
+**Quit Game** on the title screen or in the pause menu goes back to the dashboard.
 
 ## Controls
 
@@ -104,13 +107,15 @@ Settings live in `E:\UDATA\4f430001\settings.ini`. Edit the file over FTP. The u
 | D-pad | D-pad |
 | Back | pause menu |
 
-Buttons can be remapped in `E:\UDATA\4f430001\keybindings.ini`.
+Buttons can be remapped in Options > Controls > Buttons.
 
-The left stick's dead zone is in `E:\UDATA\4f430001\controller.ini` (created on first launch). The default of 43% suits a worn controller whose stick doesn't return to the centre. If your controller is in good shape, set `stick_deadzone = 15` or `20` so small pushes register sooner.
+The left stick's dead zone defaults to 43%, which suits a worn controller whose stick doesn't return to the centre. If your controller is in good shape, lower it to 15-20% in Options > Controls so small pushes register sooner; the page shows how far the stick is tilted right now, so set the dead zone just above where yours rests.
 
 ## Known issues
 
-- The left stick has a large dead zone (43%) by default, tuned on a worn controller. Lower it in `controller.ini` (see Controls).
+- The left stick has a large dead zone (43%) by default, tuned on a worn controller. Lower it in Options > Controls (see Controls).
+- NES games run choppy.
+- 720p output is experimental: it has not been tested on real hardware yet.
 
 The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
 

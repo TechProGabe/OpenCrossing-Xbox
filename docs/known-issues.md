@@ -4,21 +4,41 @@ Bugs seen on real hardware or in xemu that are not fixed yet, and the leads
 we have. Add the build and date when you log one; delete it when it's fixed
 (the commit message keeps the history).
 
-## Stick deadzone
+## Town not as smooth (hardware, 2026-09-28)
 
-- The stick deadzone is per console, not measured per controller:
-  `controller.ini` (default 43%, sized for the worn test pad). Automatic
-  calibration was tried against the hardware stick traces and rejected: a
-  worn stick's rest point moves after every release (18-41%), so a learned
-  value undershoots and walks the character on its own.
+- Town "runs ok but not as butter", ~45-50 fps by eye. The console was
+  still running the build before the settings menu (no `[Xbox]` section in
+  its `settings.ini`), so the settings-menu changes are not the cause.
+  That run's `perf.log`: 56-60 fps average per minute, but 5-12 frames a
+  minute over 33 ms and 1-5 over 100 ms (worst ~270 ms), and free RAM down
+  to 456 KB once. The hitches, not the average, are what reads as
+  not smooth; `[HITCH]` lines say whether they are texture loads or GPU.
+  `borderless_acres = 1` (the PC default) draws neighbouring acres too.
+- `[STUTTER]` lines (`pc_vi.c`) print `%.1f` values, which the Xbox log
+  path does not format: the ms fields come out empty and `audio_fill` is
+  garbage. They also flood `last.log`'s 4 KB tail.
+
+## Not yet tested on hardware (2026-09-28)
+
+- Restart after changing the output (720p).
+- 720p: fill rate, and the 5 MB texture pool in busy rooms (free memory at
+  the title matches 480 in xemu).
+- CPU/GPU overlap (`gpu_overlap = 1`): frame times in town vs off (`perf.log`).
+- 720p's Z16 depth: z-fighting at distance, and whether the NV2A is happy.
+- Shop upgrade defaulting to Singleplayer on a console whose `settings.ini`
+  predates the `[Xbox]` section.
+
+## NES games run choppy
+
+- Real hardware, `dev` at `f3b76f8d`, 2026-09-28: playing an NES game from
+  the furniture item, the frame rate is very low and the picture is choppy.
+  Not investigated yet. Leads: fixNES emulation cost on the 733 MHz CPU
+  (`pc_nes_fixnes.c`), the per-frame RGB565 → swizzled A8R8G8B8 upload of the
+  256×224 NES frame into a fresh texture (`tex_image_2d` in `xbox_nv2a.c`),
+  and the present waiting for GPU idle. `perf.log` and `[HITCH]` lines taken
+  during NES play would show whether the CPU or the GPU is short.
 
 ## Not ported
 
 - GameCube TEV swap tables and indirect textures in the combiner generator.
   Nothing visibly wrong in play so far.
-
-## Performance headroom
-
-The present call waits for the GPU to go idle every frame, so CPU and GPU
-work never overlap. That is the next lever if a scene drops below 60 fps.
-Top of the profile is `pb_busy`.

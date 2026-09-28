@@ -39,6 +39,18 @@ xemu has no screenshot command; use `-DXBOX_FBDUMP_EVERY=N`.
 xemu is not hardware: it never plays AC97 on macOS, has no CPU cache model,
 and hides timing bugs. Judge performance and hangs on a real console.
 
+Scripted menu tests: build with `XBOX_CMAKE_ARGS="-DXBOX_AUTOPAD=script"`
+and stage an `autopad.txt` with `OCX_STAGE_EXTRA` (format in the header of
+`xbox/src/xbox_autopad.c`; `SHOT` steps give `[FBDUMP]` screenshots). With a
+save, add `'-DCMAKE_C_FLAGS=-DXBOX_DBG_SAVE_FROM_D'` and stage
+`save/card_a/*.gci` (`tools/gcs_to_gci.py` converts a `.gcs`). Town is
+reached after 4000-6000 PADRead calls, depending on the date's events.
+
+720p in xemu: xemu's default AV pack is HDTV, but the EEPROM must allow
+720p. Copy `eeprom.bin`, set the video flags at 0x94 and fix the checksum
+(`traps.md`), point a copy of `xemu.toml` at it, and run with
+`OCX_XEMU_ARGS="-config_path <copy>/xemu.toml"`.
+
 ## Test on a real Xbox
 
 Deploy over FTP to any folder the dashboard lists (we use

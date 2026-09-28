@@ -146,7 +146,7 @@ set(DECOMP_FLAGS
 set(PC_REUSED
     pc_gx.c pc_gx_texture.c pc_gbi_runtime.c pc_os.c pc_dvd.c
     pc_card.c pc_vi.c pc_misc.c pc_mtx.c pc_m_card.c pc_save_bswap.c
-    pc_settings.c pc_profiler.c pc_pause_menu.c pc_settings_menu.c pc_menu_util.c
+    pc_settings.c pc_profiler.c pc_pause_menu.c pc_menu_util.c
     pc_text_draw.c pc_nes_fixnes.c pc_stubs.c pc_stubs_cpp.cpp pc_assets.c pc_disc.c
     pc_pad.c pc_keybindings.c pc_typing.c)
 list(TRANSFORM PC_REUSED PREPEND "${PC_DIR}/src/")
@@ -158,13 +158,52 @@ set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS
     # its per-axis stick deadzone reads a copy with the left stick's zeroed
     # (the radial one in xbox_pad_axis.c replaces it), so the real setting
     # is never overwritten
-    "g_pc_settings=g_xbox_pad_settings")
+    "g_pc_settings=g_xbox_pad_settings"
+    # rumble is scaled by the Options rumble setting (xbox_pad_axis.c)
+    "SDL_GameControllerRumble=xbox_controller_rumble")
+
+# pc_settings_menu.c is replaced by xbox/src/xbox_settings_menu.c (same API,
+# Xbox rows). pc_settings.c's load/save are wrapped by xbox/src/xbox_settings.c,
+# which adds the [Xbox] section of settings.ini.
+set_property(SOURCE "${PC_DIR}/src/pc_settings.c" APPEND PROPERTY COMPILE_DEFINITIONS
+    "pc_settings_load=pc_settings_load_pc"
+    "pc_settings_save=pc_settings_save_pc")
+
+# Title screen Start / Options / Quit menu (upstream's, in ac_animal_logo.c
+# under PC_ENHANCEMENTS). Only that file gets the define: elsewhere it changes
+# gameplay. Kill switch -DXBOX_TITLE_MENU=OFF (plain "Press Start" again).
+option(XBOX_TITLE_MENU "title screen Options menu" ON)
+if(XBOX_TITLE_MENU)
+    set_property(SOURCE "${DECOMP_ROOT}/src/actor/ac_animal_logo.c" APPEND PROPERTY COMPILE_DEFINITIONS PC_ENHANCEMENTS)
+endif()
+
+# Widescreen / 720p: upstream's hor+ aspect correction, viewport scaling and
+# full-res EFB copies (pc_gx.c, pc_gx_texture.c) and the matching wider culling
+# (m_actor.c, emu64.c) are under PC_ENHANCEMENTS; only these files get it.
+# With a 640x480 logical screen they behave as before except that EFB copies
+# stay GL textures instead of RGB565 in game memory. Kill switch
+# -DXBOX_WIDESCREEN=OFF.
+option(XBOX_WIDESCREEN "16:9 and 720p support" ON)
+if(XBOX_WIDESCREEN)
+    set_property(SOURCE
+        "${PC_DIR}/src/pc_gx.c" "${PC_DIR}/src/pc_gx_texture.c"
+        "${DECOMP_ROOT}/src/game/m_actor.c" "${DECOMP_ROOT}/src/static/libforest/emu64/emu64.c"
+        APPEND PROPERTY COMPILE_DEFINITIONS PC_ENHANCEMENTS)
+    add_compile_definitions(XBOX_WIDESCREEN=1)
+else()
+    add_compile_definitions(XBOX_WIDESCREEN=0)
+endif()
 
 # Debug: scripted pad input from PADRead call N on (xbox/src/xbox_autopad.c).
 set(XBOX_AUTOPAD "" CACHE STRING "debug: inject START/A presses from this PADRead call on")
 if(XBOX_AUTOPAD)
     set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS "PADRead=xbox_pad_read_real")
-    set_property(SOURCE "${XBOX_DIR}/src/xbox_autopad.c" APPEND PROPERTY COMPILE_DEFINITIONS "XBOX_DBG_AUTOPAD=${XBOX_AUTOPAD}")
+    if(XBOX_AUTOPAD STREQUAL "script")   # plays D:\autopad.txt
+        set_property(SOURCE "${XBOX_DIR}/src/xbox_autopad.c" APPEND PROPERTY COMPILE_DEFINITIONS
+            "XBOX_DBG_AUTOPAD=1" XBOX_DBG_AUTOPAD_SCRIPT)
+    else()
+        set_property(SOURCE "${XBOX_DIR}/src/xbox_autopad.c" APPEND PROPERTY COMPILE_DEFINITIONS "XBOX_DBG_AUTOPAD=${XBOX_AUTOPAD}")
+    endif()
 endif()
 
 file(GLOB XBOX_SOURCES CONFIGURE_DEPENDS "${XBOX_DIR}/src/*.c" "${XBOX_DIR}/src/*.cpp")

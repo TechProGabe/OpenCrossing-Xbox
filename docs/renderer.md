@@ -43,6 +43,36 @@ RGBA8 from `pc_gx_texture.c` → A8R8G8B8 **swizzled**, NPOT padded to POT by
 edge replication, texcoords rescaled in the vertex program. 8 MB contiguous
 pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
 
+## Frame pacing: CPU/GPU overlap
+
+Off by default until measured on hardware: `gpu_overlap = 1` in the `[Xbox]`
+section of `settings.ini` turns it on (read once at GPU init). Then
+`xbox_nv2a_present` kicks the pushbuffer and queues the flip without waiting
+for the GPU. The next frame's game logic (`game_main`, before emu64 issues
+any GL call) runs while the GPU still draws; the first GL call of the next
+frame lands in `frame_open`, which drains the GPU, frees last frame's
+textures and restarts the pushbuffer and vertex ring at their heads. That drain is
+timed and counted as `gpu` in `[HITCH]` and `perf.log`, so the cpu figure
+stays the CPU's own work. `-DXBOX_GPU_OVERLAP=0` compiles it out.
+
+## Screen size, widescreen, 720p
+
+The framebuffer is 640x480x32, or 1280x720x16 when the boot runs at 720p
+(`video_select`: setting on, dashboard allows it on the AV pack, and at least
+`XBOX_720P_MIN_FREE_KB` free). pc_gx.c's logical screen is `g_pc_window_w` x
+`g_pc_window_h` (640x480 or 854x480). `gl_viewport` / `gl_scissor` scale
+logical rectangles to framebuffer pixels (edges rounded, so abutting
+rectangles stay abutting), `gl_read_pixels` samples the framebuffer pixel
+under each logical pixel (EFB copies stay at logical size, so a 720p screen
+grab is not a 2048-wide texture), and at 16-bit the clear value is packed to
+R5G6B5 and dithering is on. 720p pairs R5G6B5 with a Z16 depth buffer (NV2x
+wants colour and depth of the same width; pbkit's depth format is made
+settable by `patch_pbkit.py`), cleared by the shim itself, since pbkit's
+Z24S8 clear value would leave Z16 at 0.996. At 720p the texture pool is 5 MB
+(`XBOX_TEX_POOL_720P_BYTES`). If 720p can't start (pb_init or the pool/ring
+allocations fail), init falls back to 480. The texture-pool recovery also
+drops pc_gx.c's full-res EFB captures (up to 4, 2 MB each for a screen grab).
+
 ## Register values that bit us (see traps.md)
 
 - `TEXTURE_FORMAT` bit 3 = 1 (border from colour).
@@ -64,9 +94,15 @@ pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
 | `XBOX_DBG_CRASH_FRAME=N` | fault on purpose at frame N (tests `xbox_crash.c`) |
 | `XBOX_DBG_NES_TEST=N` | draw RGB565 colour bars through the NES screen path from frame N (120 frames) |
 
+| `-DXBOX_AUTOPAD=script` (CMake var) | plays `D:\autopad.txt`: timed pad buttons, SDL controller events (pause menu, rebinding), one-shot screenshots, log marks, `@480`/`@720` lines (`xbox_autopad.c` header) |
+
 Kill switches (default on): `XBOX_PB_GUARD=0` (no mid-frame pushbuffer
 restart), `XBOX_VC_DELTA=0` (upload all 41 vertex-constant rows per draw
-instead of the changed ones), `XBOX_CRASH_GUARD=0`, `XBOX_LASTLOG_SECS=0`.
+instead of the changed ones), `XBOX_CRASH_GUARD=0`, `XBOX_LASTLOG_SECS=0`,
+`XBOX_GPU_OVERLAP=0` (C flag; the overlap is also off at runtime unless
+`gpu_overlap = 1`), and the CMake options `-DXBOX_WIDESCREEN=OFF`
+(no 16:9 / 720p, pc_gx.c etc. without `PC_ENHANCEMENTS`) and
+`-DXBOX_TITLE_MENU=OFF` (plain "Press Start").
 
 ## The NES screen
 

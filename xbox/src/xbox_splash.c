@@ -143,6 +143,14 @@ void xbox_splash_show(void) {
 #endif
 }
 
+/* The GPU backend is about to change the video mode (720p): XVideoSetMode
+ * frees this framebuffer. Forget it, so progress draws nothing and an error
+ * screen sets up its own 640x480 mode again. */
+void xbox_splash_release(void) {
+    s_ready = 0;
+    s_fb = NULL;
+}
+
 void xbox_splash_progress(float f) {
 #ifndef XBOX_NO_SPLASH
     int x, y, fill;
