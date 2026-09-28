@@ -27,6 +27,8 @@ void xbox_log_write(const char* s, size_t n);
 void xbox_log_exclusive(int on);
 /* last <cap-1> bytes logged (for the on-screen hang report) */
 size_t xbox_log_tail(char* out, size_t cap);
+/* bytes logged so far (changes whenever anything is logged) */
+unsigned xbox_log_pos(void);
 /* mirror the log to XBOX_UDATA_DIR "boot.log" (hardware has no COM1) */
 void xbox_bootlog_open(void);
 void xbox_bootlog_close(void);

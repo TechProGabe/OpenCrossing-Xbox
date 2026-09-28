@@ -703,10 +703,18 @@ static int s_rc_valid;
 static uint32_t s_rc_consts[XRC_MAX_STAGES][2], s_rc_fconsts[2];
 static uint32_t s_draws, s_approx_draws, s_frame;
 
-typedef struct { XTevCfg cfg; XRcProg prog; } RcEntry;
+typedef struct { uint32_t hash; XTevCfg cfg; XRcProg prog; } RcEntry;
 #define RC_CACHE 256
 static RcEntry s_rc_cache[RC_CACHE];
-static int s_rc_count;
+static int s_rc_count, s_rc_last = -1;
+
+static uint32_t cfg_hash(const XTevCfg* c) {
+    const uint32_t* w = (const uint32_t*)c;
+    uint32_t h = 2166136261u;
+    size_t i;
+    for (i = 0; i < sizeof *c / 4; i++) h = (h ^ w[i]) * 16777619u;
+    return h;
+}
 
 static float kfrac(int sel) { return (float)(8 - sel) / 8.0f; }
 
@@ -749,11 +757,22 @@ static uint32_t pack_const(uint16_t rgb_ref, uint16_t a_ref) {
     return ((uint32_t)f2b(a) << 24) | ((uint32_t)f2b(rgb[0]) << 16) | ((uint32_t)f2b(rgb[1]) << 8) | f2b(rgb[2]);
 }
 
+/* consecutive draws usually share a TEV config: check the last hit first,
+ * then the hashes (a full compare only on a hash match) */
 static const XRcProg* rc_lookup(const XTevCfg* cfg) {
     int k;
+    uint32_t h = cfg_hash(cfg);
+    if (s_rc_last >= 0 && s_rc_cache[s_rc_last].hash == h &&
+        memcmp(&s_rc_cache[s_rc_last].cfg, cfg, sizeof *cfg) == 0)
+        return &s_rc_cache[s_rc_last].prog;
     for (k = 0; k < s_rc_count; k++)
-        if (memcmp(&s_rc_cache[k].cfg, cfg, sizeof *cfg) == 0) return &s_rc_cache[k].prog;
+        if (s_rc_cache[k].hash == h && memcmp(&s_rc_cache[k].cfg, cfg, sizeof *cfg) == 0) {
+            s_rc_last = k;
+            return &s_rc_cache[k].prog;
+        }
     k = s_rc_count < RC_CACHE ? s_rc_count++ : (int)(s_draws % RC_CACHE);
+    s_rc_last = k;
+    s_rc_cache[k].hash = h;
     s_rc_cache[k].cfg = *cfg;
     xbox_tev_compile(cfg, &s_rc_cache[k].prog);
 #ifdef XBOX_DBG_RC_TEX

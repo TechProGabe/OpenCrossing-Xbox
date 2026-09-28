@@ -127,7 +127,9 @@ void pc_platform_swap_buffers(void) {
     /* test the exception reporter (xbox_crash.c) */
     if (s_frames == XBOX_DBG_CRASH_FRAME) *(volatile int*)4 = 1;
 #endif
-    if ((s_frames % 60) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
+    /* a heartbeat for the logs: once a second while boot.log is open, then
+     * every 10 s (each line makes the watchdog rewrite last.log) */
+    if ((s_frames % (s_frames <= 120 ? 60u : 600u)) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
     /* boot.log is for hangs before the game runs (later ones: hang.log); its
      * per-line HDD flushes cost ~45 ms each on hardware, so stop early */
     if (s_frames == 120) {

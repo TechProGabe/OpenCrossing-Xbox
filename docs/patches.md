@@ -44,6 +44,7 @@ flyngmt/ACGC-PC-Port.
 | `pc/src/pc_gx_texture.c` | `tex_cache_insert` drops older entries for the same large (≥128×128) buffer | every inventory open grabs the screen into one reused buffer; old versions stayed cached (eviction only at 2048 entries) and filled the Xbox's 8 MB texture pool, so the menu background went white |
 | `pc/src/pc_disc.c` | `pc_disc_read` takes an SDL mutex | fseek+fread pair on one `FILE*` raced between DVD, audio and game threads |
 | `pc/include/pc_gx_internal.h` | `PC_GX_MAX_VERTS` is `#ifndef`-guarded | the Xbox build passes 16384 (vertex batch 6 MB → 1.5 MB) |
+| `pc/src/pc_gx_texture.c` | logs a decode buffer that couldn't be allocated (`#ifdef TARGET_XBOX`) | the texture is drawn white then; the log says why |
 | `pc/src/pc_gx_texture.c` | `pc_gx_load_tex_obj_impl` checks the image pointer (`#ifdef TARGET_XBOX`, `xbox_tex_ptr_ok`) | a texture pointer into unmapped memory faults the console; it is drawn without the image and logged instead (belt and braces behind the `seg2k0` fix) |
 
 `pc/src/pc_pad.c` is compiled with `SDL_GameControllerGetAxis` renamed to

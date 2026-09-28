@@ -817,6 +817,11 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
             free(rgba);
         } else {
             u8 white[4] = {255, 255, 255, 255};
+#ifdef TARGET_XBOX
+            /* XBOX: out of heap for the decode buffer (1.2 MB for the 640x480
+             * inventory background): say so, it shows up as a white texture */
+            printf("[TEX] no memory to decode %dx%d (fmt %u): drawn white\n", width, height, (unsigned)format);
+#endif
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
         }
     } else {

@@ -48,7 +48,7 @@ game writes logs to `E:\UDATA\4f430001\`:
 | file | written |
 |---|---|
 | `boot.log` | every log line until frame 120, flushed per line |
-| `last.log` | rewritten every 3 s by the watchdog: the last 4 KB of log plus a `[STATE]` line (renderer, pushbuffer, texture pool, GPU faults). After a hard freeze it holds the seconds before it |
+| `last.log` | rewritten by the watchdog within 3 s of anything being logged (and every 30 s): the last 4 KB of log plus a `[STATE]` line (renderer, pushbuffer, texture pool, GPU faults). After a hard freeze it holds the seconds before it |
 | `crash.log` | written when a CPU exception (page fault, ...) hits a game thread: fault address, registers, `[STATE]`, stack words; the same report is drawn on screen |
 | `perf.log` | once a minute: fps, CPU ms, frames over 33 / 100 ms, pushbuffer peak, texture pool use, free RAM, GPU faults |
 | `hang.log` | by the watchdog when frames stop for 6 s (or none in 90 s after boot): log tail + every thread's stack words; the same report is drawn on screen |

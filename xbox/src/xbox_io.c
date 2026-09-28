@@ -91,6 +91,8 @@ static void tail_write(const char* s, size_t n) {
     s_tail_pos += (unsigned)n;
 }
 
+unsigned xbox_log_pos(void) { return s_tail_pos; }
+
 size_t xbox_log_tail(char* out, size_t cap) {
     unsigned end = s_tail_pos, len = end < TAIL_SIZE ? end : TAIL_SIZE, i;
     if (len > cap - 1) len = (unsigned)cap - 1;

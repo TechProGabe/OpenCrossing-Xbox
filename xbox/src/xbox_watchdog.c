@@ -28,10 +28,11 @@
 #ifndef XBOX_WATCHDOG_BOOT_SECS
 #define XBOX_WATCHDOG_BOOT_SECS 90   /* CD-R boots read ~27 MB at drive speed */
 #endif
-/* last.log: every XBOX_LASTLOG_SECS the watchdog rewrites
- * E:\UDATA\4f430001\last.log with the log tail and a [STATE] line, flushed,
- * so a hard freeze or power-off still leaves the seconds before it on disk
- * (boot.log stops at frame 120). 0 disables. */
+/* last.log: every XBOX_LASTLOG_SECS in which something was logged (and every
+ * 30 s regardless) the watchdog rewrites E:\UDATA\4f430001\last.log with the
+ * log tail and a [STATE] line, flushed, so a hard freeze or power-off still
+ * leaves the seconds before it on disk (boot.log stops at frame 120). Quiet
+ * stretches don't touch the disk. 0 disables. */
 #ifndef XBOX_LASTLOG_SECS
 #define XBOX_LASTLOG_SECS 3
 #endif
@@ -202,7 +203,14 @@ static int watchdog_body(void* arg) {
         secs++;
         if (s_disabled) continue;
         f = xbox_frame_count();
-        if (XBOX_LASTLOG_SECS && f && secs % XBOX_LASTLOG_SECS == 0) write_last_log();
+        if (XBOX_LASTLOG_SECS && f && secs % XBOX_LASTLOG_SECS == 0) {
+            static unsigned logged_at;
+            unsigned pos = xbox_log_pos();
+            if (pos != logged_at || secs % 30 == 0) {
+                logged_at = pos;
+                write_last_log();
+            }
+        }
         if (f == 0) {
             if (secs >= XBOX_WATCHDOG_BOOT_SECS && !fired) {
                 dump_all("no first frame after boot");
