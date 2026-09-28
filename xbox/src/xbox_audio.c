@@ -68,10 +68,14 @@ static int pc_audio_producer_func(void* data) {
     return 0;
 }
 
+/* thread bodies run under the exception reporter (xbox_crash.c) */
+int xbox_crash_guard(int (*fn)(void*), void* arg);
+static int producer_entry(void* d) { return xbox_crash_guard(pc_audio_producer_func, d); }
+
 void pc_audio_start_producer_thread(void) {
     if (audio_producer_thread) return;
     ASET(audio_thread_running, 1);
-    audio_producer_thread = SDL_CreateThread(pc_audio_producer_func, "AudioProducer", NULL);
+    audio_producer_thread = SDL_CreateThread(producer_entry, "AudioProducer", NULL);
     if (audio_producer_thread) {
         printf("[AUDIO] Producer thread started\n");
     } else {
@@ -343,6 +347,8 @@ static int pump_func(void* data) {
     return 0;
 }
 
+static int pump_entry(void* d) { return xbox_crash_guard(pump_func, d); }
+
 /* --- AI (Audio Interface) --- */
 
 /* xemu or a real Xbox? CPUID, NOT the AC97 codec (codec register access over
@@ -383,7 +389,7 @@ void AIInit(u8* stack) {
     printf("[AUDIO] init: output\n");
     s_apu = XBOX_AUDIO_APU && xemu && apu_init();
     ASET(s_pump_run, 1);
-    s_pump_thread = SDL_CreateThread(pump_func, "AudioPump", NULL);
+    s_pump_thread = SDL_CreateThread(pump_entry, "AudioPump", NULL);
     printf("[AUDIO] init: start\n");
     if (!s_apu) aci_run(1);
     audio_device = 1;

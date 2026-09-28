@@ -48,12 +48,15 @@ game writes logs to `E:\UDATA\4f430001\`:
 | file | written |
 |---|---|
 | `boot.log` | every log line until frame 120, flushed per line |
-| `perf.log` | once a minute: fps, CPU ms, frames over 33 / 100 ms |
+| `last.log` | rewritten every 3 s by the watchdog: the last 4 KB of log plus a `[STATE]` line (renderer, pushbuffer, texture pool, GPU faults). After a hard freeze it holds the seconds before it |
+| `crash.log` | written when a CPU exception (page fault, ...) hits a game thread: fault address, registers, `[STATE]`, stack words; the same report is drawn on screen |
+| `perf.log` | once a minute: fps, CPU ms, frames over 33 / 100 ms, pushbuffer peak, texture pool use, free RAM, GPU faults |
 | `hang.log` | by the watchdog when frames stop for 6 s (or none in 90 s after boot): log tail + every thread's stack words; the same report is drawn on screen |
 | `input.log` | left-stick swings over 120° in one frame |
 | `stickN.log` | last 10 s of stick readings, written when L3 is clicked |
 
-Symbolize stack words with `tools/xbox/sym.py [map] < hang.log`. The map must
+Symbolize stack words with `tools/xbox/sym.py [map] < hang.log` (or
+`crash.log`). The map must
 come from the same build: `build-xbox/ac_xbox.map`, or the `ac_xbox.map`
 attached to each GitHub release.
 

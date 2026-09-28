@@ -28,6 +28,13 @@
 #ifndef XBOX_WATCHDOG_BOOT_SECS
 #define XBOX_WATCHDOG_BOOT_SECS 90   /* CD-R boots read ~27 MB at drive speed */
 #endif
+/* last.log: every XBOX_LASTLOG_SECS the watchdog rewrites
+ * E:\UDATA\4f430001\last.log with the log tail and a [STATE] line, flushed,
+ * so a hard freeze or power-off still leaves the seconds before it on disk
+ * (boot.log stops at frame 120). 0 disables. */
+#ifndef XBOX_LASTLOG_SECS
+#define XBOX_LASTLOG_SECS 3
+#endif
 
 extern unsigned int pc_image_base, pc_image_end;
 unsigned int xbox_frame_count(void);
@@ -117,6 +124,11 @@ static void dump_all(const char* why) {
 
     s_rlen = 0;
     rep("[WDOG] %s (frame %u), %d threads\n", why, xbox_frame_count(), n);
+    {
+        char st[320];
+        xbox_nv2a_state(st, sizeof st);
+        rep("%s[WDOG] free %u KB\n", st, xbox_mem_free_kb());
+    }
     for (i = 0; i < n; i++) {
         const Snap* o = &s_snap[i];
         rep("[WDOG] thread %p%s state %u wait %u prio %d\n[WDOG]  ", (void*)o->t, o->self ? " (watchdog)" : "",
@@ -158,10 +170,30 @@ static void dump_all(const char* why) {
 
 static volatile int s_disabled;
 
+static void write_last_log(void) {
+    static HANDLE h = INVALID_HANDLE_VALUE;
+    static char buf[4096 + 512];
+    size_t n;
+    DWORD w;
+    if (!XBOX_LASTLOG_SECS) return;
+    if (h == INVALID_HANDLE_VALUE) {
+        h = CreateFileA(XBOX_UDATA_DIR "last.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
+                        FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h == INVALID_HANDLE_VALUE) return;
+    }
+    n = xbox_log_tail(buf, 4096);
+    n += (size_t)xbox_nv2a_state(buf + n, (int)(sizeof buf - n));
+    if (n > sizeof buf - 1) n = sizeof buf - 1;
+    SetFilePointer(h, 0, NULL, FILE_BEGIN);
+    WriteFile(h, buf, (DWORD)n, &w, NULL);
+    SetEndOfFile(h);
+    xbox_flush_file(h);
+}
+
 /* the fatal error card owns the screen for good */
 void xbox_watchdog_disable(void) { s_disabled = 1; }
 
-static DWORD WINAPI watchdog(LPVOID arg) {
+static int watchdog_body(void* arg) {
     unsigned last = 0, still = 0, secs = 0, fired = 0;
     (void)arg;
     for (;;) {
@@ -170,6 +202,7 @@ static DWORD WINAPI watchdog(LPVOID arg) {
         secs++;
         if (s_disabled) continue;
         f = xbox_frame_count();
+        if (XBOX_LASTLOG_SECS && f && secs % XBOX_LASTLOG_SECS == 0) write_last_log();
         if (f == 0) {
             if (secs >= XBOX_WATCHDOG_BOOT_SECS && !fired) {
                 dump_all("no first frame after boot");
@@ -191,10 +224,14 @@ static DWORD WINAPI watchdog(LPVOID arg) {
     return 0;
 }
 
+static DWORD WINAPI watchdog(LPVOID arg) {
+    return (DWORD)xbox_crash_guard(watchdog_body, arg);
+}
+
 void xbox_watchdog_start(void) {
     HANDLE h;
     if (!XBOX_WATCHDOG) return;
-    h = CreateThread(NULL, 16 * 1024, watchdog, NULL, 0, NULL);
+    h = CreateThread(NULL, 32 * 1024, watchdog, NULL, 0, NULL);
     if (h) {
         SetThreadPriority(h, THREAD_PRIORITY_TIME_CRITICAL);
         CloseHandle(h);

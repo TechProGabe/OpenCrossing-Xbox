@@ -55,7 +55,8 @@ pointers with the shim, so `pc/` needs no Xbox branches. Only `pc_gx_tev.c`
 | `xbox_aram.c` | sparse ARAM with disc-backed regions (`memory.md`) |
 | `xbox_audio.c` | own polled AC97 driver on hardware, APU voice under xemu |
 | `xbox_pad_axis.c` | left-stick shaping for worn controllers, stick trace |
-| `xbox_watchdog.c` | hang reporter (screen + `hang.log`) |
+| `xbox_watchdog.c` | hang reporter (screen + `hang.log`), rolling `last.log` |
+| `xbox_crash.c` | CPU exception reporter (screen + `crash.log`) |
 | `xbox_mem.c` | word-at-a-time `mem*` (pdclib's are byte loops) |
 
 ## Files on the console
@@ -66,7 +67,8 @@ or from a disc. `xbox_main.c` scans it for the first `.iso`, `.gcm` or
 
 Everything written goes to `E:\UDATA\4f430001\` in every launch mode (a disc
 is read-only): `settings.ini`, `keybindings.ini`, `save/card_a/*.gci` and
-the logs (`boot.log`, `hang.log`, `perf.log`, `input.log`, `stickN.log`).
+the logs (`boot.log`, `last.log`, `crash.log`, `hang.log`, `perf.log`,
+`input.log`, `stickN.log`).
 Saves use the GameCube `.gci` format, so they move between this port,
 Dolphin, the PC port and the other OpenCrossing ports.
 

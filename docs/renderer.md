@@ -17,6 +17,7 @@ pointers with the shim, so `pc/` has no Xbox branches. Only `pc_gx_tev.c`
 | `xbox/shaders/gx.vsh` | the one vertex program (NV2A asm → `gx_vsh.inl` via `tools/xbox/build_shaders.sh`) |
 | `xbox/src/xbox_tev_rc.c` | TEV config → register-combiner program (cached per config) |
 | `xbox/include/xbox_nv2a.h` | shared types, constant-reference tags |
+| `tools/xbox/patch_pbkit.py` | builds nxdk's pbkit with GPU errors recorded instead of halting the console |
 
 ## Vertex program (`gx.vsh`)
 
@@ -59,6 +60,12 @@ pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
 | `XBOX_DBG_NOFOG` / `XBOX_DBG_NOCULL` | force fog / culling off |
 | `-DXBOX_AUTOPAD=N` (CMake var, not a C flag) | scripted START/A presses from PADRead call N (`xbox_autopad.c`) |
 | `XBOX_DBG_AUDIO` | audio DMA/APU cursor + peak every 2 s |
+| `XBOX_DBG_WEATHER=N` | force the weather (1 rain, 2 snow) |
+| `XBOX_DBG_CRASH_FRAME=N` | fault on purpose at frame N (tests `xbox_crash.c`) |
+
+Kill switches (default on): `XBOX_PB_GUARD=0` (no mid-frame pushbuffer
+restart), `XBOX_VC_DELTA=0` (upload all 41 vertex-constant rows per draw
+instead of the changed ones), `XBOX_CRASH_GUARD=0`, `XBOX_LASTLOG_SECS=0`.
 
 ## Not yet
 

@@ -31,6 +31,12 @@ size_t xbox_log_tail(char* out, size_t cap);
 void xbox_bootlog_open(void);
 void xbox_bootlog_close(void);
 void xbox_mem_log(const char* where);
+unsigned xbox_mem_free_kb(void);
+/* xbox_crash.c: CPU exceptions -> crash.log + on-screen report. Call
+ * xbox_crash_guard(fn, arg) as a thread body wrapper; main() uses it too. */
+int  xbox_crash_guard(int (*fn)(void*), void* arg);
+/* one "[STATE] ..." line of renderer health (xbox_nv2a.c) */
+int  xbox_nv2a_state(char* buf, int cap);
 /* xbox_watchdog.c: dump every thread's stack to COM1 if frames stop */
 void xbox_watchdog_start(void);
 void xbox_watchdog_disable(void);

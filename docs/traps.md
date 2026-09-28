@@ -99,5 +99,23 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   wait for vblank until PCRTC_START moves off `pb_back_buffer()`.
 - **Python `bytearray[a:b] = b""` deletes.** It broke the first XBE icon patch
   (every section offset shifted; kernel refused the XBE silently).
+- **`u8` texture arrays can sit at odd addresses.** clang's MS-ABI target
+  gives a `u8[]` alignment 1 (GCC on Linux pads big arrays to 32), so a
+  texture like `obj_s_douzou_b3_tex_pic_i4` lands at `…469`. The runtime GBI
+  macros turn odd pointers into tokens (`pc_gbi_runtime.c`, `0x02F00000 +
+  2n`); anything that stores one must unpack it (`seg2k0` didn't for segment
+  bases: whole-console crash when the station statues were drawn).
+- **Freed memory is gone on the Xbox.** A PC keeps freed/unused heap pages
+  readable; the Xbox kernel decommits them, so a stale or bogus pointer that
+  "worked" on PC is a page fault here, and every thread runs in kernel mode:
+  unhandled, that is a bugcheck (frozen or rebooting console, no logs).
+  `xbox_crash.c` catches it first.
+- **pbkit halts the machine on a GPU error.** Its DPC switched to the debug
+  screen and looped on `Sleep()` at DISPATCH_LEVEL, and several interrupt-time
+  waits spin unbounded. We build pbkit from source through
+  `tools/xbox/patch_pbkit.py` (record + acknowledge, bounded waits).
+- **pbkit's pushbuffer has no overflow check** (release build): writing past
+  `pb_size` walks into the next contiguous allocation. `xbox_nv2a.c` restarts
+  at the head when a frame nears the end (`XBOX_PB_GUARD`).
 - **Worn Duke/S sticks rest 18–35% off centre and overshoot on release:** a
   12% per-axis deadzone reads that as walking. Measure with the L3 stick trace.

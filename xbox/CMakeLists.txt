@@ -3,6 +3,24 @@
 cmake_minimum_required(VERSION 3.16)
 project(ac_xbox C CXX)
 
+# pbkit from nxdk's source, patched so a GPU fault can't freeze the console
+# (tools/xbox/patch_pbkit.py). Defined before the tree-wide options below, so
+# it builds with nxdk's own flags (no prelude, nxdk's -O0).
+set(PBKIT_SRC $ENV{NXDK_DIR}/lib/pbkit)
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/pbkit/pbkit.c
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/pbkit
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/xbox/patch_pbkit.py
+            ${PBKIT_SRC}/pbkit.c ${CMAKE_BINARY_DIR}/pbkit/pbkit.c
+    DEPENDS ${PBKIT_SRC}/pbkit.c ${CMAKE_CURRENT_SOURCE_DIR}/../tools/xbox/patch_pbkit.py
+    COMMENT "patch pbkit.c")
+add_library(ocx_pbkit STATIC
+    ${CMAKE_BINARY_DIR}/pbkit/pbkit.c
+    ${PBKIT_SRC}/pbkit_gamma.c ${PBKIT_SRC}/pbkit_dma.c ${PBKIT_SRC}/pbkit_draw.c
+    ${PBKIT_SRC}/pbkit_print.c ${PBKIT_SRC}/pbkit_pushbuffer.c)
+target_include_directories(ocx_pbkit PRIVATE ${PBKIT_SRC})
+target_compile_options(ocx_pbkit PRIVATE -w)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_EXTENSIONS ON)
@@ -180,7 +198,7 @@ else()
     add_executable(ac_xbox ${ALL_SOURCES})
     target_link_libraries(ac_xbox
         $ENV{NXDK_DIR}/lib/libSDL2.lib
-        $ENV{NXDK_DIR}/lib/libpbkit.lib
+        ocx_pbkit
         $ENV{NXDK_DIR}/lib/libzlib.lib
         $ENV{NXDK_DIR}/lib/winmm.lib
         $ENV{NXDK_DIR}/lib/libnxdk_automount_d.lib)

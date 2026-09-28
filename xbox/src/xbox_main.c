@@ -102,6 +102,10 @@ void pc_platform_swap_buffers(void) {
     pc_gx_draw_pending();
     xbox_nv2a_present();
     s_frames++;
+#ifdef XBOX_DBG_CRASH_FRAME
+    /* test the exception reporter (xbox_crash.c) */
+    if (s_frames == XBOX_DBG_CRASH_FRAME) *(volatile int*)4 = 1;
+#endif
     if ((s_frames % 60) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
     /* boot.log is for hangs before the game runs (later ones: hang.log); its
      * per-line HDD flushes cost ~45 ms each on hardware, so stop early */
@@ -221,8 +225,16 @@ static void fatal_no_assets(void) {
     xbox_splash_error("Could not read game data", lines);
 }
 
+static int main_body(void* arg);
+
+/* the whole game runs under the exception reporter (xbox_crash.c) */
 int main(void) {
+    return xbox_crash_guard(main_body, NULL);
+}
+
+static int main_body(void* arg) {
     char disc_name[260];
+    (void)arg;
 
     xbox_logf("\n[XBOX] OpenCrossing-Xbox boot\n");
 
@@ -245,6 +257,10 @@ int main(void) {
 
     pc_settings_load();
     pc_keybindings_load();
+#ifdef XBOX_DBG_WEATHER
+    /* test runs: force the weather (1 rain, 2 snow...; mEnv_WEATHER_*) */
+    g_pc_weather_override = XBOX_DBG_WEATHER;
+#endif
 
     /* Assets BEFORE the GPU backend: pc_assets_init() holds the compressed
      * (6 MB) and decompressed (15.6 MB) REL at once, then frees both. The

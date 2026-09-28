@@ -229,6 +229,36 @@ void xbox_mem_log(const char* where) {
                   (unsigned)(st.PoolPagesCommitted * 4));
 }
 
+unsigned xbox_mem_free_kb(void) {
+    MM_STATISTICS st;
+    memset(&st, 0, sizeof st);
+    st.Length = sizeof st;
+    return MmQueryStatistics(&st) >= 0 ? (unsigned)(st.AvailablePages * 4) : 0;
+}
+
+/* Is every page of [p, p + size) mapped? Heap memory the game has freed is
+ * decommitted on the Xbox, where a PC keeps it readable. */
+int xbox_ptr_readable(const void* p, unsigned size) {
+    uintptr_t a = (uintptr_t)p, end;
+    if (!p) return 0;
+    if (!size) size = 1;
+    end = a + size - 1;
+    if (end < a) return 0;
+    for (a &= ~(uintptr_t)4095; a <= end; a += 4096)
+        if (!MmIsAddressValid((PVOID)a)) return 0;
+    return 1;
+}
+
+int xbox_tex_ptr_ok(const void* p, int w, int h, int bpp, unsigned fmt) {
+    static unsigned logged;
+    unsigned size = (unsigned)(w > 0 ? w : 1) * (unsigned)(h > 0 ? h : 1) * (unsigned)bpp / 8;
+    if (xbox_ptr_readable(p, size)) return 1;
+    if (logged++ < 16)
+        xbox_logf("[TEX] texture image at %p (%dx%d fmt %u, %u bytes) is not mapped: drawn without it\n", p, w, h,
+                  fmt, size);
+    return 0;
+}
+
 /* ---- paths ---- */
 static int is_absolute(const char* p) {
     return p[0] && p[1] == ':';

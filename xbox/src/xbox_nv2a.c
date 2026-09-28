@@ -176,26 +176,47 @@ static void pool_init(void) {
     s_blocks->free = 1;
 }
 
+/* Small textures are taken first-fit from the bottom of the pool, big ones
+ * (the 640x480 screen grab pads to 2 MB) last-fit from the top, so the town's
+ * hundreds of small textures can't chop up the space a big one needs. A failed
+ * big allocation used to leave the inventory background white. */
+#define POOL_BIG (256 * 1024)
+
 static void* pool_alloc(uint32_t size) {
-    Blk* b;
+    Blk *b, *pick = NULL;
     size = (size + POOL_ALIGN - 1) & ~(uint32_t)(POOL_ALIGN - 1);
     for (b = s_blocks; b; b = b->next) {
         if (!b->free || b->size < size) continue;
-        if (b->size > size) {
-            Blk* n = (Blk*)calloc(1, sizeof(Blk));
+        pick = b;
+        if (size < POOL_BIG) break;   /* first fit; big ones keep the last fit */
+    }
+    if (!pick) return NULL;
+    b = pick;
+    if (b->size > size) {
+        Blk* n = (Blk*)calloc(1, sizeof(Blk));
+        if (!n) return NULL;
+        n->free = 1;
+        n->next = b->next;
+        b->next = n;
+        if (size < POOL_BIG) {
             n->off = b->off + size;
             n->size = b->size - size;
-            n->free = 1;
-            n->next = b->next;
-            b->next = n;
             b->size = size;
+        } else {
+            /* take the top of the hole: the free remainder stays below */
+            n->off = b->off + b->size - size;
+            n->size = size;
+            b->size -= size;
+            n->free = 0;
+            s_pool_used += size;
+            if (s_pool_used > s_pool_peak) s_pool_peak = s_pool_used;
+            return s_pool + n->off;
         }
-        b->free = 0;
-        s_pool_used += size;
-        if (s_pool_used > s_pool_peak) s_pool_peak = s_pool_used;
-        return s_pool + b->off;
     }
-    return NULL;
+    b->free = 0;
+    s_pool_used += size;
+    if (s_pool_used > s_pool_peak) s_pool_peak = s_pool_used;
+    return s_pool + b->off;
 }
 
 static void pool_free(void* p) {
@@ -299,8 +320,72 @@ static void pb_close(void) {
     PB_END();
     s_pb_open = 0;
 }
-static inline void put1(uint32_t m, uint32_t v) { P = pb_push1(P, m, v); }
-static inline void putf(uint32_t m, float v) { P = pb_push1(P, m, SETF(v)); }
+/* pb_push1 inlined (subchannel 0 = 3D, one parameter): it is called a few
+ * hundred thousand times a frame's worth of state and was an out-of-line call
+ * into pbkit for every word pair */
+static inline void put1(uint32_t m, uint32_t v) { P[0] = (1u << 18) | m; P[1] = v; P += 2; }
+static inline void putf(uint32_t m, float v) { put1(m, SETF(v)); }
+
+/* ---- pushbuffer budget ----
+ * pbkit's pushbuffer (pb_size, 1 MB) has no overflow check: a frame that
+ * pushes more than that writes past the end of it into whatever contiguous
+ * memory follows and feeds the GPU garbage. Every frame restarts at the head
+ * (frame_open), and a frame that gets within XBOX_PB_GUARD bytes of the end
+ * drains the GPU and restarts at the head mid-frame. Kill switch:
+ * -DXBOX_PB_GUARD=0. */
+#define PB_BYTES (1024 * 1024)
+#ifndef XBOX_PB_GUARD
+#define XBOX_PB_GUARD (PB_BYTES - 128 * 1024)
+#endif
+static uint32_t* s_pb_base;          /* pb_Put right after the last pb_reset */
+static uint32_t s_pb_peak;           /* most bytes pushed between two resets, this minute */
+static uint32_t s_pb_rewinds;
+
+/* pbkit's pb_begin() only returns pb_Put when DBG is off (it is) */
+static uint32_t pb_used(void) {
+    const uint32_t* p = s_pb_open ? P : pb_begin();
+    return (uint32_t)((const uint8_t*)p - (const uint8_t*)s_pb_base);
+}
+
+static void pb_budget(void);
+
+static void pb_note_peak(void) {
+    uint32_t u = pb_used();
+    if (u > s_pb_peak) s_pb_peak = u;
+}
+
+/* ======================================================================
+ * GPU faults (tools/xbox/patch_pbkit.py)
+ * ====================================================================== */
+/* Called by the patched pbkit from its DPC: PGRAPH errors (kind 1), DMA
+ * pusher errors (2), a DPC that didn't drain in 64 rounds (3), and interrupt-
+ * time register waits that timed out (10-14). Only records; xbox_nv2a_present
+ * logs at passive level. Sixteen storms without a frame presented in between
+ * leave the GPU interrupt masked, so threads (and the watchdog) run again. */
+volatile int ocx_pb_irq_off;
+static volatile uint32_t s_gf_count, s_gf_storms, s_gf_last[5];
+static uint32_t s_gf_logged;
+
+void ocx_pb_gpu_fault(unsigned kind, unsigned a, unsigned b, unsigned c, unsigned d) {
+    s_gf_last[0] = kind;
+    s_gf_last[1] = a;
+    s_gf_last[2] = b;
+    s_gf_last[3] = c;
+    s_gf_last[4] = d;
+    s_gf_count++;
+    if (kind == 3 && ++s_gf_storms >= 16) ocx_pb_irq_off = 1;
+}
+
+static void gpu_fault_log(uint32_t frame) {
+    uint32_t n = s_gf_count;
+    s_gf_storms = 0;
+    if (n == s_gf_logged) return;
+    if (s_gf_logged < 32 || (n >> 8) != (s_gf_logged >> 8))
+        xbox_logf("[NV2A] GPU fault x%u (frame %u): kind %u %08x %08x %08x %08x%s\n", n, frame,
+                  (unsigned)s_gf_last[0], (unsigned)s_gf_last[1], (unsigned)s_gf_last[2], (unsigned)s_gf_last[3],
+                  (unsigned)s_gf_last[4], ocx_pb_irq_off ? " (GPU interrupt masked)" : "");
+    s_gf_logged = n;
+}
 
 /* ======================================================================
  * Swizzle (Morton order for power-of-two images)
@@ -378,12 +463,11 @@ static void gl_gen_textures(GLsizei n, GLuint* ids) {
 static void wait_idle(void);
 /* The GPU may still read a texture this frame: free after the flip. If the
  * list is full, drain the GPU and free everything now rather than leak. */
+static void release_deferred(void);
 static void defer_free(void* p) {
     if (s_ndeferred >= (int)(sizeof s_deferred_free / sizeof s_deferred_free[0])) {
-        int i;
         wait_idle();
-        for (i = 0; i < s_ndeferred; i++) pool_free(s_deferred_free[i]);
-        s_ndeferred = 0;
+        release_deferred();
     }
     s_deferred_free[s_ndeferred++] = p;
 }
@@ -419,7 +503,36 @@ static void gl_tex_parameteri(GLenum target, GLenum pname, GLint v) {
     }
 }
 
-static uint32_t s_tex_fail;
+static uint32_t s_tex_fail, s_tex_recover;
+
+static void release_deferred(void) {
+    int i;
+    for (i = 0; i < s_ndeferred; i++) pool_free(s_deferred_free[i]);
+    s_ndeferred = 0;
+}
+
+/* A texture that doesn't fit is drawn untextured (white). Before that:
+ * 1. drain the GPU and release this frame's deferred frees (a menu's new
+ *    screen grab arrives in the same frame the old one is deleted);
+ * 2. drop the whole texture cache (pc_gx_texture.c re-decodes on next use:
+ *    one slow frame instead of a white one). */
+extern void pc_gx_texture_shutdown(void);   /* drops the cache and pc_gx's bindings */
+extern void pc_gx_texture_bind_cache_invalidate(void);
+static void* tex_alloc(uint32_t bytes, int w, int h) {
+    void* p = pool_alloc(bytes);
+    if (p) return p;
+    wait_idle();
+    release_deferred();
+    p = pool_alloc(bytes);
+    if (p) return p;
+    s_tex_recover++;
+    xbox_logf("[NV2A] texture pool full for %dx%d (%u KB used): dropping the texture cache\n", w, h,
+              s_pool_used / 1024);
+    pc_gx_texture_shutdown();
+    pc_gx_texture_bind_cache_invalidate();
+    release_deferred();
+    return pool_alloc(bytes);
+}
 
 static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
                          GLenum fmt, GLenum type, const void* data);
@@ -445,7 +558,7 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
     if (t->mem) { defer_free(t->mem); t->mem = NULL; }
     pw = pot(w);
     ph = pot(h);
-    dst = (uint32_t*)pool_alloc((uint32_t)(pw * ph * 4));
+    dst = (uint32_t*)tex_alloc((uint32_t)(pw * ph * 4), w, h);
     if (!dst) {
         if ((s_tex_fail++ & 255) == 0) xbox_logf("[NV2A] texture pool full (%u used), %dx%d dropped\n", s_pool_used, w, h);
         return;
@@ -522,6 +635,7 @@ static uint8_t f2b(float f) { return (uint8_t)(f <= 0.0f ? 0 : f >= 1.0f ? 255 :
 static void gl_clear(GLbitfield mask) {
     int x, y, w, h;
     frame_open();
+    pb_budget();
     s_n_clr++;
     s_n_clr_frame++;
     clear_rect(&x, &y, &w, &h);
@@ -844,20 +958,44 @@ static void build_vconsts(float vc[41][4], const float scale[3][2]) {
     }
 }
 
+/* Only the constant rows that changed are sent (usually just the modelview
+ * and normal rows: 24 words instead of 164 per draw). Runs of changed rows
+ * closer than 3 apart are merged into one load. Kill switch:
+ * -DXBOX_VC_DELTA=0 (always send all 41 rows). */
+#ifndef XBOX_VC_DELTA
+#define XBOX_VC_DELTA 1
+#endif
+static void push_vconst_rows(const uint32_t* w, int first, int nrows) {
+    int i, words = nrows * 4;
+    put1(NV097_SET_TRANSFORM_CONSTANT_LOAD, (uint32_t)(96 + first));
+    w += first * 4;
+    for (i = 0; i < words; i += 32) {
+        int n = words - i < 32 ? words - i : 32;
+        pb_push(P++, NV097_SET_TRANSFORM_CONSTANT, n);
+        memcpy(P, w + i, (size_t)n * 4);
+        P += n;
+    }
+}
+
 static void emit_vconsts(const XTevCfg* c, const float scale[3][2]) {
     float vc[41][4];
+    const uint32_t* w = (const uint32_t*)vc;
     (void)c;
     build_vconsts(vc, scale);
-    if (s_vc_valid && memcmp(vc, s_shadow_vc, sizeof vc) == 0) return;
-    put1(NV097_SET_TRANSFORM_CONSTANT_LOAD, 96);
-    {
-        int i;
-        const uint32_t* w = (const uint32_t*)vc;
-        for (i = 0; i < 41 * 4; i += 32) {
-            int n = 41 * 4 - i < 32 ? 41 * 4 - i : 32;
-            pb_push(P++, NV097_SET_TRANSFORM_CONSTANT, n);
-            memcpy(P, w + i, (size_t)n * 4);
-            P += n;
+    if (!s_vc_valid || !XBOX_VC_DELTA) {
+        push_vconst_rows(w, 0, 41);
+    } else {
+        int r = 0;
+        while (r < 41) {
+            int end, gap;
+            if (memcmp(&s_shadow_vc[r * 4], vc[r], 16) == 0) { r++; continue; }
+            end = r + 1;
+            for (gap = 0; end + gap < 41 && gap < 3; ) {
+                if (memcmp(&s_shadow_vc[(end + gap) * 4], vc[end + gap], 16) != 0) { end += gap + 1; gap = 0; }
+                else gap++;
+            }
+            push_vconst_rows(w, r, end - r);
+            r = end;
         }
     }
     memcpy(s_shadow_vc, vc, sizeof vc);
@@ -920,6 +1058,30 @@ static void ring_reserve(int n) {
     }
 }
 
+/* mid-frame restart at the pushbuffer head (see XBOX_PB_GUARD) */
+static void pb_budget(void) {
+    if (!XBOX_PB_GUARD || pb_used() < (uint32_t)XBOX_PB_GUARD) return;
+    pb_note_peak();
+    wait_idle();
+    pb_reset();
+    s_pb_base = pb_begin();
+    s_ring_pos = 0;   /* the GPU is idle: the vertex ring is free too */
+    if (!s_pb_rewinds++) xbox_logf("[NV2A] pushbuffer nearly full mid-frame: restarting at the head\n");
+}
+
+/* Vertex counts the primitive can't use are trimmed rather than sent: the
+ * NV2A is less forgiving than a desktop GL driver about partial primitives. */
+static int prim_count(GLenum mode, int count) {
+    switch (mode) {
+        case GL_POINTS: return count;
+        case GL_LINES: return count & ~1;
+        case GL_LINE_STRIP: return count >= 2 ? count : 0;
+        case GL_TRIANGLES: return count - count % 3;
+        case 0x0007 /* quads */: return count & ~3;
+        default: return count >= 3 ? count : 0;   /* strips, fans */
+    }
+}
+
 static int s_logged_nes;
 
 static void draw(GLenum mode, int count) {
@@ -938,6 +1100,9 @@ static void draw(GLenum mode, int count) {
     }
     frame_open();
     if ((uint32_t)count > s_ring_cap) count = (int)s_ring_cap;
+    count = prim_count(mode, count);
+    if (count <= 0) return;
+    pb_budget();
 
     build_tev_cfg(&cfg);
     rp = rc_lookup(&cfg);
@@ -1083,6 +1248,7 @@ static void setup_state(void) {
 static void frame_open(void) {
     if (s_frame_open) return;
     pb_reset();
+    s_pb_base = pb_begin();
     pb_target_back_buffer();
     s_ring_pos = 0;
     s_frame_open = 1;
@@ -1146,9 +1312,12 @@ static void perf_account(unsigned t10, unsigned cpu10) {
         char line[160];
         DWORD w;
         int len = snprintf(line, sizeof line,
-                           "min %u (frame %u): %u.%u fps avg, cpu %u.%u ms avg, worst %u ms, >33ms %u, >100ms %u\r\n",
+                           "min %u (frame %u): %u.%u fps avg, cpu %u.%u ms avg, worst %u ms, >33ms %u, >100ms %u | "
+                           "pb peak %u KB, tex %u KB, free %u KB, gpu faults %u\r\n",
                            minute, s_frame, (unsigned)(n * 100000ull / sum) / 10, (unsigned)(n * 100000ull / sum) % 10,
-                           (unsigned)(cpu_sum / n) / 10, (unsigned)(cpu_sum / n) % 10, worst / 10, over33, over100);
+                           (unsigned)(cpu_sum / n) / 10, (unsigned)(cpu_sum / n) % 10, worst / 10, over33, over100,
+                           s_pb_peak / 1024, s_pool_used / 1024, xbox_mem_free_kb(), (unsigned)s_gf_count);
+        s_pb_peak = 0;
         WriteFile(h, line, (DWORD)len, &w, NULL);
         xbox_flush_file(h);
         xbox_logf("[PERF] %s", line);
@@ -1175,11 +1344,22 @@ static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
     s_n_clr_frame = 0;
 }
 
+/* one line of renderer state for last.log / hang.log / crash.log */
+int xbox_nv2a_state(char* buf, int cap) {
+    return snprintf(buf, (size_t)cap,
+                    "[STATE] frame %u draws %u | pb peak %u KB rewinds %u | tex pool %u KB (peak %u) recover %u "
+                    "fail %u | gpu faults %u last kind %u %08x %08x %08x%s\n",
+                    s_frame, s_draws, s_pb_peak / 1024, s_pb_rewinds, s_pool_used / 1024, s_pool_peak / 1024,
+                    s_tex_recover, s_tex_fail, (unsigned)s_gf_count, (unsigned)s_gf_last[0], (unsigned)s_gf_last[1],
+                    (unsigned)s_gf_last[2], (unsigned)s_gf_last[3], ocx_pb_irq_off ? " IRQ-MASKED" : "");
+}
+
 void xbox_nv2a_present(void) {
-    int i;
     unsigned long long t_enter = xbox_ticks();
     frame_open();
+    pb_note_peak();
     wait_idle();
+    gpu_fault_log(s_frame);
     s_frame++;
     if (g_xbox_fbdump_every > 0 && (s_frame % (uint32_t)g_xbox_fbdump_every) == 0) {
         xbox_logf("[NV2A] frame %u draws=%u approx=%u rc=%d pool=%uKB peak=%uKB\n", s_frame, s_draws,
@@ -1214,8 +1394,7 @@ void xbox_nv2a_present(void) {
     }
 #endif
     hitch_log(t_enter, xbox_ticks());
-    for (i = 0; i < s_ndeferred; i++) pool_free(s_deferred_free[i]);
-    s_ndeferred = 0;
+    release_deferred();
     s_frame_open = 0;
     s_draws = 0;
     s_approx_draws = 0;

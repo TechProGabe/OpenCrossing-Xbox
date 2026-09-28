@@ -671,6 +671,15 @@ static void pc_gx_load_tex_obj_impl(void* obj, u32 id) {
     }
 #endif
 
+#ifdef TARGET_XBOX
+    /* XBOX: a texture pointer into unmapped memory faults the whole console
+     * (xbox/src/xbox_io.c, xbox_tex_ptr_ok). Treat it as a missing image. */
+    {
+        extern int xbox_tex_ptr_ok(const void* p, int w, int h, int bpp, u32 fmt);
+        if (image_ptr && !xbox_tex_ptr_ok(image_ptr, width, height, gc_format_bpp(format), format))
+            image_ptr = NULL;
+    }
+#endif
     /* detect when emu64 reuses the same buffer with different data */
     u32 hash = tex_content_hash(image_ptr, width, height, format);
 

@@ -108,11 +108,10 @@ Buttons can be remapped in `E:\UDATA\4f430001\keybindings.ini`.
 
 ## Known issues
 
-- The game can occasionally crash and freeze the console (seen twice so far, cause unknown). Save often. If it keeps happening when Mr. Resetti appears, set `disable_resetti = 1` in `settings.ini`.
 - The left stick has a large deadzone (43%). It was tuned on a worn controller, so a controller in good shape needs a bigger push before your character starts walking.
 - The NES games inside the game do not display.
 
-The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `boot.log`, `perf.log` and `hang.log` from `E:\UDATA\4f430001\` if they exist.
+The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
 
 ## Building from source
 

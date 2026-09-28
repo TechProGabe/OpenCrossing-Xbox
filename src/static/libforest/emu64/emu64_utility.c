@@ -38,7 +38,13 @@ u32 emu64::seg2k0(u32 segadr) {
     u32 seg = (segadr >> 24) & 0xF;
     u32 offset = segadr & 0xFFFFFF;
 
-    u32 base = this->segments[seg] & ~1u;
+    /* A segment base set from an odd pointer (gSPSegment of a u8 texture
+       array the linker left at an odd address) holds a runtime token, not an
+       address: unpack it like a direct reference. */
+    u32 base = (u32)pc_gbi_unpack_runtime_ptr(this->segments[seg]);
+    if (base == 0) {
+        base = this->segments[seg] & ~1u;
+    }
 
     if (base == 0) {
         return segadr;
