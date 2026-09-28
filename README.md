@@ -111,7 +111,6 @@ The left stick's dead zone is in `E:\UDATA\4f430001\controller.ini` (created on 
 ## Known issues
 
 - The left stick has a large dead zone (43%) by default, tuned on a worn controller. Lower it in `controller.ini` (see Controls).
-- The NES games inside the game are new in this build and not yet tested on a console.
 
 The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
 

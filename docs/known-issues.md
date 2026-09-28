@@ -4,11 +4,8 @@ Bugs seen on real hardware or in xemu that are not fixed yet, and the leads
 we have. Add the build and date when you log one; delete it when it's fixed
 (the commit message keeps the history).
 
-## Untested on hardware
+## Stick deadzone
 
-- The NES screen (furniture NES games): `blit_draw` in `xbox_nv2a.c` draws
-  it, checked with a test pattern in xemu (`-DXBOX_DBG_NES_TEST=N`), not yet
-  with a real NES game on a console.
 - The stick deadzone is per console, not measured per controller:
   `controller.ini` (default 43%, sized for the worn test pad). Automatic
   calibration was tried against the hardware stick traces and rejected: a
