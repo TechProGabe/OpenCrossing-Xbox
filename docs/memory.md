@@ -59,3 +59,6 @@ bigger XVideo buffer, minus 3 MB of texture pool. `video_select`
 before GPU init, and falls back to 480 if the allocations fail. The smaller
 pool is the risk: judge it on hardware (`perf.log` tex KB, `[NV2A] texture
 pool full` lines) in town, houses and the museum.
+
+On hardware (beta-3, 2026-09-28) 720p starts, looks right and runs at
+60 fps; the pool in busy rooms has no measurement yet.

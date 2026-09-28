@@ -1,6 +1,11 @@
 # OpenCrossing-Xbox
 
-OpenCrossing-Xbox runs Animal Crossing (GameCube, USA) natively on an original Xbox. It is not an emulator: the decompiled game code is compiled for the Xbox's Pentium III and draws with its NV2A GPU. It runs at 60 fps on a stock 64 MB console.
+OpenCrossing-Xbox runs Animal Crossing (GameCube, USA) natively on an original Xbox. It is not an emulator: the decompiled game code is compiled for the Xbox's Pentium III and draws with its NV2A GPU. It runs at 60 fps on a stock 64 MB console, at up to 720p.
+
+- 480i, 480p or 720p output. 720p needs a component cable.
+- 4:3 or 16:9 widescreen.
+- An Options menu, on the title screen and in the pause menu, for video, audio, controls (including button remapping) and gameplay settings.
+- Saves use the GameCube `.gci` format, so a town can move between the Xbox, Dolphin and the PC port.
 
 Status: beta. The game is mostly playable, but it still crashes now and then and has bugs (see [Known issues](#known-issues)). Save often.
 
@@ -85,7 +90,7 @@ Settings are in **Options** on the title screen, or **Settings** in the pause me
 
 | tab | settings |
 |---|---|
-| Video | Output (480i/480p, or experimental 720p with a component cable and 720p enabled in the dashboard; needs a restart), Widescreen (4:3, 16:9, or Auto to follow the dashboard), texture filter |
+| Video | Output (480i/480p, or 720p with a component cable and 720p enabled in the dashboard; needs a restart), Widescreen (4:3, 16:9, or Auto to follow the dashboard), texture filter |
 | Audio | master volume |
 | Controls | left and right stick dead zones, rumble strength, button remapping |
 | Gameplay | Mr. Resetti, shop upgrade (Singleplayer lets Nook upgrade to Nookington's without a visitor from another town), borderless acres (Off brings back the original acre-by-acre camera), NES aspect |
@@ -115,7 +120,6 @@ The left stick's dead zone defaults to 43%, which suits a worn controller whose 
 
 - The left stick has a large dead zone (43%) by default, tuned on a worn controller. Lower it in Options > Controls (see Controls).
 - NES games run choppy.
-- 720p output is experimental: it has not been tested on real hardware yet.
 
 The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
 

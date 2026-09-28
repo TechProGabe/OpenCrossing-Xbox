@@ -20,11 +20,10 @@ we have. Add the build and date when you log one; delete it when it's fixed
 
 ## Not yet tested on hardware (2026-09-28)
 
-- Restart after changing the output (720p).
-- 720p: fill rate, and the 5 MB texture pool in busy rooms (free memory at
-  the title matches 480 in xemu).
+- 720p's 5 MB texture pool in the busiest rooms (museum, full houses):
+  `perf.log` tex KB and `[NV2A] texture pool full` lines. 720p itself runs
+  at 60 fps on hardware (beta-3, 2026-09-28).
 - CPU/GPU overlap (`gpu_overlap = 1`): frame times in town vs off (`perf.log`).
-- 720p's Z16 depth: z-fighting at distance, and whether the NV2A is happy.
 - Shop upgrade defaulting to Singleplayer on a console whose `settings.ini`
   predates the `[Xbox]` section.
 
