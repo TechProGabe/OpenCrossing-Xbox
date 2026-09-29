@@ -28,16 +28,6 @@ we have. Add the build and date when you log one; delete it when it's fixed
 - Shop upgrade defaulting to Singleplayer on a console whose `settings.ini`
   predates the `[Xbox]` section.
 
-## Crash back to the dashboard on the title screen (hardware, 2026-09-29)
-
-- `dev` at `4002bc7e`: after "clear village data" and the return to the
-  title, the console went back to the dashboard within ~30 s. No
-  `crash.log` or `hang.log`; `last.log` ends normally at the title (frame
-  24642). With no report, the CPU exception handler never ran on a game
-  thread: a kernel bugcheck, a fault in a thread outside `xbox_crash_guard`,
-  or a quick reboot. Not reproduced in xemu (7 min at the title with the
-  same erased save). Watch for it on the title after a demolish.
-
 ## NES games run choppy
 
 - Real hardware, `dev` at `f3b76f8d`, 2026-09-28: playing an NES game from
