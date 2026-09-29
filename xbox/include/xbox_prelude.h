@@ -32,7 +32,12 @@ int strncasecmp(const char* a, const char* b, unsigned int n);
 #define fprintf  xbox_fprintf
 #define vfprintf xbox_vfprintf
 #define puts     xbox_puts
+#ifdef XBOX_DISC_TU   /* pc_disc.c: the disc image reads without pdclib (xbox_io.c) */
+#define fread    xbox_disc_fread
+#define fseek    xbox_disc_fseek
+#else
 #define fread    xbox_fread   /* timed for the hitch log (disc reads) */
+#endif
 #define fclose   xbox_fclose  /* flushes FATX so saves survive a power-off */
 #endif
 

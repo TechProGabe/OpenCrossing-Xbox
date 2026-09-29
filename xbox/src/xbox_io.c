@@ -7,7 +7,8 @@
  *     own folder: HDD install, burned DVD or xemu disc alike)
  *   - everything the game writes (saves, settings)         -> E:\UDATA\<id>\
  *   - a read of any other file tries UDATA first, then D:\
- * xbox_prelude.h routes fopen/remove/rename here for C TUs.
+ * xbox_prelude.h routes fopen/remove/rename/fread/fclose here for C TUs, and
+ * pc_disc.c's fread/fseek to xbox_disc_fread/xbox_disc_fseek (below).
  *
  * LOGGING. pdclib's stdout/stderr are dead handles on nxdk. printf-family
  * calls from C TUs are routed to COM1 (0x3F8), which xemu exposes with
@@ -219,6 +220,45 @@ size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f) {
     return r;
 }
 
+/* The disc image (pc_disc.c only: it is built with XBOX_DISC_TU, and the
+ * prelude maps its fread/fseek here) reads without pdclib. pdclib's fread
+ * refills a 1 KB buffer with one NtReadFile per KB and copies byte by byte,
+ * and every disc read starts with an fseek that throws the buffer away:
+ * ~2.5 MB/s on hardware (648 KB took 264 ms). On a cold boot the first title
+ * demo's music misses xbox_aram.c's block cache block after block; the audio
+ * producer fell behind and took the CPU back from the game thread (66-83 ms
+ * frames for ~15 s). Here fseek moves the handle's own file pointer and fread
+ * is one ReadFile straight into the caller's buffer (pdclib's handle is
+ * synchronous: CreateFileA without FILE_FLAG_OVERLAPPED). pc_disc.c uses
+ * nothing else on the stream, never writes it, and pc_disc_read's mutex
+ * serialises each fseek/fread pair. Kill switch: -DXBOX_DISC_DIRECT=0. */
+#ifndef XBOX_DISC_DIRECT
+#define XBOX_DISC_DIRECT 1
+#endif
+static HANDLE file_handle(FILE* f) { return (HANDLE)((struct _PDCLIB_file_t*)f)->handle; }
+
+int xbox_disc_fseek(FILE* f, long off, int whence) {
+    DWORD how = whence == SEEK_SET ? FILE_BEGIN : whence == SEEK_CUR ? FILE_CURRENT : FILE_END;
+    if (!XBOX_DISC_DIRECT) return fseek(f, off, whence);
+    return SetFilePointer(file_handle(f), off, NULL, how) == INVALID_SET_FILE_POINTER ? -1 : 0;
+}
+
+size_t xbox_disc_fread(void* buf, size_t size, size_t n, FILE* f) {
+    static unsigned s_fails;
+    unsigned long long t0;
+    DWORD got = 0;
+    if (!XBOX_DISC_DIRECT) return xbox_fread(buf, size, n, f);
+    if (!size || !n) return 0;
+    t0 = xbox_ticks();
+    if (!ReadFile(file_handle(f), buf, (DWORD)(size * n), &got, NULL) && s_fails++ < 8)
+        xbox_logf("[IO] disc image read of %u bytes failed (error %lu)\n", (unsigned)(size * n),
+                  (unsigned long)GetLastError());
+    g_xfs.fread_ticks += xbox_ticks() - t0;
+    g_xfs.fread_bytes += got;
+    g_xfs.fread_n++;
+    return got / size;
+}
+
 /* ---- memory ---- */
 void xbox_mem_log(const char* where) {
     MM_STATISTICS st;
@@ -316,7 +356,8 @@ static int mode_writes(const char* m) {
 
 FILE* xbox_fopen(const char* path, const char* mode) {
     char p[MAX_PATH];
-    return fopen(xbox_resolve(path, mode_writes(mode) ? XBOX_PATH_WRITE : XBOX_PATH_READ, p, sizeof p), mode);
+    int w = mode_writes(mode);
+    return fopen(xbox_resolve(path, w ? XBOX_PATH_WRITE : XBOX_PATH_READ, p, sizeof p), mode);
 }
 
 int xbox_remove(const char* path) {

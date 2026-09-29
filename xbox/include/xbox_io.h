@@ -55,6 +55,9 @@ extern XboxFrameStats g_xfs;
 unsigned long long xbox_ticks(void);
 unsigned long long xbox_ticks_per_sec(void);
 size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f);
+/* the disc image, from pc_disc.c only (XBOX_DISC_TU) */
+size_t xbox_disc_fread(void* buf, size_t size, size_t n, FILE* f);
+int xbox_disc_fseek(FILE* f, long off, int whence);
 
 FILE* xbox_fopen(const char* path, const char* mode);
 int   xbox_remove(const char* path);

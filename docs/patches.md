@@ -80,6 +80,7 @@ untouched.
 | `pc/src/pc_settings_menu.c` | not built; `xbox/src/xbox_settings_menu.c` implements the same `pc_settings_menu_*` API | Xbox rows (output, widescreen, radial dead zone, rumble, controller-only bindings) |
 | `pc/src/pc_vi.c` | `g_frame_limiter` → `g_xbox_vi_frame_limit`, `g_pc_nes_active` → `g_xbox_vi_nes_pace` | the vblank pacer in `xbox_nv2a.c` owns the real variables and sets what the timer limiter sees (off while it paces; `perf.md`) |
 | `src/static/Famicom/famicom.cpp` | `pc_fixnes_frame` → `xbox_nes_frame` | `xbox_nv2a.c` times the emulator around the real call (`[NES]` lines) |
+| `pc/src/pc_disc.c` | `-DXBOX_DISC_TU`: `xbox_prelude.h` maps its `fread`/`fseek` to `xbox_disc_fread`/`xbox_disc_fseek` | pdclib reads 1 KB per kernel call; the disc image goes straight to `ReadFile` (`perf.md`) |
 | `pc/src/pc_vi.c`, `src/actor/ac_animal_logo.c` | `g_pc_verbose` → `g_xbox_verbose_noisy` (0 = off) | their verbose lines come every second (`[LOGO] draw`) or every slow frame (`[STUTTER]`, whose `%f` pdclib prints empty); the title menu's one-shot `[LOGO]` transition lines go with them. Verbose stays on elsewhere |
 | `pc/src/pc_settings.c` | `pc_settings_load`/`pc_settings_save` renamed to `*_pc`; `xbox/src/xbox_settings.c` wraps them | adds the `[Xbox]` section of `settings.ini` |
 | `src/actor/ac_animal_logo.c` | `-DPC_ENHANCEMENTS` for this file only (`XBOX_TITLE_MENU`) | upstream's title Start / Options / Quit menu. Elsewhere the define changes gameplay; the actor struct is the same size either way (`include/ac_animal_logo.h`) |

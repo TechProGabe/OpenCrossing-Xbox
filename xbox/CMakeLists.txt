@@ -181,6 +181,10 @@ set_property(SOURCE "${PC_DIR}/src/pc_vi.c" "${DECOMP_ROOT}/src/actor/ac_animal_
 set_property(SOURCE "${DECOMP_ROOT}/src/static/Famicom/famicom.cpp" APPEND PROPERTY COMPILE_DEFINITIONS
     "pc_fixnes_frame=xbox_nes_frame")
 
+# pc_disc.c's fread/fseek on the disc image go around pdclib (xbox_io.c,
+# xbox_prelude.h): pdclib reads 1 KB per kernel call.
+set_property(SOURCE "${PC_DIR}/src/pc_disc.c" APPEND PROPERTY COMPILE_DEFINITIONS XBOX_DISC_TU)
+
 # pc_settings_menu.c is replaced by xbox/src/xbox_settings_menu.c (same API,
 # Xbox rows). pc_settings.c's load/save are wrapped by xbox/src/xbox_settings.c,
 # which adds the [Xbox] section of settings.ini.

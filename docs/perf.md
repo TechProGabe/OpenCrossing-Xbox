@@ -72,3 +72,15 @@ Whole tree at `-O2`; no per-TU profiles yet (not needed so far).
   under the `[HITCH]` threshold), with average frame and CPU ms, draws and
   texture uploads. They land in `last.log`, so a choppy stretch is on disk
   after the fact. `-DXBOX_PACE_MISSES=0` turns them off.
+- Direct disc image reads (2026-09-29, `xbox_io.c`, kill switch
+  `-DXBOX_DISC_DIRECT=0`). Hardware `boot.log` of the first title demo
+  after a cold boot: 66-83 ms frames for ~15 s, almost no GPU time, one
+  32 KB disc read taking 80-186 ms, 648 KB read in 264 ms. The demo's
+  music misses `xbox_aram.c`'s block cache, and each 32 KB miss was 32
+  pdclib refills of 1 KB (`traps.md`); the audio producer fell behind and
+  took the CPU back from the game thread. `pc_disc.c` now reads the disc
+  image with one `ReadFile` per request, straight into the caller's buffer.
+  xemu (loaded host): 320 KB in 10 ms, was 83 ms. Once the cache is warm (a later title visit) it never chugged.
+  Not measured on hardware yet (xemu was on a loaded host).
+- Hardware, NES play (same session): fixNES takes 13-14 ms per NES frame,
+  the whole frame 17-18 ms, so most frames miss the vblank by 1-2 ms.

@@ -39,6 +39,14 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
 - **D: is only mounted if `libnxdk_automount_d.lib` is linked with
   `-include:_automount_d_drive`** (nxdk's Makefile does it; our CMake must too).
   Without it `FindFirstFile("D:\\*")` fails with 2 while nothing else looks wrong.
+- **pdclib `fread` is 1 KB at a time.** Its stdio buffer is `BUFSIZ` 1024
+  and `fread` refills it with one `NtReadFile` per KB and copies byte by
+  byte, and `fseek` discards the buffer: the disc image read at ~2.5 MB/s
+  on hardware. `pc_disc.c` is built with `XBOX_DISC_TU`, so its
+  `fread`/`fseek` are `xbox_disc_fread`/`xbox_disc_fseek` (`ReadFile` and
+  `SetFilePointer` on the handle, `XBOX_DISC_DIRECT`); don't mix other
+  stdio calls into that stream. A bigger `setvbuf` would still copy byte by
+  byte and read 32 KB for a 12-byte `fseek`+`fread`.
 - **pdclib printf prints nothing for `%f`** (logs show `total=ms`). Log-only for now.
 - **`pc_gx_tev.c` is not built** — `xbox/src/xbox_gx_tev.c` replaces it (no GLSL).
 - **NV2A texture FORMAT bit 3 (BORDER_SOURCE) must be 1 (colour).** 0 means
