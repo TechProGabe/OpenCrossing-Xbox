@@ -54,6 +54,7 @@ flyngmt/ACGC-PC-Port.
 | `pc/src/pc_disc.c` | `pc_disc_read` takes an SDL mutex | fseek+fread pair on one `FILE*` raced between DVD, audio and game threads |
 | `pc/include/pc_gx_internal.h` | `PC_GX_MAX_VERTS` is `#ifndef`-guarded | the Xbox build passes 16384 (vertex batch 6 MB → 1.5 MB) |
 | `pc/src/pc_gx_texture.c` | logs a decode buffer that couldn't be allocated (`#ifdef TARGET_XBOX`) | the texture is drawn white then; the log says why |
+| `pc/src/pc_m_card.c` | `mCD_EraseLand_bg` and `mCD_SaveErasePlayer_bg` write the save (they were stubs returning success) | "clear village data" and erasing a player at player select did nothing on disk: the town or player came back on the next load. Erasing a town now rewrites the town file with its save check cleared, as the GameCube does (`mCD_EraseLand_bg_set_data`), so the next load starts a new town; the old file stays as `.bak1`. Both run before any game start, so they write past the `pc_save_ready` gate |
 | `pc/src/pc_gx_texture.c` | `pc_gx_load_tex_obj_impl` checks the image pointer (`#ifdef TARGET_XBOX`, `xbox_tex_ptr_ok`) | a texture pointer into unmapped memory faults the console; it is drawn without the image and logged instead (belt and braces behind the `seg2k0` fix) |
 
 `pc/src/pc_pad.c` is compiled with `SDL_GameControllerGetAxis` renamed to
@@ -69,6 +70,7 @@ untouched.
 | file | how | why |
 |---|---|---|
 | `pc/src/pc_settings_menu.c` | not built; `xbox/src/xbox_settings_menu.c` implements the same `pc_settings_menu_*` API | Xbox rows (output, widescreen, radial dead zone, rumble, controller-only bindings) |
+| `pc/src/pc_vi.c` | `g_frame_limiter` → `g_xbox_vi_frame_limit`, `g_pc_nes_active` → `g_xbox_vi_nes_pace` | the vblank pacer in `xbox_nv2a.c` owns the real variables and sets what the timer limiter sees (off while it paces; `perf.md`) |
 | `pc/src/pc_settings.c` | `pc_settings_load`/`pc_settings_save` renamed to `*_pc`; `xbox/src/xbox_settings.c` wraps them | adds the `[Xbox]` section of `settings.ini` |
 | `src/actor/ac_animal_logo.c` | `-DPC_ENHANCEMENTS` for this file only (`XBOX_TITLE_MENU`) | upstream's title Start / Options / Quit menu. Elsewhere the define changes gameplay; the actor struct is the same size either way (`include/ac_animal_logo.h`) |
 | `pc/src/pc_gx.c`, `pc/src/pc_gx_texture.c`, `src/game/m_actor.c`, `src/static/libforest/emu64/emu64.c` | `-DPC_ENHANCEMENTS` for these files only (`XBOX_WIDESCREEN`) | hor+ widescreen, viewport scaling and the matching wider culling. The only header guards it touches are declarations (`pc_gx_internal.h`, `m_private.h`), so layouts match the other TUs. At 4:3 the one behaviour change is that EFB copies stay full-res GL textures instead of RGB565 written into game memory |

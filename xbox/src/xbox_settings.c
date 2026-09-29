@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "pc_platform.h"
+#include "pc_pause_menu.h"
 #include "pc_settings.h"
 #include "xbox_io.h"
 #include "xbox_settings.h"
@@ -139,6 +140,20 @@ void pc_settings_load(void) {
               g_xbox_settings.stick_deadzone, g_xbox_settings.rumble, g_xbox_settings.video_720p,
               g_xbox_settings.widescreen, g_xbox_settings.gpu_overlap, (unsigned)encoder_settings());
     xbox_settings_apply();
+}
+
+/* pc_vi.c is built with g_frame_limiter and g_pc_nes_active renamed
+ * (xbox/CMakeLists.txt): the real ones (settings.ini max_fps, NES play) are
+ * these, and its timer limiter sees what the policy below leaves it. */
+u32 g_frame_limiter = 60;
+extern u32 g_xbox_vi_frame_limit;   /* pc_vi.c's g_frame_limiter */
+int g_xbox_vi_nes_pace;             /* pc_vi.c's g_pc_nes_active */
+
+int xbox_vi_pace_policy(int vbl_ok) {
+    int vbl = vbl_ok && (g_frame_limiter == 60 || g_pc_nes_active);
+    g_xbox_vi_frame_limit = vbl ? 0 : g_frame_limiter;
+    g_xbox_vi_nes_pace = vbl ? 0 : g_pc_nes_active;
+    return vbl;
 }
 
 /* The encoder settings (AV pack, dashboard video flags) can't change while

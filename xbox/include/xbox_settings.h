@@ -43,6 +43,12 @@ int xbox_widescreen_wanted(const XboxSettings* s);
 /* sets the game's logical screen (g_pc_window_w/h) for the widescreen setting */
 void xbox_settings_apply(void);
 
+/* Frame limiter policy (xbox_settings.c). Returns 1 when vblank pacing runs
+ * this frame (vbl_ok = pacing built in and the GPU interrupt alive, and
+ * max_fps is the default 60 or an NES game is running); pc_vi.c's timer is
+ * then off, otherwise it gets max_fps and the NES flag as before. */
+int xbox_vi_pace_policy(int vbl_ok);
+
 /* leave the game: back to the dashboard / relaunch this XBE */
 void xbox_quit_to_dashboard(void);
 void xbox_restart(void);

@@ -23,6 +23,11 @@ we have. Add the build and date when you log one; delete it when it's fixed
 - 720p's 5 MB texture pool in the busiest rooms (museum, full houses):
   `perf.log` tex KB and `[NV2A] texture pool full` lines. 720p itself runs
   at 60 fps on hardware (beta-3, 2026-09-28).
+- Vblank pacing (`perf.md`): the first title demo after boot (choppy in
+  about 1 boot in 3 until the villager walks down from the station) and
+  town smoothness. `[PACE]` lines in `last.log` if it still chops.
+- Town and player erase at player select (`patches.md`): "clear village
+  data" should lead to a new town on the next start.
 - CPU/GPU overlap (`gpu_overlap = 1`): frame times in town vs off (`perf.log`).
 - Shop upgrade defaulting to Singleplayer on a console whose `settings.ini`
   predates the `[Xbox]` section.

@@ -95,6 +95,10 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
 - **xemu detection:** CPUID leaf 1 EDX bit 1 (VME) — clear in xemu (0383f9fd),
   set on the Xbox (0383f9ff); both report signature 0x68a. Never probe the
   AC97 codec to find out.
+- **pbkit's vblank event is pulsed** (`NtPulseEvent`): it wakes only threads
+  already waiting. Read the counter, then `pb_wait_for_vbl()`, and a vblank
+  in between costs a whole frame. `vbl_pace` waits with a timeout
+  (`ocx_pb_wait_for_vbl_timeout`, added by `patch_pbkit.py`) and re-reads.
 - **pbkit can hand you the buffer being scanned out** (two flips queued):
   wait for vblank until PCRTC_START moves off `pb_back_buffer()`.
 - **Python `bytearray[a:b] = b""` deletes.** It broke the first XBE icon patch

@@ -238,6 +238,11 @@ static void pc_ensure_save_dirs(void) {
 
 static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path);
 
+/* pc_save_write_gci_ex flags */
+#define PC_SAVE_FORCE      1   /* write even before pc_save_ready (player select) */
+#define PC_SAVE_ERASE_LAND 2   /* write the town with its save check cleared */
+static int pc_save_write_gci_ex(const char* gci_path, const char* tmp_path, int flags);
+
 /* mCD_get_land_copyProtect */
 static u16 pc_get_land_copy_protect(void) {
     u16 code = (u16)RANDOM(0xFFF0);
@@ -296,6 +301,10 @@ static int pc_save_write_gci(void) {
 }
 
 static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path) {
+    return pc_save_write_gci_ex(gci_path, tmp_path, 0);
+}
+
+static int pc_save_write_gci_ex(const char* gci_path, const char* tmp_path, int flags) {
     FILE* fp;
     u8* file_data;
     CARDDir dir_hdr;
@@ -303,13 +312,15 @@ static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path) {
     u16 checksum;
     u8* others_ptr;
 
-    if (!pc_save_ready) return TRUE;
+    if (!pc_save_ready && !(flags & PC_SAVE_FORCE)) return TRUE;
 
     pc_ensure_save_dirs();
 
-    Save_Get(save_exist) = TRUE;
-    Save_Get(save_check).version = mFRm_VERSION;
-    mFRm_SetSaveCheckData(Save_GetPointer(save_check));
+    if (!(flags & PC_SAVE_ERASE_LAND)) {
+        Save_Get(save_exist) = TRUE;
+        Save_Get(save_check).version = mFRm_VERSION;
+        mFRm_SetSaveCheckData(Save_GetPointer(save_check));
+    }
 
     file_data = (u8*)calloc(1, GCI_FILE_DATA_SIZE);
     if (!file_data) return FALSE;
@@ -373,6 +384,9 @@ static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path) {
     /* Main Save_t (offset 0x26000) */
     save_copy = (Save_t*)(file_data + GCI_SAVE_MAIN_OFFSET);
     memcpy(save_copy, &common_data.save.save, sizeof(Save_t));
+    /* mCD_EraseLand_bg_set_data: the written copy's check is cleared, so the
+     * next load finds no town; the town in memory is left as it is */
+    if (flags & PC_SAVE_ERASE_LAND) mFRm_ClearSaveCheckData(&save_copy->save_check);
 
     pc_save_bswap(save_copy, PC_BSWAP_TO_BE);
     {
@@ -1320,8 +1334,19 @@ int mCD_EraseBrokenLand_bg(int* slot) {
     return mCD_TRANS_ERR_NONE;
 }
 
+/* Player select erases run before any game has started, while pc_save_ready
+ * is still 0; the save in memory is the one just read from disk, so they
+ * write with PC_SAVE_FORCE. GC rewrites the town file with its save check
+ * cleared; the old file is kept as .bak1 like any save (only read if the new
+ * one can't be). */
 int mCD_EraseLand_bg(int* slot) {
     if (slot) *slot = mCD_SLOT_A;
+    if (!Save_Get(save_exist)) return mCD_TRANS_ERR_IOERROR;
+    if (!pc_save_write_gci_ex(PC_GCI_PATH, PC_GCI_TMP_PATH, PC_SAVE_FORCE | PC_SAVE_ERASE_LAND)) {
+        OSReport("[PC] mCD_EraseLand_bg: write failed\n");
+        return mCD_TRANS_ERR_IOERROR;
+    }
+    OSReport("[PC] mCD_EraseLand_bg: town erased\n");
     return mCD_TRANS_ERR_NONE;
 }
 
@@ -1332,8 +1357,14 @@ int mCD_ErasePassportFile_bg(int slot) {
     return mCD_TRANS_ERR_NONE;
 }
 
+/* aNPS2_clr_pl_data_init already cleared the player in memory; persist it */
 int mCD_SaveErasePlayer_bg(int* slot) {
     if (slot) *slot = mCD_SLOT_A;
+    if (!Save_Get(save_exist)) return mCD_TRANS_ERR_IOERROR;
+    if (!pc_save_write_gci_ex(PC_GCI_PATH, PC_GCI_TMP_PATH, PC_SAVE_FORCE)) {
+        OSReport("[PC] mCD_SaveErasePlayer_bg: write failed\n");
+        return mCD_TRANS_ERR_IOERROR;
+    }
     return mCD_TRANS_ERR_NONE;
 }
 

@@ -16,6 +16,10 @@ Here:
   - the DPC loop runs at most 64 rounds, and once ocx_pb_irq_off is set
     (an interrupt storm, decided in xbox_nv2a.c) it stops re-enabling the
     GPU interrupt so threads can run and the watchdog can report;
+  - ocx_pb_wait_for_vbl_timeout(): pb_wait_for_vbl with a timeout. The
+    vblank event is pulsed, which only wakes threads already waiting, so a
+    caller that read the counter just before a vblank slept a whole extra
+    frame (xbox_nv2a.c vbl_pace);
   - the depth format can be set before pb_init (pb_DepthFmt no longer static,
     Z16 sized and scaled): 720p pairs a 16-bit colour buffer with Z16, as
     NV2x wants matching colour and depth widths (xbox_nv2a.c video_select).
@@ -88,6 +92,22 @@ sub(r'\}while\(more\);\n\n    VIDEOREG\(NV_PMC_INTR_EN_0\)=NV_PMC_INTR_EN_0_INTA
     "}while(more && ++ocx_rounds < 64);\n"
     "\n    if (more) ocx_pb_gpu_fault(3, VIDEOREG(NV_PMC_INTR_0), VIDEOREG(NV_PGRAPH_INTR), VIDEOREG(NV_PFIFO_INTR_0), 0);\n"
     "    if (!ocx_pb_irq_off) VIDEOREG(NV_PMC_INTR_EN_0)=NV_PMC_INTR_EN_0_INTA_HARDWARE;")
+
+# bounded vblank wait (vbl_pace in xbox_nv2a.c)
+sub(r'DWORD pb_wait_for_vbl\(void\)\n\{\n    NtWaitForSingleObject\(pb_VBlankEvent, FALSE, NULL\);\n    return pb_vbl_counter;[^\n]*\n\}\n',
+    "DWORD pb_wait_for_vbl(void)\n"
+    "{\n"
+    "    NtWaitForSingleObject(pb_VBlankEvent, FALSE, NULL);\n"
+    "    return pb_vbl_counter; //allows caller to know if a frame has been missed\n"
+    "}\n"
+    "\n"
+    "DWORD ocx_pb_wait_for_vbl_timeout(LONGLONG timeout_100ns)\n"
+    "{\n"
+    "    LARGE_INTEGER t;\n"
+    "    t.QuadPart = -timeout_100ns;\n"
+    "    NtWaitForSingleObject(pb_VBlankEvent, FALSE, &t);\n"
+    "    return pb_vbl_counter;\n"
+    "}\n")
 
 # settable depth format (Z16 for the 16-bit 720p mode)
 sub(r'static unsigned int pb_DepthFmt = NV097_SET_SURFACE_FORMAT_ZETA_Z24S8;',

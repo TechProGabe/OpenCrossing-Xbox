@@ -162,6 +162,12 @@ set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS
     # rumble is scaled by the Options rumble setting (xbox_pad_axis.c)
     "SDL_GameControllerRumble=xbox_controller_rumble")
 
+# pc_vi.c's frame limiter is fed by the vblank pacer in xbox/src/xbox_nv2a.c,
+# which owns the real g_frame_limiter (settings.ini max_fps) and NES flag.
+set_property(SOURCE "${PC_DIR}/src/pc_vi.c" APPEND PROPERTY COMPILE_DEFINITIONS
+    "g_frame_limiter=g_xbox_vi_frame_limit"
+    "g_pc_nes_active=g_xbox_vi_nes_pace")
+
 # pc_settings_menu.c is replaced by xbox/src/xbox_settings_menu.c (same API,
 # Xbox rows). pc_settings.c's load/save are wrapped by xbox/src/xbox_settings.c,
 # which adds the [Xbox] section of settings.ini.

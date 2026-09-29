@@ -51,3 +51,24 @@ Whole tree at `-O2`; no per-TU profiles yet (not needed so far).
   default): present no longer waits for the GPU; the drain moves to the next
   frame's first GL call, so game logic overlaps the GPU (`renderer.md`). Not
   measured on hardware yet.
+
+- Vblank pacing (2026-09-29, `xbox_nv2a.c` `vbl_pace`, kill switch
+  `-DXBOX_VBL_PACE=0`). `pc_vi.c` paced each frame 16.667 ms after the end
+  of the previous one: an overrun was never made up (the average period is
+  the mean of max(frame, 16.667), over the 16.683 ms vblank as soon as
+  frames jitter around the budget), the 60.00 Hz timer beat against the
+  59.94 Hz vblank, and the last 2 ms of every frame were a busy spin. On
+  hardware the first title demo was choppy in about 1 boot in 3, on the
+  same content every time, until the villager walked down from the
+  station. Now each frame is due one vblank after the last: an early frame
+  sleeps on the vblank event (2 ms timed slices, `traps.md`), a late one
+  lets the next start at once, and a frame more than 2 vblanks behind
+  resyncs. Applies at `max_fps = 60` (the default) and during NES play,
+  and hands back to the timer while the GPU interrupt is masked
+  (`xbox_vi_pace_policy` in `xbox_settings.c`). xemu (GPU-bound, ~25 ms
+  frames): 42.5 → 43.8 fps, no regression; not measured on hardware yet.
+- `[PACE]` lines (vblank pacing only): one per 5 s window in which frames
+  missed a vblank 6 or more times a second on average (most are 17-33 ms,
+  under the `[HITCH]` threshold), with average frame and CPU ms, draws and
+  texture uploads. They land in `last.log`, so a choppy stretch is on disk
+  after the fact. `-DXBOX_PACE_MISSES=0` turns them off.

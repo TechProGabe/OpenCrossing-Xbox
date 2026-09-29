@@ -1455,6 +1455,10 @@ static void setup_state(void) {
 #ifndef XBOX_GPU_OVERLAP
 #define XBOX_GPU_OVERLAP 1
 #endif
+/* vblank pacing (vbl_pace, below); -DXBOX_VBL_PACE=0 keeps pc_vi.c's timer */
+#ifndef XBOX_VBL_PACE
+#define XBOX_VBL_PACE 1
+#endif
 /* also settings.ini [Xbox] gpu_overlap = 0 at runtime (read once at init: the
  * two modes can't be switched between a present and the next frame_open) */
 static int s_overlap;
@@ -1572,8 +1576,9 @@ int xbox_nv2a_init(void) {
     load_vertex_program();
     setup_attributes();
     setup_state();
-    xbox_logf("[NV2A] up: %dx%d %d-bit, tex pool %u KB, vertex ring %u verts, gpu overlap %d\n", s_fbw, s_fbh,
-              s_fb_bpp, s_pool_bytes / 1024, s_ring_cap, s_overlap);
+    xbox_logf("[NV2A] up: %dx%d %d-bit, tex pool %u KB, vertex ring %u verts, gpu overlap %d, vblank pacing %d "
+              "(replaces the VI timer at max_fps 60)\n",
+              s_fbw, s_fbh, s_fb_bpp, s_pool_bytes / 1024, s_ring_cap, s_overlap, XBOX_VBL_PACE);
     return 1;
 }
 
@@ -1589,6 +1594,37 @@ int xbox_nv2a_init(void) {
 #ifndef XBOX_PERF_LOG
 #define XBOX_PERF_LOG 1
 #endif
+/* Pace log: under vblank pacing, a frame over 17.5 ms missed its vblank (the
+ * previous picture shows twice); 17-33 ms frames are under the hitch
+ * threshold, and a run of them is what reads as choppy. One "[PACE]" line
+ * per 5 s window in which frames missed at least XBOX_PACE_MISSES times a
+ * second on average, so last.log holds a choppy stretch without the log
+ * itself rewriting last.log every 3 s. -DXBOX_PACE_MISSES=0 turns it off. */
+#ifndef XBOX_PACE_MISSES
+#define XBOX_PACE_MISSES 6
+#endif
+static int s_vbl_on;   /* vbl_pace ran this frame */
+static void pace_account(unsigned t10, unsigned cpu10, unsigned draws, unsigned tex_n) {
+    static unsigned n, missed, sum, cpu_sum, draw_sum, tex_sum;
+    if (!XBOX_PACE_MISSES) return;
+    if (!s_vbl_on) {
+        n = missed = sum = cpu_sum = draw_sum = tex_sum = 0;
+        return;
+    }
+    n++;
+    sum += t10;
+    cpu_sum += cpu10;
+    draw_sum += draws;
+    tex_sum += tex_n;
+    if (t10 > 175) missed++;
+    if (sum < 50000) return;   /* 5 s */
+    if (missed >= 5 * XBOX_PACE_MISSES)
+        xbox_logf("[PACE] frame %u: %u of %u frames missed a vblank in 5 s | avg %u ms, cpu %u ms | draws %u, "
+                  "tex %u\n",
+                  s_frame, missed, n, sum / n / 10, cpu_sum / n / 10, draw_sum / n, tex_sum);
+    n = missed = sum = cpu_sum = draw_sum = tex_sum = 0;
+}
+
 void xbox_flush_file(HANDLE h);
 static void perf_account(unsigned t10, unsigned cpu10) {
     static unsigned n, worst, over33, over100;
@@ -1641,7 +1677,11 @@ static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
                       (unsigned)(g_xfs.tex_ticks / f), g_xfs.fread_n, (unsigned)(g_xfs.fread_bytes / 1024),
                       (unsigned)(g_xfs.fread_ticks / f));
     }
-    if (t_last) perf_account((unsigned)((t_done - t_last) * 10 / f), (unsigned)(cpu_ticks * 10 / f));
+    if (t_last) {
+        unsigned t10 = (unsigned)((t_done - t_last) * 10 / f), cpu10 = (unsigned)(cpu_ticks * 10 / f);
+        perf_account(t10, cpu10);
+        pace_account(t10, cpu10, s_draws, g_xfs.tex_n);
+    }
     t_last = t_done;
     memset(&g_xfs, 0, sizeof g_xfs);
     s_n_clr_frame = 0;
@@ -1655,6 +1695,42 @@ int xbox_nv2a_state(char* buf, int cap) {
                     s_frame, s_draws, s_pb_peak / 1024, s_pb_rewinds, s_pool_used / 1024, s_pool_peak / 1024,
                     s_tex_recover, s_tex_fail, (unsigned)s_gf_count, (unsigned)s_gf_last[0], (unsigned)s_gf_last[1],
                     (unsigned)s_gf_last[2], (unsigned)s_gf_last[3], ocx_pb_irq_off ? " IRQ-MASKED" : "");
+}
+
+/* Vblank pacing. pc_vi.c's limiter paced each frame 16.667 ms after the end
+ * of the previous one: a late frame's overrun was never made up, and its
+ * 60.00 Hz beat against the 59.94 Hz vblank. With frame times near the budget
+ * that tipped whole stretches into repeated pictures, differently from boot
+ * to boot (the title demo, 1 boot in 3), and its last 2 ms were a busy spin
+ * the audio producer couldn't use. Here every frame is due one vblank after
+ * the previous one: an early frame sleeps until its vblank, a late one lets
+ * the next start at once (the triple buffer absorbs it), and one more than
+ * XBOX_VBL_SLACK vblanks behind (a load) resyncs rather than racing to catch
+ * up. The wait is in 2 ms slices (the vblank event is pulsed: a vblank
+ * between reading the counter and waiting would otherwise cost a frame).
+ * When it applies, and what pc_vi.c's timer sees otherwise, is
+ * xbox_vi_pace_policy (xbox_settings.c); with the GPU interrupt masked there
+ * are no vblank events and the timer takes over. Kill switch:
+ * -DXBOX_VBL_PACE=0 (the timer, as before). */
+#define XBOX_VBL_SLACK 2
+DWORD ocx_pb_wait_for_vbl_timeout(LONGLONG timeout_100ns);   /* patch_pbkit.py */
+
+static void vbl_pace(void) {
+    static DWORD s_due;
+    int guard = 20;   /* 40 ms: never hang on a vblank that doesn't come */
+    DWORD now;
+    if (!xbox_vi_pace_policy(XBOX_VBL_PACE && !ocx_pb_irq_off)) {
+        s_vbl_on = 0;
+        return;
+    }
+    now = pb_get_vbl_counter();
+    if (!s_vbl_on) {
+        s_due = now;
+        s_vbl_on = 1;
+    }
+    s_due++;
+    if ((int)(now - s_due) > XBOX_VBL_SLACK) s_due = now;
+    while (guard-- && (int)(pb_get_vbl_counter() - s_due) < 0) ocx_pb_wait_for_vbl_timeout(20000);
 }
 
 void xbox_nv2a_present(void) {
@@ -1700,6 +1776,7 @@ void xbox_nv2a_present(void) {
             pb_wait_for_vbl();
     }
 #endif
+    vbl_pace();
     hitch_log(t_enter, xbox_ticks());
     s_frame_open = 0;
     s_draws = 0;
