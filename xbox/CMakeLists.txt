@@ -167,6 +167,19 @@ set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS
 set_property(SOURCE "${PC_DIR}/src/pc_vi.c" APPEND PROPERTY COMPILE_DEFINITIONS
     "g_frame_limiter=g_xbox_vi_frame_limit"
     "g_pc_nes_active=g_xbox_vi_nes_pace")
+# Verbose logging stays on for the Xbox (boot.log / last.log are the only
+# logs on hardware), except where upstream logs every second or every slow
+# frame: that kept the watchdog rewriting last.log and pushed everything else
+# out of its 4 KB tail. pc_vi.c's [STUTTER] also prints %f, which pdclib
+# can't (xbox_nv2a.c's [HITCH] / [PACE] replace it). g_xbox_verbose_noisy is 0;
+# this also drops ac_animal_logo.c's one-shot title menu transition lines.
+set_property(SOURCE "${PC_DIR}/src/pc_vi.c" "${DECOMP_ROOT}/src/actor/ac_animal_logo.c"
+    APPEND PROPERTY COMPILE_DEFINITIONS "g_pc_verbose=g_xbox_verbose_noisy")
+
+# NES play: the emulator's per-frame time is measured by xbox_nes_frame
+# (xbox/src/xbox_nv2a.c), which calls the real pc_fixnes_frame.
+set_property(SOURCE "${DECOMP_ROOT}/src/static/Famicom/famicom.cpp" APPEND PROPERTY COMPILE_DEFINITIONS
+    "pc_fixnes_frame=xbox_nes_frame")
 
 # pc_settings_menu.c is replaced by xbox/src/xbox_settings_menu.c (same API,
 # Xbox rows). pc_settings.c's load/save are wrapped by xbox/src/xbox_settings.c,

@@ -14,9 +14,6 @@ we have. Add the build and date when you log one; delete it when it's fixed
   to 456 KB once. The hitches, not the average, are what reads as
   not smooth; `[HITCH]` lines say whether they are texture loads or GPU.
   `borderless_acres = 1` (the PC default) draws neighbouring acres too.
-- `[STUTTER]` lines (`pc_vi.c`) print `%.1f` values, which the Xbox log
-  path does not format: the ms fields come out empty and `audio_fill` is
-  garbage. They also flood `last.log`'s 4 KB tail.
 
 ## Not yet tested on hardware (2026-09-28)
 
@@ -39,8 +36,9 @@ we have. Add the build and date when you log one; delete it when it's fixed
   Not investigated yet. Leads: fixNES emulation cost on the 733 MHz CPU
   (`pc_nes_fixnes.c`), the per-frame RGB565 → swizzled A8R8G8B8 upload of the
   256×224 NES frame into a fresh texture (`tex_image_2d` in `xbox_nv2a.c`),
-  and the present waiting for GPU idle. `perf.log` and `[HITCH]` lines taken
-  during NES play would show whether the CPU or the GPU is short.
+  and the present waiting for GPU idle. `[NES]` lines (in perf.log, every
+  5 s of play) give the emulator's own ms per NES frame: well under 16 ms
+  means the upload/draw/present side. NES play now paces to the vblank too.
 
 ## Not ported
 

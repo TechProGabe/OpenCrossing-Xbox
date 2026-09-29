@@ -1595,6 +1595,24 @@ int xbox_nv2a_init(void) {
 #ifndef XBOX_PERF_LOG
 #define XBOX_PERF_LOG 1
 #endif
+/* perf.log extras: the minute's [HITCH] lines of 100 ms and over, [PACE] and
+ * [NES] lines are kept here and written under that minute's perf line, so
+ * perf.log holds the whole session (last.log only has the last 4 KB) and
+ * the disk is touched once a minute, not at the hitch. */
+static char s_perf_extra[2048];
+static unsigned s_perf_extra_len, s_perf_extra_drop;
+static void perf_note(const char* line) {   /* one line, no line ending */
+    size_t n = strlen(line);
+    if (!XBOX_PERF_LOG) return;
+    if (s_perf_extra_len + n + 2 > sizeof s_perf_extra) {
+        s_perf_extra_drop++;
+        return;
+    }
+    memcpy(s_perf_extra + s_perf_extra_len, line, n);
+    memcpy(s_perf_extra + s_perf_extra_len + n, "\r\n", 2);
+    s_perf_extra_len += (unsigned)n + 2;
+}
+
 /* Pace log: under vblank pacing, a frame over 17.5 ms missed its vblank (the
  * previous picture shows twice); 17-33 ms frames are under the hitch
  * threshold, and a run of them is what reads as choppy. One "[PACE]" line
@@ -1619,19 +1637,80 @@ static void pace_account(unsigned t10, unsigned cpu10, unsigned draws, unsigned 
     tex_sum += tex_n;
     if (t10 > 175) missed++;
     if (sum < 50000) return;   /* 5 s */
-    if (missed >= 5 * XBOX_PACE_MISSES)
-        xbox_logf("[PACE] frame %u: %u of %u frames missed a vblank in 5 s | avg %u ms, cpu %u ms | draws %u, "
-                  "tex %u\n",
-                  s_frame, missed, n, sum / n / 10, cpu_sum / n / 10, draw_sum / n, tex_sum);
+    if (missed >= 5 * XBOX_PACE_MISSES) {
+        char line[160];
+        snprintf(line, sizeof line,
+                 "  [PACE] frame %u: %u of %u frames missed a vblank in 5 s | avg %u ms, cpu %u ms | draws %u, tex %u",
+                 s_frame, missed, n, sum / n / 10, cpu_sum / n / 10, draw_sum / n, tex_sum);
+        xbox_logf("%s\n", line + 2);
+        perf_note(line);
+    }
     n = missed = sum = cpu_sum = draw_sum = tex_sum = 0;
 }
 
+/* NES play: famicom.cpp is built with pc_fixnes_frame renamed to this
+ * (xbox/CMakeLists.txt), so the emulator's CPU time per NES frame is
+ * measured apart from the upload and draw. One [NES] line per 300 frames
+ * (5 s) in perf.log, and in the log too when the average is over 14 ms
+ * (then fixNES itself is what chops). */
+unsigned short* pc_fixnes_frame(void);
+unsigned short* xbox_nes_frame(void) {
+    static unsigned n, last_frame;
+    static unsigned long long sum, worst;
+    unsigned long long t0 = xbox_ticks(), d;
+    unsigned short* fb = pc_fixnes_frame();
+    d = xbox_ticks() - t0;
+    if (s_frame - last_frame > 2) {   /* a new game */
+        n = 0;
+        sum = worst = 0;
+    }
+    last_frame = s_frame;
+    sum += d;
+    if (d > worst) worst = d;
+    if (++n == 300) {
+        unsigned long long f = xbox_ticks_per_sec() / 10000;   /* 0.1 ms */
+        unsigned avg = (unsigned)(sum / n / f), top = (unsigned)(worst / f);
+        char line[128];
+        snprintf(line, sizeof line, "  [NES] frame %u: emulator %u.%u ms avg, worst %u.%u ms per NES frame", s_frame,
+                 avg / 10, avg % 10, top / 10, top % 10);
+        if (avg > 140) xbox_logf("%s\n", line + 2);   /* only when it is the problem */
+        perf_note(line);
+        n = 0;
+        sum = worst = 0;
+    }
+    return fb;
+}
+
 void xbox_flush_file(HANDLE h);
+static HANDLE s_perf_h = INVALID_HANDLE_VALUE;
+static int perf_open(void) {
+    if (s_perf_h == INVALID_HANDLE_VALUE)
+        s_perf_h = CreateFileA(XBOX_UDATA_DIR "perf.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
+                               FILE_ATTRIBUTE_NORMAL, NULL);
+    return s_perf_h != INVALID_HANDLE_VALUE;
+}
+/* write the noted lines: every 15 s if there are any (a quit or freeze
+ * loses at most that much), and ahead of each minute's summary line */
+static void perf_flush_notes(void) {
+    DWORD w;
+    if (!s_perf_extra_len && !s_perf_extra_drop) return;
+    if (perf_open()) {
+        if (s_perf_extra_len) WriteFile(s_perf_h, s_perf_extra, s_perf_extra_len, &w, NULL);
+        if (s_perf_extra_drop) {
+            char line[64];
+            int len = snprintf(line, sizeof line, "  (%u more lines not kept)\r\n", s_perf_extra_drop);
+            WriteFile(s_perf_h, line, (DWORD)len, &w, NULL);
+        }
+        xbox_flush_file(s_perf_h);
+    }
+    s_perf_extra_len = s_perf_extra_drop = 0;
+}
+
 static void perf_account(unsigned t10, unsigned cpu10) {
     static unsigned n, worst, over17, over33, over100;
     static unsigned long long sum, cpu_sum;
     static unsigned minute;
-    static HANDLE h = INVALID_HANDLE_VALUE;
+    HANDLE h;
     if (!XBOX_PERF_LOG) return;
     n++;
     sum += t10;
@@ -1640,11 +1719,11 @@ static void perf_account(unsigned t10, unsigned cpu10) {
     if (t10 > 175) over17++;
     if (t10 > 330) over33++;
     if (t10 > 1000) over100++;
+    if (sum % 150000 < t10) perf_flush_notes();   /* every 15 s, if any */
     if (sum < 600000) return;   /* 60 s */
     minute++;
-    if (h == INVALID_HANDLE_VALUE)
-        h = CreateFileA(XBOX_UDATA_DIR "perf.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
-                        FILE_ATTRIBUTE_NORMAL, NULL);
+    perf_flush_notes();   /* the minute's notes go above its summary */
+    h = perf_open() ? s_perf_h : INVALID_HANDLE_VALUE;
     if (h != INVALID_HANDLE_VALUE) {
         char line[200];
         DWORD w;
@@ -1671,13 +1750,25 @@ static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
     unsigned long long cpu_ticks = t_enter - t_last > s_drain_ticks ? t_enter - t_last - s_drain_ticks : 0;
     s_drain_ticks = 0;
     if (XBOX_HITCH_MS && t_last) {
+        /* a fade or load draws nothing for many frames: report the first
+         * frame of such a run and its length, not every frame of it */
+        static unsigned s_sparse_run;
         unsigned total = (unsigned)((t_done - t_last) / f), cpu = (unsigned)(cpu_ticks / f);
-        if (total >= XBOX_HITCH_MS || s_draws < 3)
-            xbox_logf("[HITCH] frame %u: %u ms (cpu %u, gpu+flip %u) draws %u clears %u | tex %u / %u ms | "
-                      "fread %u / %u KB / %u ms\n",
-                      s_frame, total, cpu, total - cpu, s_draws, s_n_clr_frame, g_xfs.tex_n,
-                      (unsigned)(g_xfs.tex_ticks / f), g_xfs.fread_n, (unsigned)(g_xfs.fread_bytes / 1024),
-                      (unsigned)(g_xfs.fread_ticks / f));
+        int sparse = s_draws < 3;
+        if (!sparse && s_sparse_run > 1) xbox_logf("[HITCH] %u frames with < 3 draws, up to frame %u\n", s_sparse_run, s_frame - 1);
+        s_sparse_run = sparse ? s_sparse_run + 1 : 0;
+        if (s_sparse_run && s_sparse_run % 600 == 0) xbox_logf("[HITCH] %u frames with < 3 draws so far\n", s_sparse_run);
+        if (total >= XBOX_HITCH_MS || s_sparse_run == 1) {
+            char line[200];
+            snprintf(line, sizeof line,
+                     "  [HITCH] frame %u: %u ms (cpu %u, gpu+flip %u) draws %u clears %u | tex %u / %u ms | "
+                     "fread %u / %u KB / %u ms",
+                     s_frame, total, cpu, total - cpu, s_draws, s_n_clr_frame, g_xfs.tex_n,
+                     (unsigned)(g_xfs.tex_ticks / f), g_xfs.fread_n, (unsigned)(g_xfs.fread_bytes / 1024),
+                     (unsigned)(g_xfs.fread_ticks / f));
+            xbox_logf("%s\n", line + 2);
+            if (total >= 100) perf_note(line);
+        }
     }
     if (t_last) {
         unsigned t10 = (unsigned)((t_done - t_last) * 10 / f), cpu10 = (unsigned)(cpu_ticks * 10 / f);

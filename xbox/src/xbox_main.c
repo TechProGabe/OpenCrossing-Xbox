@@ -32,6 +32,7 @@ int           g_pc_running = 1;
 int           g_pc_frame_limit_override = -1;
 int           g_pc_speedhack_enabled = 0;
 int           g_pc_verbose = 1;
+int           g_xbox_verbose_noisy = 0;   /* g_pc_verbose for the files that log every second / slow frame (CMakeLists.txt); 1 = back on */
 int           g_pc_time_override = -1;
 int           g_pc_min_override = -1;
 int           g_pc_sec_override = -1;
