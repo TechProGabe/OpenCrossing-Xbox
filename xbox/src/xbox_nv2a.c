@@ -1589,7 +1589,8 @@ int xbox_nv2a_init(void) {
 #define XBOX_HITCH_MS 40
 #endif
 /* perf.log: one line a minute on the HDD (hardware has no serial port):
- * average fps, average cpu ms, worst frame, frames > 33 ms and > 100 ms.
+ * average fps, average cpu ms, worst frame, frames > 17.5 ms (a missed
+ * vblank), > 33 ms and > 100 ms.
  * Times arrive in 0.1 ms units. -DXBOX_PERF_LOG=0 disables. */
 #ifndef XBOX_PERF_LOG
 #define XBOX_PERF_LOG 1
@@ -1627,7 +1628,7 @@ static void pace_account(unsigned t10, unsigned cpu10, unsigned draws, unsigned 
 
 void xbox_flush_file(HANDLE h);
 static void perf_account(unsigned t10, unsigned cpu10) {
-    static unsigned n, worst, over33, over100;
+    static unsigned n, worst, over17, over33, over100;
     static unsigned long long sum, cpu_sum;
     static unsigned minute;
     static HANDLE h = INVALID_HANDLE_VALUE;
@@ -1636,6 +1637,7 @@ static void perf_account(unsigned t10, unsigned cpu10) {
     sum += t10;
     cpu_sum += cpu10;
     if (t10 > worst) worst = t10;
+    if (t10 > 175) over17++;
     if (t10 > 330) over33++;
     if (t10 > 1000) over100++;
     if (sum < 600000) return;   /* 60 s */
@@ -1644,20 +1646,20 @@ static void perf_account(unsigned t10, unsigned cpu10) {
         h = CreateFileA(XBOX_UDATA_DIR "perf.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
                         FILE_ATTRIBUTE_NORMAL, NULL);
     if (h != INVALID_HANDLE_VALUE) {
-        char line[160];
+        char line[200];
         DWORD w;
         int len = snprintf(line, sizeof line,
-                           "min %u (frame %u): %u.%u fps avg, cpu %u.%u ms avg, worst %u ms, >33ms %u, >100ms %u | "
+                           "min %u (frame %u): %u.%u fps avg, cpu %u.%u ms avg, worst %u ms, >17ms %u, >33ms %u, >100ms %u | "
                            "pb peak %u KB, tex %u KB, free %u KB, gpu faults %u\r\n",
                            minute, s_frame, (unsigned)(n * 100000ull / sum) / 10, (unsigned)(n * 100000ull / sum) % 10,
-                           (unsigned)(cpu_sum / n) / 10, (unsigned)(cpu_sum / n) % 10, worst / 10, over33, over100,
+                           (unsigned)(cpu_sum / n) / 10, (unsigned)(cpu_sum / n) % 10, worst / 10, over17, over33, over100,
                            s_pb_peak / 1024, s_pool_used / 1024, xbox_mem_free_kb(), (unsigned)s_gf_count);
         s_pb_peak = 0;
         WriteFile(h, line, (DWORD)len, &w, NULL);
         xbox_flush_file(h);
         xbox_logf("[PERF] %s", line);
     }
-    n = worst = over33 = over100 = 0;
+    n = worst = over17 = over33 = over100 = 0;
     sum = cpu_sum = 0;
 }
 
