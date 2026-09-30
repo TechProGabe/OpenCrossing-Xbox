@@ -50,7 +50,7 @@ pointers with the shim, so `pc/` needs no Xbox branches. Only `pc_gx_tev.c`
 | file | job |
 |---|---|
 | `xbox_main.c` | entry, finds the disc image, splash, error cards, frame counter |
-| `xbox_io.c` | path mapping, logging, file flushing, `boot.log` |
+| `xbox_io.c` | path mapping, logging, file flushing, `boot.log`, the disc image's reads (around pdclib) |
 | `xbox_nv2a.c`, `xbox_tev_rc.c`, `shaders/gx.vsh` | renderer (`renderer.md`) |
 | `xbox_aram.c` | sparse ARAM with disc-backed regions (`memory.md`) |
 | `xbox_audio.c` | own polled AC97 driver on hardware, APU voice under xemu |
@@ -73,6 +73,14 @@ the logs (`boot.log`, `last.log`, `crash.log`, `hang.log`, `perf.log`,
 `input.log`, `stickN.log`). Saves use the GameCube `.gci` format, so they
 move between this port, Dolphin, the PC port and the other OpenCrossing
 ports.
+
+The home town is `save/card_a/DobutsunomoriP_MURA.gci` (also accepted:
+`8P-GAFE-DobutsunomoriP_MURA.gci`). That file wins when it exists; the scan
+for any other `.gci` name (Dolphin exports `01-GAFE-...`) is broken on the
+Xbox (`known-issues.md`). Each save rotates the previous file to
+`.bak1`..`.bak3`, which are only read if the main file can't be; "clear
+village data" writes the town with its save check cleared, so its previous
+state is `.bak1`.
 
 Saves are flushed to disk on close, and the volume is flushed on rename.
 FATX caches directory entries, and Mr. Resetti's "quit without saving" check
@@ -141,3 +149,12 @@ never an XISO.
   zone is a setting with a live stick readout instead.
 - Turning on `PC_ENHANCEMENTS` for the whole tree: it also changes gameplay
   (camera, fog, player, submenus). Only the files listed in `patches.md` get it.
+- `pc_vi.c`'s timer frame limiter on the Xbox: it lost every overrun and
+  beat against the 59.94 Hz vblank; frames pace to the vblank counter
+  (`perf.md`).
+- A bigger pdclib buffer (`setvbuf`) for the disc image: `fseek` before
+  every read discards it, so a 12-byte read would pull in 32 KB, and
+  `fread` still copies byte by byte. Interposing `fseek` for every C file
+  was rejected too (a program-wide stdio change for one reader): only
+  `pc_disc.c` gets `xbox_disc_fread`/`xbox_disc_fseek`.
+

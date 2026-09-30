@@ -171,3 +171,20 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   `-DXBOX_WIDESCREEN=OFF` left the next "release" builds without it.
   `xbox/build.sh` passes each option's default on every run; add new
   options there too.
+- **nxdk defines `_WIN32` and `_MSC_VER`.** `pc/` code under `#ifdef _WIN32`
+  takes its Windows branch: `pc_card.c`'s save scan calls `FindFirstFileA`
+  with a relative path that never goes through `xbox_resolve`, so it finds
+  nothing (`known-issues.md`). The POSIX branches (`opendir`, `stat`, `mkdir`)
+  are the ones `xbox_posix.c` resolves. Check which branch a `pc/` file
+  takes before trusting it.
+- **The `cpu` in `[HITCH]` / `perf.log` is time between presents,** not CPU
+  used by the game thread: another thread's work (the audio producer
+  catching up, a disc read) and any wait count in it. The cold-boot title
+  chug read as "cpu 80 ms" with the game thread mostly starved. Before
+  vblank pacing it also included `pc_vi.c`'s pacing spin.
+- **Which hardware log covers what:** `boot.log` is every line of the
+  first 120 frames (boot and the start of the first title demo), `last.log`
+  only the last 4 KB (seconds to minutes, depending on log volume), and
+  `perf.log` the whole session a minute at a time. A problem in the first
+  seconds after boot is in `boot.log`; anything later, in `perf.log`.
+

@@ -4,26 +4,16 @@ Bugs seen on real hardware or in xemu that are not fixed yet, and the leads
 we have. Add the build and date when you log one; delete it when it's fixed
 (the commit message keeps the history).
 
-## Town not as smooth (hardware, 2026-09-28)
-
-- Town "runs ok but not as butter", ~45-50 fps by eye. The console was
-  still running the build before the settings menu (no `[Xbox]` section in
-  its `settings.ini`), so the settings-menu changes are not the cause.
-  That run's `perf.log`: 56-60 fps average per minute, but 5-12 frames a
-  minute over 33 ms and 1-5 over 100 ms (worst ~270 ms), and free RAM down
-  to 456 KB once. The hitches, not the average, are what reads as
-  not smooth; `[HITCH]` lines say whether they are texture loads or GPU.
-  `borderless_acres = 1` (the PC default) draws neighbouring acres too.
-
-## Not yet tested on hardware (2026-09-28)
+## Not yet tested on hardware
 
 - 720p's 5 MB texture pool in the busiest rooms (museum, full houses):
   `perf.log` tex KB and `[NV2A] texture pool full` lines. 720p itself runs
   at 60 fps on hardware (beta-3, 2026-09-28).
-- Direct disc image reads (`perf.md`): the first title demo after a cold
-  boot, which chugged at 12-15 fps for ~15 s until the villager walks down
-  from the station (vblank pacing alone didn't fix it; a later title visit
-  never chugged). perf.log minute 1 `>17ms` and `[PACE]` lines.
+- Direct disc image reads (`perf.md`, `dev` at `ab04d7fb`, deployed
+  2026-09-29): the first title demo after a cold boot chugged at 12-15 fps
+  for ~15 s until the villager walks down from the station; a later title
+  visit never did. Judge it on perf.log minute 1 (`>17ms` was 622, `[PACE]`
+  windows at 88 ms average) over several cold boots.
 - CPU/GPU overlap (`gpu_overlap = 1`): frame times in town vs off (`perf.log`).
 - Shop upgrade defaulting to Singleplayer on a console whose `settings.ini`
   predates the `[Xbox]` section.
@@ -47,18 +37,18 @@ we have. Add the build and date when you log one; delete it when it's fixed
   so an imported save under another name loses to a town started on the
   Xbox. Worth a line in the README's save instructions.
 
-## NES games run choppy
+## NES games run a little choppy
 
-- Real hardware, `dev` at `f3b76f8d`, 2026-09-28: playing an NES game from
-  the furniture item, the frame rate is very low and the picture is choppy.
-  Not investigated yet. Leads: fixNES emulation cost on the 733 MHz CPU
-  (`pc_nes_fixnes.c`), the per-frame RGB565 → swizzled A8R8G8B8 upload of the
-  256×224 NES frame into a fresh texture (`tex_image_2d` in `xbox_nv2a.c`),
-  and the present waiting for GPU idle. Better with vblank pacing, but
-  measured (hardware, `[NES]` lines): fixNES alone takes 13-14 ms per NES
-  frame and the whole frame 17-18 ms, so it misses the vblank by 1-2 ms.
-  Next: cut the ~4 ms outside the emulator (RGB565 to swizzled A8R8G8B8
-  upload of a padded 256x256 texture every frame) or the emulator itself.
+- Hardware, 2026-09-29 (`[NES]` lines in perf.log): fixNES alone takes
+  13-14 ms per NES frame and the whole frame 17-18 ms, so most frames miss
+  the 16.7 ms vblank by 1-2 ms. Better than before vblank pacing ("improved,
+  not 100%"). The ~4 ms outside the emulator is the lead: the per-frame
+  RGB565 to swizzled A8R8G8B8 conversion of a padded 256x256 texture into
+  a fresh pool block (`tex_image_2d` in `xbox_nv2a.c`), then the draw and
+  present. Options: upload in place when the size doesn't change, or keep
+  RGB565 (build fixNES without `COL_TEX_BSWAP` so red is in the high bits).
+  The emulator itself steps CPU, PPU, APU and mapper through separate calls
+  every cycle (`pc_fixnes_frame`).
 
 ## Not ported
 

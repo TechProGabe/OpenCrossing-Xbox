@@ -55,6 +55,10 @@ textures and restarts the pushbuffer and vertex ring at their heads. That drain 
 timed and counted as `gpu` in `[HITCH]` and `perf.log`, so the cpu figure
 stays the CPU's own work. `-DXBOX_GPU_OVERLAP=0` compiles it out.
 
+Independently, `xbox_nv2a_present` ends with `vbl_pace`: each frame is due
+one vblank after the previous one, replacing `pc_vi.c`'s timer limiter at
+`max_fps = 60` and during NES play (`perf.md`).
+
 ## Screen size, widescreen, 720p
 
 The framebuffer is 640x480x32, or 1280x720x16 when the boot runs at 720p
@@ -93,6 +97,8 @@ drops pc_gx.c's full-res EFB captures (up to 4, 2 MB each for a screen grab).
 | `XBOX_DBG_WEATHER=N` | force the weather (1 rain, 2 snow) |
 | `XBOX_DBG_CRASH_FRAME=N` | fault on purpose at frame N (tests `xbox_crash.c`) |
 | `XBOX_DBG_NES_TEST=N` | draw RGB565 colour bars through the NES screen path from frame N (120 frames) |
+| `XBOX_HITCH_MS=N` | `[HITCH]` threshold (40 ms; 1 logs every frame) |
+| `XBOX_PACE_MISSES=N` | `[PACE]` threshold, missed vblanks a second (6; 0 = off) |
 
 | `-DXBOX_AUTOPAD=script` (CMake var) | plays `D:\autopad.txt`: timed pad buttons, SDL controller events (pause menu, rebinding), one-shot screenshots, log marks, `@480`/`@720` lines (`xbox_autopad.c` header) |
 
@@ -100,7 +106,8 @@ Kill switches (default on): `XBOX_PB_GUARD=0` (no mid-frame pushbuffer
 restart), `XBOX_VC_DELTA=0` (upload all 41 vertex-constant rows per draw
 instead of the changed ones), `XBOX_CRASH_GUARD=0`, `XBOX_LASTLOG_SECS=0`,
 `XBOX_GPU_OVERLAP=0` (C flag; the overlap is also off at runtime unless
-`gpu_overlap = 1`), and the CMake options `-DXBOX_WIDESCREEN=OFF`
+`gpu_overlap = 1`), `XBOX_VBL_PACE=0` (`pc_vi.c`'s timer limiter),
+`XBOX_DISC_DIRECT=0` (disc image through pdclib), and the CMake options `-DXBOX_WIDESCREEN=OFF`
 (no 16:9 / 720p, pc_gx.c etc. without `PC_ENHANCEMENTS`) and
 `-DXBOX_TITLE_MENU=OFF` (plain "Press Start").
 

@@ -37,7 +37,11 @@ logged to `~/xemu/run/serial.log`, and stops at the regex or the timeout.
 xemu has no screenshot command; use `-DXBOX_FBDUMP_EVERY=N`.
 
 xemu is not hardware: it never plays AC97 on macOS, has no CPU cache model,
-and hides timing bugs. Judge performance and hangs on a real console.
+and hides timing bugs. Judge performance and hangs on a real console. Its
+timing also follows the host: on a busy Mac (check `uptime`) two runs of
+the same build differed 2x, so A/B timings there need an idle host. An
+`XBOX_FBDUMP_EVERY` frame takes seconds (the dump goes over serial) and
+shows up as a `[HITCH]`.
 
 Scripted menu tests: build with `XBOX_CMAKE_ARGS="-DXBOX_AUTOPAD=script"`
 and stage an `autopad.txt` with `OCX_STAGE_EXTRA` (format in the header of
@@ -66,6 +70,18 @@ game writes logs to `E:\UDATA\4f430001\`:
 | `hang.log` | by the watchdog when frames stop for 6 s (or none in 90 s after boot): log tail + every thread's stack words; the same report is drawn on screen |
 | `input.log` | left-stick swings over 120° in one frame |
 | `stickN.log` | last 10 s of stick readings, written when L3 is clicked |
+
+From the Mac, curl does both directions (dashboard FTP login `xbox`/`xbox`):
+
+```sh
+X=ftp://<xbox-ip>
+curl -u xbox:xbox -o perf.log $X/E/UDATA/4f430001/perf.log          # pull a log
+curl -u xbox:xbox -l $X/E/UDATA/4f430001/save/card_a/                # list saves
+curl -u xbox:xbox -T build-xbox/xbe/default.xbe $X/F/Applications/OpenCrossing/default.xbe
+```
+
+Re-download an uploaded XBE and compare `shasum` before asking for a test.
+Copy the whole `save/card_a` folder off the console before touching a save.
 
 Symbolize stack words with `tools/xbox/sym.py [map] < hang.log` (or
 `crash.log`). The map must

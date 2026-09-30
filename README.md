@@ -83,8 +83,9 @@ Saves go to the hard drive in every mode, including discs, at `E:\UDATA\4f430001
 To continue a town from your GameCube or Dolphin:
 
 1. Export the save. Dolphin's memory card manager gives you a `.gci`. GameShark and GC Memcard Manager exports are `.gcs`.
-2. Convert it: `python3 tools/gcs_to_gci.py mysave.gcs`. This writes `DobutsunomoriP_MURA.gci`. A `.gci` from Dolphin can be copied as it is.
-3. Launch the game once so it creates its folders. Then FTP the `.gci` to `E:\UDATA\4f430001\save\card_a\`, replacing the file there.
+2. Convert it: `python3 tools/gcs_to_gci.py mysave.gcs`. This writes `DobutsunomoriP_MURA.gci`. A `.gci` from Dolphin needs no conversion.
+3. Name it exactly `DobutsunomoriP_MURA.gci`. Dolphin names its exports `01-GAFE-DobutsunomoriP_MURA.gci`, and other names aren't found yet.
+4. Launch the game once so it creates its folders. Then FTP the `.gci` to `E:\UDATA\4f430001\save\card_a\`, replacing the file there. If you already started a town on the Xbox, copy its `DobutsunomoriP_MURA.gci` off first: the file of that name is the one that loads.
 
 Settings are in **Options** on the title screen, or **Settings** in the pause menu (Back button):
 
@@ -119,7 +120,8 @@ The left stick's dead zone defaults to 43%, which suits a worn controller whose 
 ## Known issues
 
 - The left stick has a large dead zone (43%) by default, tuned on a worn controller. Lower it in Options > Controls (see Controls).
-- NES games run choppy.
+- NES games run a little choppy.
+- A save only loads if it is named `DobutsunomoriP_MURA.gci` (see Saves and settings).
 
 The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
 
