@@ -37,6 +37,22 @@ we have. Add the build and date when you log one; delete it when it's fixed
   so an imported save under another name loses to a town started on the
   Xbox. Worth a line in the README's save instructions.
 
+## Date sometimes comes up as 2083 (2026-09-29)
+
+- User report on hardware: the in-game date seems to default to 2083,
+  apparently at random. Not reproduced or logged yet.
+- The clock is set once at boot in `OSInit` (`pc_os.c`): `time(NULL)` from
+  nxdk, turned into GameCube ticks since 2000 with a timezone offset from
+  `gmtime`/`mktime`. Leads: what nxdk's `time()` returns when the console
+  clock is unset or the RTC capacitor has drained, and whether its
+  `mktime` fails (`-1` makes the offset huge). Log `unix_now`,
+  `tz_offset_secs` and `gc_secs` at boot to catch a bad start.
+- Separate lead: `osGetTime` computes `(now - start) * GC_TIMER_CLOCK` in
+  64 bits before dividing by the counter frequency. At 40.5 MHz times a
+  733 MHz counter that overflows after about 10 minutes of uptime and the
+  clock jumps. Check `SDL_GetPerformanceFrequency` on nxdk; split the
+  multiply (seconds + remainder) if it's the CPU counter.
+
 ## NES games run a little choppy
 
 - Hardware, 2026-09-29 (`[NES]` lines in perf.log): fixNES alone takes
