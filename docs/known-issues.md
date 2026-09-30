@@ -28,6 +28,25 @@ we have. Add the build and date when you log one; delete it when it's fixed
 - Shop upgrade defaulting to Singleplayer on a console whose `settings.ini`
   predates the `[Xbox]` section.
 
+## Saves under any other name are never found (2026-09-29)
+
+- A user report: a GameCube save exported with Dolphin's memory card manager
+  as `01-GAFE-DobutsunomoriP_MURA.gci` in `save/card_a` didn't load. Only
+  the exact names `DobutsunomoriP_MURA.gci` and
+  `8P-GAFE-DobutsunomoriP_MURA.gci` work (`pc_save_scan_gci_dir`). The
+  "any `.gci` in the folder" fallback, `pc_card_scan_for_gci` in
+  `pc_card.c`, takes its `_WIN32` branch (nxdk defines `_WIN32`) and calls
+  `FindFirstFileA("save/card_a\*.gci")` with a relative path, which never
+  resolves on the Xbox. The same scan finds a visiting town in
+  `save/card_b`, so that is broken too.
+- Fix: build `pc_card.c` with `-U_WIN32` so it takes the `opendir` branch
+  (`xbox_posix.c` resolves `save/...` to `E:\UDATA\4f430001\`); check its
+  `mkdir`/`strcasecmp` fall back cleanly. Workaround until then: rename the
+  file to `DobutsunomoriP_MURA.gci` (an existing file of that name wins).
+- Even once fixed, `DobutsunomoriP_MURA.gci` is loaded first when it exists,
+  so an imported save under another name loses to a town started on the
+  Xbox. Worth a line in the README's save instructions.
+
 ## NES games run choppy
 
 - Real hardware, `dev` at `f3b76f8d`, 2026-09-28: playing an NES game from
