@@ -6,7 +6,15 @@ we have. Add the build and date when you log one; delete it when it's fixed
 
 ## Not yet tested on hardware
 
-- The Melee-X backport combo build (2026-10-03, `backport.md`): native
+- v5-v7 ran on hardware 2026-10-03 (NES, clock and audio confirmed; v7
+  logged no audio starvation after boot). Not judged separately yet: the
+  texture cache index (`PC_TEX_CACHE_INDEX`) and inline shim compares in a
+  busy town, the texture pitch fix (no GPU faults since).
+- Round C (2026-10-03): safe video (BACK at boot, 480i/480p/720p Output
+  row), the clock fix over 20+ minutes. The FPS counter, 16-bit clear
+  colours and `*_prev.log` work (v4).
+- The Melee-X backport combo build (2026-10-03, `backport.md`; v1 ran on
+  hardware 2026-10-03: stable, audio fine, 57-60 fps in town at 720p): native
   texture formats, texture reuse, per-draw skips, vertex cache break, strict
   GPU wait, 32 KB kicks, GPU overlap on by default, AC97 start/recovery/
   shutdown, session-long `boot.log`, `[FRAME]` / `[BEAT]` / `[PROF]`.
@@ -30,15 +38,115 @@ we have. Add the build and date when you log one; delete it when it's fixed
 
 ## Z-fighting on the player model and the pockets glove (2026-10-03)
 
-- User report on hardware (build and video mode not noted): where the
-  villager's shirt and trousers meet there seems to be z-fighting, and the
-  glove hand in the pockets menu shows the same. To look into later.
-- Leads: depth precision. 480 runs Z24S8, 720p Z16, where Melee-X needed a
-  depth remap (its `docs/renderer.md` "Depth", `XGX_Z16_DEPTH_RATIO`) for the
-  same symptom; check which mode it was. Also `ZMIN_MAX_CONTROL`, the depth
+- User report on hardware (beta build, 480: 640x480x32 with Z24S8 per the
+  console's boot.log): where the villager's shirt and trousers meet there
+  seems to be z-fighting, and the glove hand in the pockets menu shows the
+  same. To look into later.
+- Leads: depth precision. It happens at 480 (Z24S8), so it isn't only the
+  Z16 problem Melee-X fixed with a depth remap at 720p (its
+  `docs/renderer.md` "Depth", `XGX_Z16_DEPTH_RATIO`); 720p may be worse. Also `ZMIN_MAX_CONTROL`, the depth
   range folded into the projection (`mat4_rows_mul`), and whether the seam's
   polygons share depth on the GameCube (Dolphin) too. Get a screenshot pair
   of 480 vs 720p.
+
+## No sound: AC97 stuck at descriptor 0 (2026-10-03, v2)
+
+- Hardware, v2: `[AUDIO] AC97 stuck: civ 0 lvi 6 sr 00/00` from the first
+  buffer, eight restarts and three cold resets without a finished buffer
+  (codec ready, status 00300100). v1, with the same audio code, played fine;
+  the v1 session before it ended without a quit line (reset or power-off
+  mid-game). In xemu with the AC97 path forced (`-DXBOX_AUDIO_APU=0`) v1 and
+  v2 both run the engine. Melee-X saw the same state after a crash and only
+  a power-off cleared it. Lead: a codec left stuck by an unclean end (IGR,
+  reset button); check with a full power-off before launching. If it comes
+  back after a power-off, suspect v2's controllers starting before the
+  splash (USB up before the AC97) and test with `audio_fix = 0`.
+- Confirmed (2026-10-03): after a full power-off v3 has sound. The stuck
+  codec came from the unclean end of the session before; a reset or IGR
+  doesn't clear it. Worth a README line ("no sound: power the console off").
+
+## Crash on START at the title (GitHub #2, 2026-09-29)
+
+- Report from an early beta (its log still has `[LOGO]` lines and closes
+  `boot.log` at frame 120): pressing START on the title, the game stops;
+  `last.log` ends at `aAL_setupAction: 4 -> 5` (the START press), `[STATE]`
+  shows no GPU fault. Only `last.log` was posted.
+- Not reproduced in xemu (2026-10-03, dev): first boot with no save and no
+  `settings.ini` (`-DXBOX_DBG_FRESH_UDATA`), START at the title goes on to
+  K.K. and the train, at 480; also with the pre-v6 clock (~2083). Next:
+  the reporter's release, console (RAM, 480/720p), what's in
+  `save/card_a`, and any `crash.log` / `hang.log`; and whether the current
+  release does it.
+
+## Audio chugs (2026-10-03, v4)
+
+- Hardware report, v4 at 720p: "the audio chugs". No `[AUDIO]` warnings in
+  the log; the AC97 itself ran. The frames around it were CPU-bound (busy
+  town 51 fps at 340 draws, NES 52 fps): the game thread never sleeps then,
+  and the audio producer thread had the same priority, so it waited for the
+  game's time slice while the ~70 ms ring ran dry. v5 runs the producer one
+  step above the game (`audio_priority`, `xbox_audio.c`) and counts the
+  silence the AC97 played for lack of samples (`[BEAT] ... audio starved N
+  ms in G gaps`). One gap of ~25 ms at boot is the ring filling. If it
+  still chugs with no starved ms, look at the synthesis itself
+  (`pc_audio_process_frame`'s cost in `[PROF]`).
+
+## Title text at 720p looks odd (2026-10-03, v4)
+
+- User report: at 720p the "2001" and "2002" of the copyright line and some
+  of the title menu's options look a little weird; probably there since
+  720p came in. xemu at 720p (16:9 and 4:3) shows them clean, so it may be
+  the console's 16-bit framebuffer or filtering. Needs a photo from the
+  TV.
+- Found on the way (xemu): at 16:9 (always at 720p) some 2D art is drawn
+  ~1.3x too wide, the title logo for one; only the 3D is hor+ and some 2D
+  is pillarboxed (`pc_gx.c`). The main game stays 16:9 (user's choice); NES
+  games are 4:3 between bars (`nes_aspect`, checked at 720p in xemu with
+  `XBOX_DBG_NES_TEST`).
+
+## Choice list scrolls down on its own (2026-10-03, v3)
+
+- Hardware report: in a conversation's choice list the cursor scrolls down
+  by itself and won't go back up; walking is normal. AC turns the C-stick
+  into the N64 C buttons past 29 of 127 (~23%, `contreaddata.c`) and the
+  lists scroll on C-down too, while the C-stick dead zone was 12%: a worn
+  right stick resting a quarter down holds C-down. v4 makes the Xbox's
+  C-stick dead zone 30% (raised once for older settings files,
+  `opt_version` 2). Confirm on hardware; `stick0.log` (L3) has raw reads.
+
+## NES at 720p (2026-10-03)
+
+- Fixed in v7 (hardware, 2026-10-03: "literally flawless", 59.4 fps, 4:3
+  between bars in `nes_shot.raw`): the picture was drawn a second time,
+  full screen, by `famicom.cpp`'s GameCube quad (`patches.md`). v5's
+  upload fast path and v7 together took NES from 52 to ~59 fps. NES frames 17.8 ms in v5
+  (56 fps; upload 1.4 ms, was 3.0).
+- v4 on hardware: NES plays at 720p (heap 3072 KB, fixNES's allocations
+  fit) and the save file is written. Left:
+  - Free RAM during NES play is 244 KB (perf.log minute 3): one more
+    allocation and something fails. Options: a smaller 720p texture pool
+    while NES runs, or fixNES's noise table (508 KB) shared or shrunk.
+  - Frames 19 ms (52 fps): fixNES 13.3 ms, the screen upload 3 ms (fixed
+    in v5: two texels a word), gpu wait ~2 ms. fixNES's `ppuCycle` alone is
+    ~24% of NES samples; per-TU `-O3` for `ppu.c`/`cpu.c`/`apu.c` is the next
+    thing to try.
+  - On leaving the game the log shows `ファミコン共通セーブは不正です` /
+    `共通セーブ領域が壊れているのでセーブしません` (the common NES save area
+    is invalid, not saved), right before `[NES] internal save write ...: ok`.
+    Possibly a first play with no area yet, possibly byte order; check
+    whether high scores survive a second play.
+
+### Earlier: "memory card in slot A could not be read"
+
+- Cause found with v3's `[NES]` lines: `famicom_init` failed on
+  `MALLOC_MALLOC ... CHR_TO_I8_BUF_SIZE 1048576Byte 確保失敗`. The PC branch
+  of `famicom_emu_init` mallocs a fixed 4 MB heap for the emulator, and at
+  720p only ~3.8 MB is free (perf.log `free 3824 KB`); the room reports the
+  failure as a card error. The beta ran NES at 480 (~5.5 MB free). v4 falls
+  back to 3.5 / 3 / 2.75 MB (`[NES] emulator heap` line); on hardware it
+  got 3 MB and played.
+- Also fixed on the way: `famicom.cpp` (C++) never got the path routing, so
+  the NES save file was never read or written on the Xbox.
 
 ## Saves under any other name are never found (2026-09-29)
 
@@ -59,24 +167,34 @@ we have. Add the build and date when you log one; delete it when it's fixed
   so an imported save under another name loses to a town started on the
   Xbox. Worth a line in the README's save instructions.
 
+## Clock: 2083, and hours off after a reboot (fixed in v6, 2026-10-03)
+
+- v5 report: the time was set right in the game and saved; after a reboot
+  the game said ~3 hours later. Cause (also the 2083 date): `OSInit`'s
+  time-zone offset came from nxdk's `mktime`, which returns -1, so the
+  console clock was UTC plus the boot's own Unix time (~2083), and each
+  boot moved it on by the real time since the previous boot. The save's
+  `time_delta` read -56.8 years. v6 takes the offset from the dashboard's
+  time zone (`[CLOCK]` line at boot) and resets such deltas to 0 once
+  (`[CLOCK] save's time offset ... reset`), so the game shows the
+  dashboard's local time. To check on hardware: time right after boot,
+  after 20+ minutes, and after a reboot. The notes below are the history.
+
 ## Date sometimes comes up as 2083 (2026-09-29)
 
 - User report on hardware: the in-game date seems to default to 2083,
   apparently at random. Not reproduced or logged yet.
-- Second report (2026-10-03): the clock may not keep time correctly. To
-  look into later; the `osGetTime` overflow below would also make the clock
-  jump or drift over a long session.
 - The clock is set once at boot in `OSInit` (`pc_os.c`): `time(NULL)` from
   nxdk, turned into GameCube ticks since 2000 with a timezone offset from
   `gmtime`/`mktime`. Leads: what nxdk's `time()` returns when the console
   clock is unset or the RTC capacitor has drained, and whether its
   `mktime` fails (`-1` makes the offset huge). Log `unix_now`,
   `tz_offset_secs` and `gc_secs` at boot to catch a bad start.
-- Separate lead: `osGetTime` computes `(now - start) * GC_TIMER_CLOCK` in
-  64 bits before dividing by the counter frequency. At 40.5 MHz times a
-  733 MHz counter that overflows after about 10 minutes of uptime and the
-  clock jumps. Check `SDL_GetPerformanceFrequency` on nxdk; split the
-  multiply (seconds + remainder) if it's the CPU counter.
+- The clock not keeping time (2026-10-03 report) was `osGetTime`'s overflow,
+  fixed in round C (`patches.md`): nxdk's performance counter is the TSC at
+  733 MHz, and `(now - start) * 40.5 MHz` passed 2^64 10.4 minutes after
+  boot, so the game clock jumped back every 10.4 minutes. Check on hardware
+  that the clock keeps time over 20+ minutes; the 2083 start is separate.
 
 ## NES games run a little choppy
 

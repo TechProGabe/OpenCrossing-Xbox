@@ -44,6 +44,7 @@ enum {
     ITEM_SHOP_VISITOR,
     ITEM_BORDERLESS_ACRES,
     ITEM_NES_ASPECT,
+    ITEM_FPS_COUNTER,
 };
 
 typedef struct {
@@ -57,6 +58,7 @@ static const Item tab_video_items[] = {
     { "Widescreen",     ITEM_WIDESCREEN },
 #endif
     { "Texture filter", ITEM_TEXTURE_FILTERING },
+    { "FPS counter",    ITEM_FPS_COUNTER },
 };
 static const Item tab_audio_items[] = {
     { "Master volume", ITEM_MASTER_VOLUME },
@@ -189,13 +191,31 @@ static void capture_finish(int changed) {
 
 /* ---- pending state ---- */
 
+/* Output: 480i, then 480p and 720p where the dashboard allows them. 480p
+ * is progressive = 1 without 720p; 720p keeps progressive as it was, for
+ * when it can't start; 480i changes progressive only where 480p exists. */
+enum { OUT_480I, OUT_480P, OUT_720P, OUT_N };
+static int out_get(const XboxSettings* s) {
+    if (s->video_720p) return OUT_720P;
+    return s->progressive && xbox_video_480p_allowed() ? OUT_480P : OUT_480I;
+}
+static int out_allowed(int o) {
+    return o == OUT_480I || (o == OUT_480P && xbox_video_480p_allowed()) ||
+           (o == OUT_720P && xbox_video_720p_allowed());
+}
+static void out_set(XboxSettings* s, int o) {
+    s->video_720p = o == OUT_720P;
+    if (o == OUT_480P) s->progressive = 1;
+    else if (o == OUT_480I && xbox_video_480p_allowed()) s->progressive = 0;
+}
+
 static int restart_pending(void) {
-    return s_xpending.video_720p != g_xbox_settings.video_720p;
+    return out_get(&s_xpending) != out_get(&g_xbox_settings);
 }
 
 /* the running output differs from the saved choice: shown until a restart */
 static int restart_outstanding(void) {
-    return g_xbox_settings.video_720p != g_xbox_settings_boot.video_720p;
+    return out_get(&g_xbox_settings) != out_get(&g_xbox_settings_boot);
 }
 
 static void recompute_dirty(void) {
@@ -210,8 +230,17 @@ static int step_clamp(int v, int step, int dir, int lo, int hi) {
 
 static void item_cycle(int id, int dir) {
     switch (id) {
-        case ITEM_OUTPUT:
-            s_xpending.video_720p = !s_xpending.video_720p;
+        case ITEM_OUTPUT: {
+            int o = out_get(&s_xpending), k;
+            for (k = 0; k < OUT_N; k++) {
+                o = (o + (dir > 0 ? 1 : OUT_N - 1)) % OUT_N;
+                if (out_allowed(o)) break;
+            }
+            out_set(&s_xpending, o);
+            break;
+        }
+        case ITEM_FPS_COUNTER:
+            s_xpending.fps_counter = !s_xpending.fps_counter;
             break;
         case ITEM_WIDESCREEN: /* Off -> On -> Auto */
             s_xpending.widescreen = (s_xpending.widescreen + (dir > 0 ? 1 : 2)) % 3;
@@ -248,15 +277,15 @@ static void item_cycle(int id, int dir) {
     recompute_dirty();
 }
 
-static const char* std_output_name(void) {
-    const char* n = xbox_video_mode_name();
-    return strcmp(n, "720p") == 0 ? "480" : n;   /* running 720p: the 480 mode isn't known */
-}
-
 static void item_format(int id, char* buf, size_t n) {
     switch (id) {
-        case ITEM_OUTPUT:
-            snprintf(buf, n, "< %s >", s_xpending.video_720p ? "720p" : std_output_name());
+        case ITEM_OUTPUT: {
+            static const char* const names[OUT_N] = { "480i", "480p", "720p" };
+            snprintf(buf, n, "< %s >", names[out_get(&s_xpending)]);
+            break;
+        }
+        case ITEM_FPS_COUNTER:
+            snprintf(buf, n, "%s", s_xpending.fps_counter ? "< On >" : "< Off >");
             break;
         case ITEM_WIDESCREEN:
             if (s_xpending.widescreen == XBOX_WS_AUTO)
@@ -303,7 +332,8 @@ static void item_format(int id, char* buf, size_t n) {
 
 static int item_changed(int id) {
     switch (id) {
-        case ITEM_OUTPUT:            return s_xpending.video_720p != g_xbox_settings.video_720p;
+        case ITEM_OUTPUT:            return out_get(&s_xpending) != out_get(&g_xbox_settings);
+        case ITEM_FPS_COUNTER:       return s_xpending.fps_counter != g_xbox_settings.fps_counter;
         case ITEM_WIDESCREEN:        return s_xpending.widescreen != g_xbox_settings.widescreen;
         case ITEM_TEXTURE_FILTERING: return s_pending.texture_filtering != g_pc_settings.texture_filtering;
         case ITEM_MASTER_VOLUME:     return s_pending.master_volume != g_pc_settings.master_volume;

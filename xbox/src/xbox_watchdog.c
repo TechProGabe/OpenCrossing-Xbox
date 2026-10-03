@@ -40,6 +40,7 @@
 
 extern unsigned int pc_image_base, pc_image_end;
 unsigned int xbox_frame_count(void);
+unsigned xbox_audio_starved_ms(unsigned* gaps);
 void xbox_flush_file(HANDLE h);
 
 #define WD_MAX_THREADS 16
@@ -207,16 +208,28 @@ void xbox_watchdog_disable(void) { s_disabled = 1; }
 static int watchdog_body(void* arg) {
     unsigned last = 0, still = 0, secs = 0, fired = 0;
     (void)arg;
+    DWORD tick = GetTickCount();
     for (;;) {
         unsigned f;
-        Sleep(1000);
-        secs++;
+        HANDLE ev = (HANDLE)xbox_bootlog_event();
+        /* an urgent line wakes us early: write it, the second goes on */
+        if (ev) WaitForSingleObject(ev, 1000 - (GetTickCount() - tick < 1000 ? GetTickCount() - tick : 1000));
+        else Sleep(1000);
         xbox_bootlog_pump();   /* the queued log lines (xbox_io.c) */
+        if (GetTickCount() - tick < 1000) continue;
+        tick = GetTickCount();
+        secs++;
         if (s_disabled) continue;
         f = xbox_frame_count();
-        if (XBOX_HEARTBEAT_SECS && f && secs % XBOX_HEARTBEAT_SECS == 0)
-            xbox_logf_quiet("[BEAT] %us: vblank %u, presented %u, free %u KB\n", secs, (unsigned)pb_get_vbl_counter(), f,
-                      xbox_mem_free_kb());
+        if (XBOX_HEARTBEAT_SECS && f && secs % XBOX_HEARTBEAT_SECS == 0) {
+            /* audio starved: silence the AC97 played because the producer
+             * thread was behind (an audible chug), xbox_audio.c */
+            unsigned gaps, starved = xbox_audio_starved_ms(&gaps);
+            char au[48] = "";
+            if (starved) snprintf(au, sizeof au, ", audio starved %u ms in %u gaps", starved, gaps);
+            xbox_logf_quiet("[BEAT] %us: vblank %u, presented %u, free %u KB%s\n", secs, (unsigned)pb_get_vbl_counter(), f,
+                      xbox_mem_free_kb(), au);
+        }
         if (XBOX_LASTLOG_SECS && f && secs % XBOX_LASTLOG_SECS == 0) {
             static unsigned logged_at;
             unsigned pos = xbox_log_pos_loud();

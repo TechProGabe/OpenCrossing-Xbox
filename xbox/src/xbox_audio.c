@@ -56,8 +56,21 @@ static u32 ai_dsp_sample_rate = PC_AUDIO_SAMPLE_RATE;
 static SDL_Thread* audio_producer_thread = NULL;
 static int audio_thread_running;
 
+/* The producer runs above the game thread: a game frame that misses the
+ * vblank never sleeps, and at equal priority the producer then waited for
+ * the game's time slice to end while the ring (~70 ms ahead) ran dry: the
+ * audio chugged with the frame rate (hardware, 720p town and NES at 51 fps).
+ * It sleeps whenever the ring is full, so it takes only the synthesis time.
+ * Below the AC97 pump (highest). Its locks (the jaudio message queue) are
+ * kernel-blocking SDL mutexes, not spinlocks (docs/traps.md). Kill switch:
+ * -DXBOX_AUDIO_PRIORITY=0, or audio_priority = 0 in settings.ini. */
+#ifndef XBOX_AUDIO_PRIORITY
+#define XBOX_AUDIO_PRIORITY 1
+#endif
 static int pc_audio_producer_func(void* data) {
     (void)data;
+    if (XBOX_AUDIO_PRIORITY && g_xbox_settings_boot.audio_priority)
+        KeSetBasePriorityThread(KeGetCurrentThread(), 1);   /* THREAD_PRIORITY_ABOVE_NORMAL */
     while (AGET(audio_thread_running)) {
         int fill = pc_audio_get_buffer_fill();
         if (fill < AUDIO_PRODUCE_THRESHOLD) {
@@ -94,6 +107,16 @@ static SDL_Thread* s_pump_thread;
 static int s_pump_run, s_playing;
 static unsigned s_queued;             /* descriptors queued since start */
 static u32 s_frac;                    /* resampler phase, 16.16 in input frames */
+static u32 s_starved, s_gaps;         /* 48 kHz frames played as silence, and runs of them */
+static int s_was_starved;
+
+/* for the [BEAT] line (xbox_watchdog.c): ms of output the producer didn't
+ * keep up with since the last call, and in how many gaps */
+unsigned xbox_audio_starved_ms(unsigned* gaps) {
+    unsigned f = __atomic_exchange_n(&s_starved, 0, __ATOMIC_ACQ_REL);
+    *gaps = __atomic_exchange_n(&s_gaps, 0, __ATOMIC_ACQ_REL);
+    return f / 48;
+}
 
 static void fill_48k(s16* out) {
     /* step = 32000/48000 = 2/3 of an input frame, in 16.16 */
@@ -105,8 +128,14 @@ static void fill_48k(s16* out) {
         u32 need = rp + 4;   /* current and next stereo frame */
         if (!AGET(s_playing) || (s32)(wp - need) < 0) {
             out[2 * i] = out[2 * i + 1] = 0;
+            if (AGET(s_playing)) {
+                __atomic_add_fetch(&s_starved, 1, __ATOMIC_RELAXED);
+                if (!s_was_starved) __atomic_add_fetch(&s_gaps, 1, __ATOMIC_RELAXED);
+                s_was_starved = 1;
+            }
             continue;
         }
+        s_was_starved = 0;
         {
             s32 t = (s32)(s_frac & 0xFFFF);
             s32 l0 = ring_buffer[rp & RING_BUF_MASK], r0 = ring_buffer[(rp + 1) & RING_BUF_MASK];

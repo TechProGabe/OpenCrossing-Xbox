@@ -179,7 +179,12 @@ set_property(SOURCE "${PC_DIR}/src/pc_vi.c" "${DECOMP_ROOT}/src/actor/ac_animal_
 # NES play: the emulator's per-frame time is measured by xbox_nes_frame
 # (xbox/src/xbox_nv2a.c), which calls the real pc_fixnes_frame.
 set_property(SOURCE "${DECOMP_ROOT}/src/static/Famicom/famicom.cpp" APPEND PROPERTY COMPILE_DEFINITIONS
-    "pc_fixnes_frame=xbox_nes_frame")
+    "pc_fixnes_frame=xbox_nes_frame"
+    # C++ files don't get the prelude's fopen routing (libc++ spells
+    # std::fopen); famicom.cpp's NES save file (save/card_a/...F_SAVE.sav)
+    # opened a relative path, which never resolves on the Xbox, so NES game
+    # saves were neither read nor written. Its own calls only:
+    "fopen=xbox_fopen" "fclose=xbox_fclose")
 
 # pc_disc.c's fread/fseek on the disc image go around pdclib (xbox_io.c,
 # xbox_prelude.h): pdclib reads 1 KB per kernel call.

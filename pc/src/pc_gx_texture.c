@@ -100,10 +100,45 @@ static int tex_cache_count = 0;
 static int tex_cache_hits = 0;
 static int tex_cache_misses = 0;
 
-/* Linear scan. Fine for <=2048 entries at ~100% hit rate. */
+/* PC_TEX_CACHE_INDEX: entries are chained per data_ptr bucket. A linear scan
+ * of up to 2048 entries on every GXLoadTexObj was the top function of a busy
+ * town frame on the Xbox (~9% of a 19 ms frame, 340 draws). The chains hold
+ * entries [0, tex_index_n); entries appended since are linked on the next
+ * find, and any compaction (eviction, invalidate) sets tex_index_n to -1 for
+ * a full rebuild. A key matches at most one entry (insert follows a miss),
+ * so the order of the walk doesn't matter. 0 = the linear scan. */
+#ifndef PC_TEX_CACHE_INDEX
+#define PC_TEX_CACHE_INDEX 1
+#endif
+#if PC_TEX_CACHE_INDEX
+#define TEX_INDEX_BITS 12
+static s16 tex_index_head[1 << TEX_INDEX_BITS];
+static s16 tex_index_next[TEX_CACHE_SIZE];
+static int tex_index_n = -1;
+
+static u32 tex_index_bucket(u32 data_ptr) { return (data_ptr * 2654435761u) >> (32 - TEX_INDEX_BITS); }
+
+static void tex_index_sync(void) {
+    if (tex_index_n < 0 || tex_index_n > tex_cache_count) {
+        memset(tex_index_head, 0xFF, sizeof(tex_index_head));
+        tex_index_n = 0;
+    }
+    for (; tex_index_n < tex_cache_count; tex_index_n++) {
+        u32 b = tex_index_bucket(tex_cache[tex_index_n].data_ptr);
+        tex_index_next[tex_index_n] = tex_index_head[b];
+        tex_index_head[b] = (s16)tex_index_n;
+    }
+}
+#endif
+
 static TexCacheEntry* tex_cache_find(u32 data_ptr, int w, int h, u32 fmt, u32 tlut_name,
                                      u32 tlut_ptr, u32 tlut_hash, u32 data_hash) {
+#if PC_TEX_CACHE_INDEX
+    tex_index_sync();
+    for (int i = tex_index_head[tex_index_bucket(data_ptr)]; i >= 0; i = tex_index_next[i]) {
+#else
     for (int i = 0; i < tex_cache_count; i++) {
+#endif
         TexCacheEntry* e = &tex_cache[i];
         if (e->data_ptr == data_ptr && e->width == w && e->height == h &&
             e->format == fmt && e->tlut_name == tlut_name && e->tlut_ptr == tlut_ptr &&
@@ -138,6 +173,9 @@ static TexCacheEntry* tex_cache_insert(u32 data_ptr, int w, int h, u32 fmt, u32 
             if (j != i) tex_cache[j] = tex_cache[i];
             j++;
         }
+#if PC_TEX_CACHE_INDEX
+        if (j != tex_cache_count) tex_index_n = -1;
+#endif
         tex_cache_count = j;
     }
     if (tex_cache_count >= TEX_CACHE_SIZE) {
@@ -155,6 +193,9 @@ static TexCacheEntry* tex_cache_insert(u32 data_ptr, int w, int h, u32 fmt, u32 
         }
         memmove(&tex_cache[0], &tex_cache[half], (tex_cache_count - half) * sizeof(TexCacheEntry));
         tex_cache_count -= half;
+#if PC_TEX_CACHE_INDEX
+        tex_index_n = -1;
+#endif
     }
     TexCacheEntry* e = &tex_cache[tex_cache_count++];
     e->data_ptr = data_ptr;
@@ -180,10 +221,16 @@ void pc_gx_texture_cache_invalidate(void) {
         }
     }
     tex_cache_count = 0;
+#if PC_TEX_CACHE_INDEX
+    tex_index_n = -1;
+#endif
 }
 
 void pc_gx_texture_init(void) {
     tex_cache_count = 0;
+#if PC_TEX_CACHE_INDEX
+    tex_index_n = -1;
+#endif
     tex_cache_hits = 0;
     tex_cache_misses = 0;
     (void)pc_gx_tlut_force_be();

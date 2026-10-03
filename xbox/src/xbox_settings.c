@@ -27,6 +27,9 @@
 #ifndef XBOX_STICK_DZ
 #define XBOX_STICK_DZ 43   /* radial %: playtest pad rests up to 41% off centre */
 #endif
+#ifndef XBOX_CSTICK_DZ
+#define XBOX_CSTICK_DZ 30  /* per-axis %: past the game's own C-button threshold */
+#endif
 
 void pc_settings_load_pc(void);
 void pc_settings_save_pc(void);
@@ -37,8 +40,11 @@ void xbox_watchdog_disable(void);
  * GPU overlap on since the Melee-X backport (Melee-X runs it by default since
  * its v33); the backport's switches default to the new behaviour, and 0 in
  * settings.ini puts each one back (docs/backport.md). */
-#define XBOX_OPT_VERSION 1
-#define XBOX_SETTINGS_DEFAULTS { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION }
+#define XBOX_OPT_VERSION 2   /* 2: the C-stick dead zone moved up once (pc_settings_load) */
+#ifndef XBOX_FPS_DEFAULT
+#define XBOX_FPS_DEFAULT 0   /* the FPS counter's default; 1 for test builds */
+#endif
+#define XBOX_SETTINGS_DEFAULTS { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION, XBOX_FPS_DEFAULT, 1, 1 }
 XboxSettings g_xbox_settings = XBOX_SETTINGS_DEFAULTS;
 XboxSettings g_xbox_settings_boot = XBOX_SETTINGS_DEFAULTS;
 
@@ -56,6 +62,9 @@ static const struct { const char* key; int* v; int lo, hi; } k_opt_keys[] = {
     { "strict_gpu_wait", &g_xbox_settings.strict_gpu_wait, 0, 1 },
     { "pushbuffer_kick_kb", &g_xbox_settings.pb_kick_kb, 4, 256 },
     { "audio_fix", &g_xbox_settings.audio_fix, 0, 1 },
+    { "fps_counter", &g_xbox_settings.fps_counter, 0, 1 },
+    { "progressive", &g_xbox_settings.progressive, 0, 1 },
+    { "audio_priority", &g_xbox_settings.audio_priority, 0, 1 },
 };
 #define N_OPT_KEYS ((int)(sizeof k_opt_keys / sizeof k_opt_keys[0]))
 
@@ -68,6 +77,8 @@ static int parse_int(const char* s, int lo, int hi, int* out) {
 }
 
 /* reads [Xbox] keys into g_xbox_settings; returns the HAVE_* found */
+static int s_file_version;   /* opt_version the file had */
+
 static int read_xbox_section(void) {
     char line[256];
     int in_xbox = 0, have = 0, overlap = 1, version = 0, opt_have = 0;
@@ -110,6 +121,7 @@ static int read_xbox_section(void) {
      * old default: that value was nobody's choice, so it gives way to the
      * new default once, and the save below writes opt_version. */
     if ((have & HAVE_OVERLAP) && version >= 1) g_xbox_settings.gpu_overlap = overlap;
+    s_file_version = version;
     if (version >= XBOX_OPT_VERSION && opt_have == N_OPT_KEYS) have |= HAVE_OPT;
     g_xbox_settings.opt_version = XBOX_OPT_VERSION;
     return have;
@@ -130,6 +142,11 @@ static void append_xbox_section(void) {
     fprintf(f, "\n# Video output: 0 = standard (480i, or 480p when the dashboard allows it),\n");
     fprintf(f, "# 1 = 720p (component cable + 720p enabled in the dashboard). Needs a restart.\n");
     fprintf(f, "video_720p = %d\n", g_xbox_settings.video_720p);
+    fprintf(f, "\n# 480 output: 1 = 480p where the dashboard allows it, 0 = always 480i.\n");
+    fprintf(f, "# Hold BACK while OpenCrossing starts for 480i (sets video_720p and this to 0).\n");
+    fprintf(f, "progressive = %d\n", g_xbox_settings.progressive);
+    fprintf(f, "\n# On-screen frame rate: 1 = on (Options > Video)\n");
+    fprintf(f, "fps_counter = %d\n", g_xbox_settings.fps_counter);
     fprintf(f, "\n# Widescreen: 0 = 4:3, 1 = 16:9, 2 = follow the dashboard setting\n");
     fprintf(f, "widescreen = %d\n", g_xbox_settings.widescreen);
     fprintf(f, "\n# Testing: 1 = the next frame's game logic runs while the GPU draws,\n");
@@ -145,6 +162,7 @@ static void append_xbox_section(void) {
     fprintf(f, "# 16 = the old value\n");
     fprintf(f, "pushbuffer_kick_kb = %d\n", g_xbox_settings.pb_kick_kb);
     fprintf(f, "audio_fix = %d\n", g_xbox_settings.audio_fix);
+    fprintf(f, "audio_priority = %d\n", g_xbox_settings.audio_priority);
     fprintf(f, "opt_version = %d\n", g_xbox_settings.opt_version);
     fclose(f);
 }
@@ -166,6 +184,14 @@ void pc_settings_load(void) {
          * second town into save/card_b over FTP. */
         g_pc_settings.disable_shop_visitor_req = 1;
     }
+    /* AC turns the C-stick into the N64 C buttons past ~23% (29 of 127,
+     * contreaddata.c), and the choice lists scroll on C-down: a worn right
+     * stick resting a quarter off centre scrolled every list down by itself
+     * (2026-10-03). 30% on the Xbox, raised once for older files. */
+    if (s_file_version < 2 && g_pc_settings.cstick_deadzone < XBOX_CSTICK_DZ) {
+        xbox_logf("[Settings] C-stick dead zone %d%% -> %d%%\n", g_pc_settings.cstick_deadzone, XBOX_CSTICK_DZ);
+        g_pc_settings.cstick_deadzone = XBOX_CSTICK_DZ;
+    }
     if (!(have & HAVE_DZ)) {
         int dz = xbox_controller_ini_deadzone();
         if (dz >= 0) {
@@ -175,15 +201,16 @@ void pc_settings_load(void) {
     }
     if (have != HAVE_ALL) pc_settings_save();   /* write the missing keys once */
     g_xbox_settings_boot = g_xbox_settings;
-    xbox_logf("[Settings] Xbox: stick dead zone %d%%, rumble %d%%, 720p %d, widescreen %d, gpu overlap %d "
-              "(encoder %08x)\n",
+    xbox_logf("[Settings] Xbox: stick dead zone %d%%, rumble %d%%, 720p %d, progressive %d, widescreen %d, "
+              "gpu overlap %d, fps counter %d (encoder %08x)\n",
               g_xbox_settings.stick_deadzone, g_xbox_settings.rumble, g_xbox_settings.video_720p,
-              g_xbox_settings.widescreen, g_xbox_settings.gpu_overlap, (unsigned)encoder_settings());
+              g_xbox_settings.progressive, g_xbox_settings.widescreen, g_xbox_settings.gpu_overlap,
+              g_xbox_settings.fps_counter, (unsigned)encoder_settings());
     xbox_logf("[Settings] backport: native_textures %d texture_reuse %d draw_skip %d vertex_cache_break %d "
-              "strict_gpu_wait %d pushbuffer_kick_kb %d audio_fix %d\n",
+              "strict_gpu_wait %d pushbuffer_kick_kb %d audio_fix %d audio_priority %d\n",
               g_xbox_settings.native_tex, g_xbox_settings.tex_reuse, g_xbox_settings.draw_skip,
               g_xbox_settings.vb_cache_break, g_xbox_settings.strict_gpu_wait, g_xbox_settings.pb_kick_kb,
-              g_xbox_settings.audio_fix);
+              g_xbox_settings.audio_fix, g_xbox_settings.audio_priority);
     xbox_settings_apply();
 }
 
@@ -213,6 +240,45 @@ static DWORD encoder_settings(void) {
     return s_enc;
 }
 
+int g_xbox_safe_video_held;
+
+/* Safe video (from Melee-X): BACK held on any controller as the splash ends
+ * means the TV may not show the saved mode. This boot and the next run at
+ * 480i: video_720p and progressive are saved as 0, and Options > Video >
+ * Output turns them back on. */
+void xbox_settings_safe_video(void) {
+    if (!g_xbox_safe_video_held) return;
+    g_xbox_settings.video_720p = 0;
+    g_xbox_settings.progressive = 0;
+    pc_settings_save();
+    g_xbox_settings_boot = g_xbox_settings;
+    xbox_logf("[VIDEO] BACK held at boot: 480i (video_720p and progressive saved as 0)\n");
+}
+
+/* 480p, and so a choice between 480i and 480p: the component (HDTV) pack
+ * with 480p allowed in the dashboard, NTSC (nxdk has no PAL progressive
+ * modes, and no 480i HDTV mode to force on other packs) */
+int xbox_video_480p_allowed(void) {
+    DWORD enc = encoder_settings();
+    return (enc & VIDEO_MODE_480P) && (enc & VIDEO_ADAPTER_MASK) == AV_PACK_HDTV &&
+           (enc & VIDEO_STANDARD_MASK) != 0x00000300 /* PAL */;
+}
+
+/* 640x480x32 for the splash, the error screens and the GPU: 480i where the
+ * dashboard would give 480p but progressive = 0 (settings.ini, or safe
+ * video). XVideoSetMode always picks 480p on an HDTV pack set to 480p, so
+ * nxdk's own XVideoInit sets the 640x480i mode after it has recorded the
+ * size for pbkit (Melee-X's set_mode_480). Before the settings load,
+ * progressive is its default 1. */
+void XVideoInit(DWORD dwMode, int width, int height, int bpp);   /* nxdk hal/video.c */
+#define MODE_640x480I_HDTV 0x0801010du
+int xbox_video_set_480(void) {
+    if (!XVideoSetMode(640, 480, 32, REFRESH_DEFAULT)) return 0;
+    if (!g_xbox_settings_boot.progressive && xbox_video_480p_allowed())
+        XVideoInit(MODE_640x480I_HDTV, 640, 480, 32);
+    return 1;
+}
+
 int xbox_video_720p_allowed(void) {
     static int s_allowed = -1;
     if (s_allowed < 0) {
@@ -223,15 +289,6 @@ int xbox_video_720p_allowed(void) {
             if (vm.width == 1280 && vm.height == 720) s_allowed = 1;
     }
     return s_allowed;
-}
-
-const char* xbox_video_mode_name(void) {
-    DWORD enc = encoder_settings();
-    if (g_xbox_video_720p) return "720p";
-    /* nxdk's mode table picks 480p for 640x480 whenever the dashboard allows
-     * it on a component (HDTV) AV pack */
-    if ((enc & 0xFF) == AV_PACK_HDTV && (enc & VIDEO_MODE_480P)) return "480p";
-    return "480i";
 }
 
 int xbox_widescreen_wanted(const XboxSettings* s) {
@@ -264,10 +321,12 @@ void usbh_core_deinit(void);   /* nxdk libusbohci */
  * joystick quit leaves it on on purpose): the second quit in one power-on
  * hung on a looping sound and then showed error 21. */
 static void leave_game(void) {
+    xbox_bootlog_pump();   /* the quit line and what came before it */
     pc_audio_shutdown();
     SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
     usbh_core_deinit();
     xbox_watchdog_disable();
+    xbox_bootlog_pump();
 }
 
 /* XLaunchXBE only returns when it couldn't set up the launch; the pad and

@@ -847,6 +847,22 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
     t->bpp = tbpp;
     t->drawn = 0;
     swz_tables(pw, ph);
+    /* The NES screen, every frame: 256 wide, so no column padding, and x and
+     * x + 1 (x even) are neighbours in the swizzled layout. Two texels a
+     * word, red and blue swapped in place: 3 ms of a 19 ms NES frame on the
+     * console in the per-texel loop below. */
+    if (src && bpp == 2 && nvfmt == FMT_R5G6B5 && w == pw && !(w & 1) && !((uintptr_t)src & 3)) {
+        uint32_t* d32 = (uint32_t*)dst;
+        for (y = 0; y < ph; y++) {
+            const uint32_t* row = (const uint32_t*)(src + (size_t)(y < h ? y : h - 1) * (size_t)w * 2);
+            uint32_t yo = swz_y[y];
+            for (x = 0; x < pw; x += 2) {
+                uint32_t c = row[x >> 1];
+                d32[(yo | swz_x[x]) >> 1] = (c & 0x07E007E0u) | ((c & 0x001F001Fu) << 11) | ((c >> 11) & 0x001F001Fu);
+            }
+        }
+        return;
+    }
     for (y = 0; y < ph; y++) {
         int sy = y < h ? y : h - 1;   /* pad by edge replication */
         uint32_t yo = swz_y[y];
@@ -967,8 +983,9 @@ static void gl_clear(GLbitfield mask) {
     if (mask & GL_COLOR_BUFFER_BIT) {
         uint32_t c = ((uint32_t)f2b(G.clear_c[3]) << 24) | ((uint32_t)f2b(G.clear_c[0]) << 16) |
                      ((uint32_t)f2b(G.clear_c[1]) << 8) | f2b(G.clear_c[2]);
-        /* the clear value is in the surface's own format */
-        if (s_fb_bpp == 16) c = ((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F);
+        /* A8R8G8B8: pb_fill converts it to the surface's format itself (at
+         * 720p R5G6B5). Converting here as well made every 16-bit clear
+         * colour near black (Melee-X found it). */
         pb_fill(x, y, w, h, c);
     }
     if (mask & GL_DEPTH_BUFFER_BIT) {
@@ -1153,16 +1170,30 @@ static uint32_t pack_const(uint16_t rgb_ref, uint16_t a_ref) {
     return ((uint32_t)f2b(a) << 24) | ((uint32_t)f2b(rgb[0]) << 16) | ((uint32_t)f2b(rgb[1]) << 8) | f2b(rgb[2]);
 }
 
+/* n bytes (a multiple of 4) equal: the shim's per-draw compares, inline.
+ * memcmp stays a call into xbox_mem.c even as __builtin_memcmp (the
+ * prelude's macro): under -ffreestanding clang doesn't expand it. These
+ * callers made it ~6% of a busy 720p town frame on the console. */
+static inline int words_eq(const void* a, const void* b, size_t n) {
+    const uint32_t* x = (const uint32_t*)a;
+    const uint32_t* y = (const uint32_t*)b;
+    uint32_t d = 0;
+    size_t i;
+    for (i = 0; i < n / 4; i++) d |= x[i] ^ y[i];
+    return d == 0;
+}
+_Static_assert(sizeof(XTevCfg) % 4 == 0 && sizeof(XRcProg) % 4 == 0, "words_eq compares whole words");
+
 /* consecutive draws usually share a TEV config: check the last hit first,
  * then the hashes (a full compare only on a hash match) */
 static const XRcProg* rc_lookup(const XTevCfg* cfg) {
     int k;
     uint32_t h = cfg_hash(cfg);
     if (s_rc_last >= 0 && s_rc_cache[s_rc_last].hash == h &&
-        memcmp(&s_rc_cache[s_rc_last].cfg, cfg, sizeof *cfg) == 0)
+        words_eq(&s_rc_cache[s_rc_last].cfg, cfg, sizeof *cfg))
         return &s_rc_cache[s_rc_last].prog;
     for (k = 0; k < s_rc_count; k++)
-        if (s_rc_cache[k].hash == h && memcmp(&s_rc_cache[k].cfg, cfg, sizeof *cfg) == 0) {
+        if (s_rc_cache[k].hash == h && words_eq(&s_rc_cache[k].cfg, cfg, sizeof *cfg)) {
             s_rc_last = k;
             return &s_rc_cache[k].prog;
         }
@@ -1247,7 +1278,7 @@ static void emit_combiners(const XRcProg* rp, int consts_dirty) {
     fc[0] = pack_const(rp->fref[0], rp->fref[1]);
     fc[1] = pack_const(rp->fref[2], rp->fref[3]);
 
-    if (!s_rc_valid || memcmp(&s_rc_cur, rp, sizeof *rp) != 0) {
+    if (!s_rc_valid || !words_eq(&s_rc_cur, rp, sizeof *rp)) {
         put1(NV097_SET_COMBINER_CONTROL,
              (uint32_t)rp->nstages | (1u << 12) | (1u << 16) /* FACTOR0/1 each stage */);
         for (i = 0; i < rp->nstages; i++) {
@@ -1300,14 +1331,16 @@ static void emit_textures(const XTevCfg* c, float scale[3][2]) {
                    (1u << 16) /* 1 mip level */ | ((uint32_t)log2i(t->pw) << 20) | ((uint32_t)log2i(t->ph) << 24);
             v[2] = wrap_mode(t->wrap_s) | (wrap_mode(t->wrap_t) << 8) | (3u << 16);
             v[3] = 0x4003FFC0u;   /* ENABLE | MAX_LOD_CLAMP (the nxdk mesh sample's value) */
-            v[4] = (uint32_t)t->pw * t->bpp << 16;
+            /* swizzled: the pitch isn't used, but PGRAPH checks it. A 4x4
+             * AY8 (native_textures) gave 4 and a data error on hardware */
+            v[4] = (((uint32_t)t->pw * t->bpp + 63) & ~63u) << 16;
             v[5] = 0x2000u | (filt_min << 16) | (filt_mag << 24);
             v[6] = ((uint32_t)t->pw << 16) | (uint32_t)t->ph;
             scale[s][0] = (float)t->w / (float)t->pw;
             scale[s][1] = (float)t->h / (float)t->ph;
             prog |= 1u << (s * 5);   /* 2D_PROJECTIVE */
         }
-        if (memcmp(v, s_tex_shadow[s], sizeof v) != 0) {
+        if (!words_eq(v, s_tex_shadow[s], sizeof v)) {
             uint32_t b = (uint32_t)s * 64;
             if (!t) {
                 put1(NV097_SET_TEXTURE_CONTROL0 + b, 0);
@@ -1437,10 +1470,10 @@ static void emit_vconsts(const float scale[3][2], uint32_t groups) {
         int r = 0;
         while (r < 41) {
             int end, gap;
-            if (memcmp(&s_shadow_vc[r * 4], vc[r], 16) == 0) { r++; continue; }
+            if (words_eq(&s_shadow_vc[r * 4], vc[r], 16)) { r++; continue; }
             end = r + 1;
             for (gap = 0; end + gap < 41 && gap < 3; ) {
-                if (memcmp(&s_shadow_vc[(end + gap) * 4], vc[end + gap], 16) != 0) { end += gap + 1; gap = 0; }
+                if (!words_eq(&s_shadow_vc[(end + gap) * 4], vc[end + gap], 16)) { end += gap + 1; gap = 0; }
                 else gap++;
             }
             push_vconst_rows(w, r, end - r);
@@ -1483,10 +1516,10 @@ static void emit_fixed(void) {
     {
         int x, y, w, h;
         clear_rect(&x, &y, &w, &h);
-        v = (x & 0xFFF) | ((y & 0xFFF) << 12) | (((w > 0 ? w : 0) & 0x7FF) << 24);
-        if (last[10] != v || last[11] != h) {
+        v = (x & 0xFFFF) | (y << 16);   /* w kept whole: 8 bits of it once matched another clip */
+        if (last[10] != v || last[11] != ((w & 0xFFFF) | (h << 16))) {
             last[10] = v;
-            last[11] = h;
+            last[11] = (w & 0xFFFF) | (h << 16);
             if (w <= 0 || h <= 0) { x = y = 0; w = h = 1; }
             put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)x | ((uint32_t)(x + w - CLIP_INCL) << 16));
             put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)y | ((uint32_t)(y + h - CLIP_INCL) << 16));
@@ -1683,7 +1716,7 @@ static void draw(GLenum mode, int count) {
         s_cfg_valid = 1;
         s_cfg_epoch = s_tex_epoch;
         emit_textures(&s_cfg, scale);
-        if (memcmp(scale, s_scale, sizeof scale) != 0) {
+        if (!words_eq(scale, s_scale, sizeof scale)) {
             memcpy(s_scale, scale, sizeof scale);
             groups |= D_TEXGEN;
         }
@@ -1876,25 +1909,27 @@ static void frame_open(void) {
 #define XBOX_720P_MIN_FREE_KB (32 * 1024)
 #endif
 int g_xbox_video_720p;
-static void video_select(void) {
+
+/* 720p when asked for, allowed and affordable; 0 leaves the 640x480 mode */
+static int video_720p(void) {
     unsigned free_kb;
     /* 720p is drawn through the 16:9 logical screen (pc_gx.c with
      * PC_ENHANCEMENTS); without it the picture would be stretched */
-    if (!XBOX_WIDESCREEN || !g_xbox_settings_boot.video_720p) return;
+    if (!XBOX_WIDESCREEN || !g_xbox_settings_boot.video_720p) return 0;
     if (!xbox_video_720p_allowed()) {
         xbox_logf("[NV2A] 720p asked for but not allowed (dashboard or AV cable): staying at 480\n");
-        return;
+        return 0;
     }
     free_kb = xbox_mem_free_kb();
     if (free_kb < XBOX_720P_MIN_FREE_KB) {
         xbox_logf("[NV2A] 720p needs %u KB free, have %u KB: staying at 480\n", XBOX_720P_MIN_FREE_KB, free_kb);
-        return;
+        return 0;
     }
     xbox_splash_release();   /* XVideoSetMode frees the splash's buffer */
     if (!XVideoSetMode(1280, 720, 16, REFRESH_DEFAULT)) {
         xbox_logf("[NV2A] XVideoSetMode 1280x720x16 failed: back to 640x480\n");
-        XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);
-        return;
+        xbox_video_set_480();
+        return 0;
     }
     pb_set_color_format(NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5, false);
     /* NV2x wants colour and depth of the same width: Z16 with R5G6B5 */
@@ -1902,13 +1937,26 @@ static void video_select(void) {
     s_zmax = 65535.0f;
     s_pool_bytes = XBOX_TEX_POOL_720P_BYTES;
     g_xbox_video_720p = 1;
+    return 1;
+}
+
+/* The splash set 640x480 in the dashboard's mode, before the settings were
+ * read: at 480 with progressive = 0 (settings.ini, or safe video) the mode
+ * is set again as 480i (xbox_video_set_480). */
+static void video_select(void) {
+    if (video_720p()) return;
+    if (!g_xbox_settings_boot.progressive && xbox_video_480p_allowed()) {
+        xbox_splash_release();   /* XVideoSetMode frees the splash's buffer */
+        xbox_video_set_480();
+        xbox_logf("[NV2A] 480i (progressive = 0)\n");
+    }
 }
 
 /* back to the standard mode when 720p can't start (pb_init or the texture
  * pool / vertex ring allocations fail): a console must never be stuck on
  * the "Graphics init failed" screen because of a saved setting */
 static void video_standard(void) {
-    XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);
+    xbox_video_set_480();
     pb_set_color_format(NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8, false);
     pb_DepthFmt = NV097_SET_SURFACE_FORMAT_ZETA_Z24S8;
     s_zmax = 16777215.0f;
@@ -2050,18 +2098,28 @@ static void pace_account(unsigned t10, unsigned cpu10, unsigned draws, unsigned 
  * measured apart from the upload and draw. One [NES] line per 300 frames
  * (5 s) in perf.log, and in the log too when the average is over 14 ms
  * (then fixNES itself is what chops). */
+/* -DXBOX_NES_SHOT=N (test builds): the framebuffer of the Nth NES frame
+ * of each game goes to UDATA nes_shot.raw (16-byte header "OCXS", width,
+ * height, bpp; then the rows), for what the console really shows; the
+ * serial dump only exists in xemu. tools/xbox/raw_to_png.py converts it. */
+#ifndef XBOX_NES_SHOT
+#define XBOX_NES_SHOT 0
+#endif
+static int s_nes_shot;
 unsigned short* pc_fixnes_frame(void);
 unsigned short* xbox_nes_frame(void) {
-    static unsigned n, last_frame;
+    static unsigned n, last_frame, game_frames;
     static unsigned long long sum, worst;
     unsigned long long t0 = xbox_ticks(), d;
     unsigned short* fb = pc_fixnes_frame();
     d = xbox_ticks() - t0;
     if (s_frame - last_frame > 2) {   /* a new game */
         n = 0;
+        game_frames = 0;
         sum = worst = 0;
     }
     last_frame = s_frame;
+    if (XBOX_NES_SHOT && ++game_frames == XBOX_NES_SHOT) s_nes_shot = 1;   /* nes_shot.raw at this present */
     sum += d;
     if (d > worst) worst = d;
     if (++n == 300) {
@@ -2269,17 +2327,97 @@ static void vbl_pace(void) {
     while (guard-- && (int)(pb_get_vbl_counter() - s_due) < 0) ocx_pb_wait_for_vbl_timeout(20000);
 }
 
+/* On-screen frame rate (settings.ini fps_counter, Options > Video), from
+ * Melee-X: frames presented over the last half second, drawn by the GPU
+ * after the frame as colour fills of the lit runs of each font row. Yellow
+ * 5x7 digits on a black box inside the TV-safe area, 2x (3x at 720p).
+ * Applies live; screenshots show it. */
+/* a colour fill of the rect, pushed at P (an open block) */
+static void fill_rect(int x, int y, int w, int h, uint32_t color) {
+    put1(NV097_SET_CLEAR_RECT_HORIZONTAL, ((uint32_t)(x + w - 1) << 16) | (uint32_t)x);
+    put1(NV097_SET_CLEAR_RECT_VERTICAL, ((uint32_t)(y + h - 1) << 16) | (uint32_t)y);
+    put1(NV097_SET_COLOR_CLEAR_VALUE, color);
+    put1(NV097_CLEAR_SURFACE, 0xF0);   /* colour only */
+}
+
+static void fps_overlay(void) {
+    static const uint8_t font[10][7] = {
+        { 14, 17, 19, 21, 25, 17, 14 }, { 4, 12, 4, 4, 4, 4, 14 },   { 14, 17, 1, 2, 4, 8, 31 },
+        { 31, 2, 4, 2, 1, 17, 14 },     { 2, 6, 10, 18, 31, 2, 2 },  { 31, 16, 30, 1, 1, 17, 14 },
+        { 6, 8, 16, 30, 17, 17, 14 },   { 31, 1, 2, 4, 8, 8, 8 },    { 14, 17, 17, 14, 17, 17, 14 },
+        { 14, 17, 17, 15, 1, 2, 12 },
+    };
+    static uint32_t s_val, s_frames;
+    static unsigned long long s_t0;
+    unsigned long long now = xbox_ticks(), hz = xbox_ticks_per_sec();
+    uint32_t v, digits[3], nd = 0, d, cy;
+    int z = SCR_H >= 720 ? 3 : 2, x0 = SCR_W / 16, y0 = SCR_H / 16;
+    s_frames++;
+    if (!s_t0 || now - s_t0 > 2 * hz) {
+        s_t0 = now;
+        s_frames = 0;
+    } else if (now - s_t0 >= hz / 2) {
+        s_val = (uint32_t)((s_frames * hz + (now - s_t0) / 2) / (now - s_t0));
+        s_t0 = now;
+        s_frames = 0;
+    }
+    v = s_val > 999 ? 999 : s_val;
+    do {
+        digits[nd++] = v % 10;
+        v /= 10;
+    } while (v && nd < 3);
+    /* one pushbuffer block of clear-rect fills (pb_fill would be a block and
+     * a kick per run); colours in the surface's format: black, yellow */
+    pb_close();
+    PB_BEGIN();
+    fill_rect(x0, y0, (int)nd * 6 * z + 2 * z, 9 * z, 0);
+    for (d = 0; d < nd; d++)
+        for (cy = 0; cy < 7; cy++) {
+            uint32_t bits = font[digits[nd - 1 - d]][cy], cx = 0;
+            while (cx < 5) {   /* runs of lit cells */
+                uint32_t run = 0;
+                while (cx + run < 5 && (bits >> (4 - (cx + run)) & 1)) run++;
+                if (run)
+                    fill_rect(x0 + z + (int)(d * 6 + cx) * z, y0 + z + (int)cy * z, (int)run * z, z,
+                              s_fb_bpp == 16 ? 0xFFE0u : 0xFFFFFF00u);
+                cx += run ? run : 1;
+            }
+        }
+    PB_END();
+}
+
+static void shot_file(void) {
+    HANDLE h;
+    DWORD wr;
+    uint32_t hdr[4] = { 0x5358434Fu /* "OCXS" */, (uint32_t)SCR_W, (uint32_t)SCR_H, (uint32_t)s_fb_bpp };
+    const uint8_t* fb = (const uint8_t*)pb_back_buffer();
+    uint32_t pitch = pb_back_buffer_pitch(), row = (uint32_t)SCR_W * (uint32_t)s_fb_bpp / 8;
+    int y;
+    h = CreateFileA(XBOX_UDATA_DIR "nes_shot.raw", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return;
+    WriteFile(h, hdr, sizeof hdr, &wr, NULL);
+    for (y = 0; y < SCR_H; y++) WriteFile(h, fb + (size_t)y * pitch, row, &wr, NULL);
+    CloseHandle(h);
+    xbox_logf("[NV2A] nes_shot.raw written (%dx%d, %d-bit), frame %u\n", SCR_W, SCR_H, s_fb_bpp, s_frame);
+}
+
 void xbox_nv2a_present(void) {
     unsigned long long t_enter = xbox_ticks(), t_pace;
     int dump;
     frame_open();
     pb_note_peak();
+    if (g_xbox_settings.fps_counter) fps_overlay();
     s_frame++;
     dump = (g_xbox_fbdump_every > 0 && (s_frame % (uint32_t)g_xbox_fbdump_every) == 0) || g_xbox_fbdump_once;
     g_xbox_fbdump_once = 0;
     if (s_overlap && !dump) pb_close();   /* kick; frame_open drains */
     else wait_idle();
     gpu_fault_log(s_frame - 1);
+    if (s_nes_shot) {
+        s_nes_shot = 0;
+        wait_idle();
+        shot_file();
+    }
     if (dump) {
         xbox_logf("[NV2A] frame %u draws=%u approx=%u rc=%d pool=%uKB peak=%uKB\n", s_frame, s_draws,
                   s_approx_draws, s_rc_count, s_pool_used / 1024, s_pool_peak / 1024);

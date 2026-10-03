@@ -36,6 +36,10 @@ typedef struct {
     int pb_kick_kb;     /* pushbuffer kick size, KB (16 = the old 4096 words) */
     int audio_fix;      /* AC97: queue before the run bit, stuck/halt recovery */
     int opt_version;    /* 1 once the file has the keys above (migration) */
+    int fps_counter;    /* on-screen frame rate (Options > Video), applies live */
+    int progressive;    /* 0 = 480i even where the dashboard allows 480p; BACK
+                         * held at boot sets it and video_720p to 0 (safe video) */
+    int audio_priority; /* hidden: the audio producer thread above the game's */
 } XboxSettings;
 
 extern XboxSettings g_xbox_settings;
@@ -45,10 +49,16 @@ extern XboxSettings g_xbox_settings_boot;
 /* 1 when the dashboard allows 720p on this AV pack (component cable,
  * "720p" ticked in the dashboard's video settings) */
 int xbox_video_720p_allowed(void);
+/* the same for 480p (component cable, NTSC: nxdk has no PAL progressive) */
+int xbox_video_480p_allowed(void);
+/* sets 640x480x32: 480i when progressive = 0 and the pack would give 480p */
+int xbox_video_set_480(void);
+/* BACK held when the splash ended: 480i, saved (xbox_splash.c sets it,
+ * xbox_settings_safe_video applies it after the settings load) */
+extern int g_xbox_safe_video_held;
+void xbox_settings_safe_video(void);
 /* 1 when this boot actually runs at 720p (xbox_nv2a.c decides at init) */
 extern int g_xbox_video_720p;
-/* 480i / 480p / 720p: what the encoder is putting out now */
-const char* xbox_video_mode_name(void);
 /* 1 when s asks for a 16:9 picture (Auto follows the dashboard) */
 int xbox_widescreen_wanted(const XboxSettings* s);
 /* sets the game's logical screen (g_pc_window_w/h) for the widescreen setting */

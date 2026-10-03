@@ -26,7 +26,12 @@ static s64 gc_epoch_offset_ticks = 0; /* Ticks from GC epoch to program start */
 s64 osGetTime(void) {
     u64 now = SDL_GetPerformanceCounter();
     u64 freq = SDL_GetPerformanceFrequency();
-    s64 elapsed = (s64)((now - time_base_start) * (u64)GC_TIMER_CLOCK / freq);
+    u64 d = now - time_base_start;
+    /* whole seconds and the rest apart: d * GC_TIMER_CLOCK overflows 64 bits
+     * once d passes 2^64 / 40.5 MHz, 10.4 minutes after boot on a counter
+     * running at the CPU clock (the Xbox's TSC, 733 MHz), and the clock
+     * jumped back every 10.4 minutes */
+    s64 elapsed = (s64)((d / freq) * (u64)GC_TIMER_CLOCK + (d % freq) * (u64)GC_TIMER_CLOCK / freq);
     return gc_epoch_offset_ticks + elapsed;
 }
 
@@ -257,7 +262,17 @@ void OSInit(void) {
         struct tm utc_tm = *gmt;
         utc_tm.tm_isdst = -1; /* let mktime determine DST */
         time_t utc_as_local = mktime(&utc_tm);
-        s64 tz_offset_secs = (s64)difftime(unix_now, utc_as_local);
+        /* mktime failing gives -1, and the "offset" became the whole Unix
+         * time: the clock read ~2083 and moved on by the real time between
+         * two boots at every boot (Xbox: nxdk's mktime fails) */
+        s64 tz_offset_secs = utc_as_local == (time_t)-1 ? 0 : (s64)difftime(unix_now, utc_as_local);
+#ifdef TARGET_XBOX
+        {   /* the dashboard's time zone and DST: the clock reads local time,
+             * as a GameCube's does (xbox_io.c) */
+            extern long xbox_local_offset_secs(void);
+            tz_offset_secs = xbox_local_offset_secs();
+        }
+#endif
 
         if (g_pc_time_override >= 0 || g_pc_date_month > 0) {
             /* --time H[:M[:S]] / --date M/D[/Y] overrides */
