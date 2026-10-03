@@ -128,14 +128,15 @@ void pc_platform_swap_buffers(void) {
     /* test the exception reporter (xbox_crash.c) */
     if (s_frames == XBOX_DBG_CRASH_FRAME) *(volatile int*)4 = 1;
 #endif
-    /* a heartbeat for the logs: once a second while boot.log is open, then
-     * every 10 s (each line makes the watchdog rewrite last.log) */
-    if ((s_frames % (s_frames <= 120 ? 60u : 600u)) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
-    /* boot.log is for hangs before the game runs (later ones: hang.log); its
-     * per-line HDD flushes cost ~45 ms each on hardware, so stop early */
+    /* a heartbeat for the boot: once a second until frame 120; after that
+     * the watchdog's [BEAT] carries the frame count */
+    if (s_frames <= 120 && s_frames % 60u == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
+    /* boot.log's per-line HDD flushes cost ~45 ms each on hardware: from
+     * here on lines are queued and the watchdog writes them once a second
+     * (xbox_io.c; -DXBOX_LOG_SESSION=0 closes boot.log here instead) */
     if (s_frames == 120) {
-        xbox_logf("[XBOX] 120 frames up, closing boot.log\n");
-        xbox_bootlog_close();
+        xbox_logf("[XBOX] 120 frames up, boot.log continues buffered\n");
+        xbox_bootlog_async();
     }
 }
 
@@ -272,6 +273,7 @@ static int main_body(void* arg) {
     xbox_mem_log("boot");
     read_image_range();
     xbox_logf("[XBOX] image %08x-%08x\n", pc_image_base, pc_image_end);
+    xbox_prof_start();   /* -DXBOX_PROF=1 builds only; this thread runs the game */
 
     xbox_splash_show();
 

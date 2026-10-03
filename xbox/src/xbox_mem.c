@@ -10,6 +10,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* the prelude maps these names to compiler builtins; here they are defined */
+#undef memcpy
+#undef memmove
+#undef memset
+#undef memcmp
+
 #ifndef XBOX_FAST_MEM
 #define XBOX_FAST_MEM 1
 #endif

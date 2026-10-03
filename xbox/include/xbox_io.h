@@ -29,9 +29,16 @@ void xbox_log_exclusive(int on);
 size_t xbox_log_tail(char* out, size_t cap);
 /* bytes logged so far (changes whenever anything is logged) */
 unsigned xbox_log_pos(void);
+/* the same, not counting heartbeat lines logged with xbox_logf_quiet */
+unsigned xbox_log_pos_loud(void);
+int  xbox_logf_quiet(const char* fmt, ...);
+void xbox_log_write_quiet(const char* s, size_t n);
 /* mirror the log to XBOX_UDATA_DIR "boot.log" (hardware has no COM1) */
 void xbox_bootlog_open(void);
 void xbox_bootlog_close(void);
+/* after boot: queue log lines; the watchdog writes them (xbox_bootlog_pump) */
+void xbox_bootlog_async(void);
+void xbox_bootlog_pump(void);
 void xbox_mem_log(const char* where);
 unsigned xbox_mem_free_kb(void);
 /* xbox_crash.c: CPU exceptions -> crash.log + on-screen report. Call
@@ -42,6 +49,8 @@ int  xbox_nv2a_state(char* buf, int cap);
 /* xbox_watchdog.c: dump every thread's stack to COM1 if frames stop */
 void xbox_watchdog_start(void);
 void xbox_watchdog_disable(void);
+/* xbox_prof.c: sampling profiler of the calling (game) thread, -DXBOX_PROF=1 */
+void xbox_prof_start(void);
 int  xbox_logf(const char* fmt, ...);
 int  xbox_vlogf(const char* fmt, va_list ap);
 

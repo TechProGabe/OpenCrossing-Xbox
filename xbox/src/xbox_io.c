@@ -94,6 +94,13 @@ static void tail_write(const char* s, size_t n) {
 
 unsigned xbox_log_pos(void) { return s_tail_pos; }
 
+/* Heartbeat lines ([BEAT], [FRAME], [PROF]) are logged through
+ * xbox_logf_quiet: they go everywhere a line goes, but xbox_log_pos_loud
+ * doesn't move, so the watchdog doesn't rewrite last.log for them (a line a
+ * few seconds would otherwise keep it flushing the HDD all session). */
+static volatile unsigned s_quiet_bytes;
+unsigned xbox_log_pos_loud(void) { return s_tail_pos - s_quiet_bytes; }
+
 size_t xbox_log_tail(char* out, size_t cap) {
     unsigned end = s_tail_pos, len = end < TAIL_SIZE ? end : TAIL_SIZE, i;
     if (len > cap - 1) len = (unsigned)cap - 1;
@@ -103,12 +110,34 @@ size_t xbox_log_tail(char* out, size_t cap) {
 }
 
 /* ---- boot log file: E:\UDATA\4f430001\boot.log ----
- * Real hardware has no serial port, so everything logged until the game has
- * shown XBOX_BOOTLOG_FRAMES frames also goes to a file on the HDD, flushed
- * per write so a hard freeze still leaves the last line on disk. */
+ * Real hardware has no serial port, so the log also goes to a file on the
+ * HDD. Until the game has shown 120 frames every write is flushed at once,
+ * so a hang during boot still leaves its last line on disk. After that
+ * (xbox_bootlog_async, from Melee-X: its logs cover whole sessions) the game
+ * thread only queues lines in memory, and the watchdog thread writes and
+ * flushes them once a second (xbox_bootlog_pump): a per-line flush costs
+ * ~45 ms on hardware. boot.log keeps the first 4 MB; after that the log
+ * goes on in boot2.log and boot3.log in turn, each restarted at 2 MB, so the
+ * newest 2-4 MB before a late hang survive. Kill switch:
+ * -DXBOX_LOG_SESSION=0 (boot.log closes at frame 120, as before). */
+#ifndef XBOX_LOG_SESSION
+#define XBOX_LOG_SESSION 1
+#endif
+#define BOOTLOG_FIRST_MAX (4u << 20)
+#define BOOTLOG_NEXT_MAX (2u << 20)
+#define PEND_BYTES (128 * 1024)
 static HANDLE s_bootlog = INVALID_HANDLE_VALUE;
+static volatile int s_bootlog_async;
+static char s_pend[2][PEND_BYTES];
+static unsigned s_pend_len[2], s_pend_cur, s_pend_drops;
+static RTL_CRITICAL_SECTION s_pend_lock;
+static unsigned s_file_bytes, s_file_no = 1;   /* boot.log = 1, then 2, 3, 2, ... */
+static volatile int s_pump_seen;   /* the watchdog called xbox_bootlog_pump */
 
 void xbox_bootlog_open(void) {
+    RtlInitializeCriticalSection(&s_pend_lock);
+    DeleteFileA(XBOX_UDATA_DIR "boot2.log");   /* a previous session's tail */
+    DeleteFileA(XBOX_UDATA_DIR "boot3.log");
     s_bootlog = CreateFileA(XBOX_UDATA_DIR "boot.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
                             FILE_ATTRIBUTE_NORMAL, NULL);
 }
@@ -117,6 +146,17 @@ void xbox_bootlog_close(void) {
     HANDLE h = s_bootlog;
     s_bootlog = INVALID_HANDLE_VALUE;
     if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+}
+
+/* from here on, writes are queued for xbox_bootlog_pump. With the kill
+ * switch, or no watchdog to pump them (-DXBOX_WATCHDOG=0), boot.log is
+ * closed instead, as before. */
+void xbox_bootlog_async(void) {
+    if (!XBOX_LOG_SESSION || !s_pump_seen) {
+        xbox_bootlog_close();
+        return;
+    }
+    s_bootlog_async = 1;
 }
 
 /* nxdk's winapi has no FlushFileBuffers; its HANDLEs are NT handles */
@@ -129,8 +169,57 @@ static void bootlog_write(const char* s, size_t n) {
     DWORD w;
     HANDLE h = s_bootlog;
     if (h == INVALID_HANDLE_VALUE) return;
+    if (s_bootlog_async) {
+        unsigned c;
+        RtlEnterCriticalSection(&s_pend_lock);
+        c = s_pend_cur;
+        if (s_pend_len[c] + n <= PEND_BYTES) {
+            memcpy(s_pend[c] + s_pend_len[c], s, n);
+            s_pend_len[c] += (unsigned)n;
+        } else {
+            s_pend_drops++;
+        }
+        RtlLeaveCriticalSection(&s_pend_lock);
+        return;
+    }
     WriteFile(h, s, (DWORD)n, &w, NULL);
     xbox_flush_file(h);
+    s_file_bytes += (unsigned)n;
+}
+
+/* the watchdog thread, once a second: write what was queued, flush once */
+void xbox_bootlog_pump(void) {
+    unsigned c, len, drops;
+    DWORD w;
+    s_pump_seen = 1;
+    if (!s_bootlog_async || s_bootlog == INVALID_HANDLE_VALUE) return;
+    RtlEnterCriticalSection(&s_pend_lock);
+    c = s_pend_cur;
+    len = s_pend_len[c];
+    drops = s_pend_drops;
+    s_pend_drops = 0;
+    s_pend_cur = c ^ 1;
+    s_pend_len[c ^ 1] = 0;
+    RtlLeaveCriticalSection(&s_pend_lock);
+    if (!len && !drops) return;
+    if (s_file_bytes + len > (s_file_no == 1 ? BOOTLOG_FIRST_MAX : BOOTLOG_NEXT_MAX)) {
+        char name[64];
+        s_file_no = s_file_no == 2 ? 3 : 2;
+        snprintf(name, sizeof name, XBOX_UDATA_DIR "boot%u.log", s_file_no);
+        CloseHandle(s_bootlog);
+        s_bootlog = CreateFileA(name, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        s_file_bytes = 0;
+        if (s_bootlog == INVALID_HANDLE_VALUE) return;
+    }
+    if (len) WriteFile(s_bootlog, s_pend[c], len, &w, NULL);
+    if (drops) {
+        char line[64];
+        int n = snprintf(line, sizeof line, "[LOG] %u lines not kept (queue full)\n", drops);
+        WriteFile(s_bootlog, line, (DWORD)n, &w, NULL);
+        len += (unsigned)n;
+    }
+    xbox_flush_file(s_bootlog);
+    s_file_bytes += len;
 }
 
 void xbox_log_write(const char* s, size_t n) {
@@ -146,6 +235,24 @@ int xbox_vlogf(const char* fmt, va_list ap) {
     int n = vsnprintf(buf, sizeof buf, fmt, ap);
     if (n < 0) return n;
     xbox_log_write(buf, (size_t)(n < (int)sizeof buf ? n : (int)sizeof buf - 1));
+    return n;
+}
+
+void xbox_log_write_quiet(const char* s, size_t n) {
+    unsigned pos = s_tail_pos;
+    xbox_log_write(s, n);
+    s_quiet_bytes += s_tail_pos - pos;
+}
+
+int xbox_logf_quiet(const char* fmt, ...) {
+    char buf[1024];
+    va_list ap;
+    int n;
+    va_start(ap, fmt);
+    n = vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    if (n < 0) return n;
+    xbox_log_write_quiet(buf, (size_t)(n < (int)sizeof buf ? n : (int)sizeof buf - 1));
     return n;
 }
 

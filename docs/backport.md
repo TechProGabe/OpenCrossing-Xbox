@@ -95,6 +95,27 @@ rebuild (`architecture.md`, Files on the console).
 
 ## Status
 
-| item | state |
-|---|---|
-| plan | written 2026-10-03 |
+Rounds A and B, 2026-10-03, one combo build for the console. `settings.ini`
+key (`[Xbox]`, 0 = old behaviour) or compile switch for each:
+
+| item | where | switch | state |
+|---|---|---|---|
+| sampling profiler, `prof_report.py`, `static_syms.py` | `xbox_prof.c`, `tools/xbox/` | `-DXBOX_PROF=1` | works in xemu |
+| `[FRAME]` every 5 s | `xbox_nv2a.c` | `XBOX_FRAME_LOG` | works in xemu |
+| session-long `boot.log` (+ `boot2/3.log`), `[BEAT]` | `xbox_io.c`, `xbox_watchdog.c` | `XBOX_LOG_SESSION`, `XBOX_HEARTBEAT_SECS` | built; hardware pending |
+| `console.py` stage/deploy/pull/rollback | `tools/xbox/` | — | written; console was off |
+| first-fault PGRAPH + pushbuffer dump, stall report | `xbox_nv2a.c` | — | built |
+| strict `wait_idle` | `xbox_nv2a.c` | `strict_gpu_wait` | xemu ok |
+| vertex cache break per batch | `xbox_nv2a.c` | `vertex_cache_break` | xemu ok |
+| inclusive window clip | `xbox_nv2a.c` | `XBOX_CLIP_INCLUSIVE` | xemu ok |
+| AC97 start order, stuck/halt recovery, shutdown reset | `xbox_audio.c` | `audio_fix` | hardware only (xemu uses the APU) |
+| memcpy & co. builtins | `xbox_prelude.h` | `XBOX_BUILTIN_MEM` | `pc_gx.o` 81 → 18 calls |
+| GPU overlap on by default (+ migration) | `xbox_settings.c` | `gpu_overlap` | xemu ok |
+| 32 KB kicks | `xbox_nv2a.c` | `pushbuffer_kick_kb` | xemu ok |
+| per-draw skips | `xbox_nv2a.c` | `draw_skip` | xemu: shim 1.3 → 0.8 ms |
+| native texture formats | `xbox_nv2a.c` | `native_textures` | xemu: 440 of 864 KB saved, shots match |
+| texture reuse (NES screen in place) | `xbox_nv2a.c` | `texture_reuse` | built; NES not exercised in xemu |
+
+Not done in this round: atomic `settings.ini` writes, the 128 MB hold,
+sampled texture rechecks, EFB copies on the GPU, SSE matrices, prefetches,
+per-TU levels (all wait for the console profile), round C.

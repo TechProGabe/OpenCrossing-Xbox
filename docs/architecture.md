@@ -59,7 +59,8 @@ pointers with the shim, so `pc/` needs no Xbox branches. Only `pc_gx_tev.c`
 | `xbox_settings_menu.c` | the Options page (title screen and pause menu), replaces `pc_settings_menu.c` |
 | `xbox_watchdog.c` | hang reporter (screen + `hang.log`), rolling `last.log` |
 | `xbox_crash.c` | CPU exception reporter (screen + `crash.log`) |
-| `xbox_mem.c` | word-at-a-time `mem*` (pdclib's are byte loops) |
+| `xbox_mem.c` | word-at-a-time `mem*` (pdclib's are byte loops); the prelude makes constant-size calls builtins |
+| `xbox_prof.c` | sampling profiler of the game thread (`-DXBOX_PROF=1`, `perf.md`) |
 
 ## Files on the console
 
@@ -89,7 +90,10 @@ lectured after a clean power-off.
 
 `settings.ini` is the PC port's file plus an `[Xbox]` section
 (`xbox_stick_deadzone`, `rumble`, `video_720p`, `widescreen` (default 0 =
-4:3), and the menu-less `gpu_overlap` test switch). The PC writer
+4:3), and menu-less test switches: `gpu_overlap` and the Melee-X backport's
+`native_textures`, `texture_reuse`, `draw_skip`, `vertex_cache_break`,
+`strict_gpu_wait`, `pushbuffer_kick_kb`, `audio_fix`, each 1 = new behaviour,
+0 = the old one, read at boot; `opt_version` marks a file that has them). The PC writer
 rewrites the whole file, so `xbox_settings.c` appends the section after
 every save. The left stick dead zone used to live in `controller.ini`; the
 first boot without `xbox_stick_deadzone` takes that value over, and the old

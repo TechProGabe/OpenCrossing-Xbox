@@ -98,6 +98,31 @@ static Uniform s_u[U_COUNT] = {
 #define UI(u, e, c) (s_uv[u][(e) * s_u[u].comps + (c)].i)
 #define UF(u, e, c) (s_uv[u][(e) * s_u[u].comps + (c)].f)
 
+/* Per-draw skips (Melee-X renderer.md "CPU cost of the back end"). pc_gx.c
+ * sets every uniform before every draw, mostly to the value it already has.
+ * A setter that changes a value marks the groups that read it; draw() then
+ * rebuilds only those: the TEV config and its combiner program (D_TEV), the
+ * combiner constants (D_TEVK), and the vertex-constant blocks (projection,
+ * modelview, material, lights, texgen). Textures bump s_tex_epoch whenever
+ * what a unit samples can change. Kill switch: -DXBOX_DRAW_SKIP=0, or
+ * draw_skip = 0 in settings.ini (everything rebuilt for every draw). */
+#ifndef XBOX_DRAW_SKIP
+#define XBOX_DRAW_SKIP 1
+#endif
+enum { D_TEV = 1, D_TEVK = 2, D_PROJ = 4, D_MV = 8, D_MAT = 16, D_LIGHT = 32, D_TEXGEN = 64, D_ALL = 127 };
+static const uint8_t k_ugroup[U_COUNT] = {
+    [U_PROJ] = D_PROJ, [U_MV] = D_MV, [U_NRM] = D_MV,
+    [U_PREV] = D_TEVK, [U_REG0] = D_TEVK, [U_REG1] = D_TEVK, [U_REG2] = D_TEVK, [U_KCOLOR] = D_TEVK,
+    [U_FOGCOL] = D_TEVK,
+    [U_NUMST] = D_TEV, [U_CIN] = D_TEV, [U_AIN] = D_TEV, [U_COP] = D_TEV, [U_AOP] = D_TEV, [U_BSC] = D_TEV,
+    [U_OUT] = D_TEV, [U_KSEL] = D_TEV, [U_USETEX] = D_TEV, [U_FOGEN] = D_TEV | D_MAT,
+    [U_CHANCOL] = D_MAT, [U_LCFG0] = D_MAT, [U_FOGP] = D_MAT, [U_LCFG1] = D_MAT | D_LIGHT,
+    [U_LPOS] = D_LIGHT, [U_LCOL] = D_LIGHT,
+    [U_TCSRC] = D_TEXGEN, [U_TMEN] = D_TEXGEN, [U_TMR0] = D_TEXGEN, [U_TMR1] = D_TEXGEN, [U_TGSRC] = D_TEXGEN,
+};
+static uint32_t s_udirty = D_ALL;
+static uint32_t s_tex_epoch = 1;
+
 static GLint gl_get_uniform_location(GLuint prog, const GLchar* name) {
     int k;
     (void)prog;
@@ -118,22 +143,33 @@ static UVal* uslot(GLint loc, int* room) {
     return &s_uv[k][e * s_u[k].comps];
 }
 
+/* floats are compared as bits: -0 and NaN payloads count as changes */
 static void set_f(GLint loc, int comps, int count, const GLfloat* v) {
-    int room, n, i;
+    int room, n, i, diff = 0;
     UVal* d = uslot(loc, &room);
     if (!d) return;
     n = comps * count;
     if (n > room) n = room;
-    for (i = 0; i < n; i++) d[i].f = v[i];
+    for (i = 0; i < n; i++) {
+        UVal u;
+        u.f = v[i];
+        diff |= d[i].i ^ u.i;
+        d[i].i = u.i;
+    }
+    if (diff) s_udirty |= k_ugroup[loc >> 8];
 }
 
 static void set_i(GLint loc, int comps, int count, const GLint* v) {
-    int room, n, i;
+    int room, n, i, diff = 0;
     UVal* d = uslot(loc, &room);
     if (!d) return;
     n = comps * count;
     if (n > room) n = room;
-    for (i = 0; i < n; i++) d[i].i = v[i];
+    for (i = 0; i < n; i++) {
+        diff |= d[i].i ^ v[i];
+        d[i].i = v[i];
+    }
+    if (diff) s_udirty |= k_ugroup[loc >> 8];
 }
 
 static void u1i(GLint l, GLint a) { set_i(l, 1, 1, &a); }
@@ -275,6 +311,8 @@ typedef struct {
     int w, h, pw, ph;
     void* mem;
     int wrap_s, wrap_t, min_f, mag_f;
+    uint32_t nvfmt, bpp;   /* NV097_SET_TEXTURE_FORMAT_COLOR_SZ_*, bytes per texel */
+    uint32_t drawn;        /* s_frame + 1 of the last frame that drew it, 0 = never */
 } XTex;
 static XTex s_tex[MAX_TEX];
 static int s_tex_next = 1;
@@ -313,23 +351,41 @@ static uint32_t* P;
 #define PB_BEGIN() (P = pb_begin())
 #define PB_END() pb_end(P)
 
-/* Draws share one open pushbuffer block, closed only every XBOX_PB_KICK
- * dwords or before anything that must see the GPU caught up: every pb_end
- * runs pbkit's pb_cache_flush (sfence + write-combine flush + MMIO poll), and
+static inline void put1(uint32_t m, uint32_t v);
+
+/* Draws share one open pushbuffer block, closed only every s_pb_kick dwords
+ * or before anything that must see the GPU caught up: every pb_end runs
+ * pbkit's pb_cache_flush (sfence + write-combine flush + MMIO poll), and
  * with two blocks per draw that was ~400 flushes a frame and the second-
- * hottest function in the profile. Kill switch: -DXBOX_PB_KICK=0 (close
- * after every draw). */
+ * hottest function in the profile. 32 KB a kick since the Melee-X backport
+ * (Melee-X measured each kick's flush at ~2% of its CPU at 16 KB);
+ * settings.ini pushbuffer_kick_kb sets the size (16 = the old one). Kill
+ * switch: -DXBOX_PB_KICK=0 (close after every draw). */
 #ifndef XBOX_PB_KICK
-#define XBOX_PB_KICK 4096
+#define XBOX_PB_KICK 1
 #endif
+static uint32_t s_pb_kick = 8192;   /* dwords; pushbuffer_kick_kb at init */
 static int s_pb_open;
 static uint32_t* s_pb_mark;
+
+/* The NV2A caches vertex data by address, and a draw's fetch reads ahead of
+ * its last vertex. Once a batch is kicked the GPU can run it before the CPU
+ * writes the next vertices into the ring right behind it, and the next draw
+ * then takes its first vertices from the stale read-ahead (Melee-X: black
+ * wedges on the console only; xemu has no such cache). Every batch starts by
+ * dropping that cache. Kill switch: -DXBOX_VB_CACHE_BREAK=0, or
+ * vertex_cache_break = 0 in settings.ini. */
+#ifndef XBOX_VB_CACHE_BREAK
+#define XBOX_VB_CACHE_BREAK 1
+#endif
+static int s_vb_break = XBOX_VB_CACHE_BREAK;
 
 static void pb_open(void) {
     if (s_pb_open) return;
     PB_BEGIN();
     s_pb_mark = P;
     s_pb_open = 1;
+    if (s_vb_break) put1(NV097_BREAK_VERTEX_BUFFER_CACHE, 0);
 }
 
 static void pb_close(void) {
@@ -382,8 +438,28 @@ static void pb_note_peak(void) {
 volatile int ocx_pb_irq_off;
 static volatile uint32_t s_gf_count, s_gf_storms, s_gf_last[5];
 static uint32_t s_gf_logged;
+static uint32_t s_draws, s_approx_draws, s_frame;
+/* The first fault, with where the pusher was and which draw of which frame
+ * the CPU had reached (later ones are usually its consequences), and PGRAPH
+ * 0x400700-0x4008FC as they were then (surface, zeta, clip, limit and trap
+ * state; decode against xemu's nv2a_regs). From Melee-X, where it found the
+ * EFB-copy stalls. */
+static volatile uint32_t s_gf_first[9], s_gf_first_logged, s_gf_regs[128];
 
 void ocx_pb_gpu_fault(unsigned kind, unsigned a, unsigned b, unsigned c, unsigned d) {
+    if (!s_gf_count) {
+        int i;
+        s_gf_first[0] = kind;
+        s_gf_first[1] = a;
+        s_gf_first[2] = b;
+        s_gf_first[3] = c;
+        s_gf_first[4] = d;
+        s_gf_first[5] = *(volatile uint32_t*)(0xFD000000u + 0x3244);   /* DMA GET */
+        s_gf_first[6] = *(volatile uint32_t*)(0xFD000000u + 0x3240);   /* DMA PUT */
+        s_gf_first[7] = s_frame;
+        s_gf_first[8] = s_draws;
+        for (i = 0; i < 128; i++) s_gf_regs[i] = *(volatile uint32_t*)(0xFD400700u + (uint32_t)i * 4);
+    }
     s_gf_last[0] = kind;
     s_gf_last[1] = a;
     s_gf_last[2] = b;
@@ -393,10 +469,37 @@ void ocx_pb_gpu_fault(unsigned kind, unsigned a, unsigned b, unsigned c, unsigne
     if (kind == 3 && ++s_gf_storms >= 16) ocx_pb_irq_off = 1;
 }
 
+
+/* passive level only: logs, and reads the pushbuffer around the fault */
+static void log_first_fault(void) {
+    const uint32_t* w;
+    int i;
+    if (!s_gf_count || s_gf_first_logged) return;
+    s_gf_first_logged = 1;
+    xbox_logf("[NV2A] first GPU fault: kind %u %08x %08x %08x %08x, get %08x put %08x (pushbuffer %08x), "
+              "frame %u draw %u\n",
+              (unsigned)s_gf_first[0], (unsigned)s_gf_first[1], (unsigned)s_gf_first[2], (unsigned)s_gf_first[3],
+              (unsigned)s_gf_first[4], (unsigned)s_gf_first[5], (unsigned)s_gf_first[6],
+              (unsigned)((uint32_t)s_pb_base & 0x03FFFFFFu), (unsigned)s_gf_first[7], (unsigned)s_gf_first[8]);
+    /* what the pusher had just read: 64 words before GET, 32 from it. The
+     * pushbuffer is contiguous memory, mapped at 0x80000000 | physical. */
+    w = (const uint32_t*)(0x80000000u | (s_gf_first[5] & 0x03FFFFFCu));
+    if (MmIsAddressValid((PVOID)(w - 64)) && MmIsAddressValid((PVOID)(w + 31)))
+        for (i = -64; i < 32; i += 8)
+            xbox_logf("[NV2A]  first fault get%+d: %08x %08x %08x %08x %08x %08x %08x %08x\n", i * 4, w[i], w[i + 1],
+                      w[i + 2], w[i + 3], w[i + 4], w[i + 5], w[i + 6], w[i + 7]);
+    for (i = 0; i < 128; i += 8)
+        xbox_logf("[NV2A]  first fault pgraph %06x: %08x %08x %08x %08x %08x %08x %08x %08x\n", 0x400700 + i * 4,
+                  (unsigned)s_gf_regs[i], (unsigned)s_gf_regs[i + 1], (unsigned)s_gf_regs[i + 2],
+                  (unsigned)s_gf_regs[i + 3], (unsigned)s_gf_regs[i + 4], (unsigned)s_gf_regs[i + 5],
+                  (unsigned)s_gf_regs[i + 6], (unsigned)s_gf_regs[i + 7]);
+}
+
 static void gpu_fault_log(uint32_t frame) {
     uint32_t n = s_gf_count;
     s_gf_storms = 0;
     if (n == s_gf_logged) return;
+    log_first_fault();
     if (s_gf_logged < 32 || (n >> 8) != (s_gf_logged >> 8))
         xbox_logf("[NV2A] GPU fault x%u (frame %u): kind %u %08x %08x %08x %08x%s\n", n, frame,
                   (unsigned)s_gf_last[0], (unsigned)s_gf_last[1], (unsigned)s_gf_last[2], (unsigned)s_gf_last[3],
@@ -478,6 +581,8 @@ static void gl_gen_textures(GLsizei n, GLuint* ids) {
 }
 
 static void wait_idle(void);
+static int s_frame_open;
+static void frame_open(void);
 /* The GPU may still read a texture this frame: free after the flip. If the
  * list is full, drain the GPU and free everything now rather than leak. */
 static void release_deferred(void);
@@ -500,11 +605,17 @@ static void gl_delete_textures(GLsizei n, const GLuint* ids) {
         s_tex[id].used = 0;
         s_tex[id].mem = NULL;
         for (u = 0; u < 8; u++) if (s_bound[u] == id) s_bound[u] = 0;
+        s_tex_epoch++;
     }
 }
 
 static void gl_active_texture(GLenum t) { s_active_unit = (int)(t - GL_TEXTURE0) & 7; }
-static void gl_bind_texture(GLenum target, GLuint id) { (void)target; s_bound[s_active_unit] = id < MAX_TEX ? id : 0; }
+static void gl_bind_texture(GLenum target, GLuint id) {
+    GLuint v = id < MAX_TEX ? id : 0;
+    (void)target;
+    if (s_bound[s_active_unit] != v) s_tex_epoch++;
+    s_bound[s_active_unit] = v;
+}
 
 static void gl_tex_parameteri(GLenum target, GLenum pname, GLint v) {
     XTex* t;
@@ -518,6 +629,7 @@ static void gl_tex_parameteri(GLenum target, GLenum pname, GLint v) {
         case GL_TEXTURE_MIN_FILTER: t->min_f = v; break;
         case GL_TEXTURE_MAG_FILTER: t->mag_f = v; break;
     }
+    s_tex_epoch++;
 }
 
 static uint32_t s_tex_fail, s_tex_recover;
@@ -561,20 +673,134 @@ static void* tex_alloc(uint32_t bytes, int w, int h) {
 static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
                          GLenum fmt, GLenum type, const void* data);
 
+static unsigned long long s_wait_ticks;   /* every wait_idle, for the [FRAME] line */
+
+/* upload time without the GPU waits inside it (frame_open, tex_alloc's
+ * recovery): those count as gpu wait */
 static void gl_tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
                             GLenum fmt, GLenum type, const void* data) {
-    unsigned long long t0 = xbox_ticks();
+    unsigned long long t0 = xbox_ticks(), w0 = s_wait_ticks;
     tex_image_2d(target, level, ifmt, w, h, border, fmt, type, data);
-    g_xfs.tex_ticks += xbox_ticks() - t0;
+    g_xfs.tex_ticks += xbox_ticks() - t0 - (s_wait_ticks - w0);
     g_xfs.tex_n++;
 }
+
+/* Native texture formats (Melee-X keeps GX textures in formats the NV2A
+ * samples as they are; here only the RGBA8 that pc_gx_texture.c decodes
+ * arrives, so each upload is classified instead). Every texel of the image
+ * is checked, and the smallest format that holds all of them is used:
+ *   grey, opaque              -> Y8        (1 byte)
+ *   grey, alpha = grey        -> AY8       (1 byte: I4/I8)
+ *   grey                      -> A8Y8      (2 bytes: IA4/IA8)
+ *   opaque, 5/6/5-bit colour  -> R5G6B5    (2 bytes)
+ *   alpha 0/255, 5-bit colour -> A1R5G5B5  (2 bytes: most RGB5A3/CI)
+ *   all four 4-bit            -> A4R4G4B4  (2 bytes)
+ *   anything else             -> A8R8G8B8  (4 bytes)
+ * Grey and alpha are kept exactly. A 5- or 6-bit colour channel is accepted
+ * when it is what pc_gx_texture.c's x * 255 / 31 (or a framebuffer read
+ * back's bit replication) gives for some x; the NV2A expands x by bit
+ * replication, as the GameCube does, so such a texel can come out 1/255
+ * from the decoder's value. The NES screen (RGB565, red in the low bits)
+ * goes to R5G6B5 as it is. Kill switch: -DXBOX_NATIVE_TEX=0, or
+ * native_textures = 0 in settings.ini (everything A8R8G8B8, as before). */
+#ifndef XBOX_NATIVE_TEX
+#define XBOX_NATIVE_TEX 1
+#endif
+static int s_native_tex = XBOX_NATIVE_TEX;
+#define FMT_Y8 NV097_SET_TEXTURE_FORMAT_COLOR_SZ_Y8
+#define FMT_AY8 NV097_SET_TEXTURE_FORMAT_COLOR_SZ_AY8
+#define FMT_A8Y8 NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8Y8
+#define FMT_R5G6B5 NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R5G6B5
+#define FMT_A1R5G5B5 NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A1R5G5B5
+#define FMT_A4R4G4B4 NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A4R4G4B4
+#define FMT_A8R8G8B8 NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8R8G8B8
+
+/* q5[v]: the 5-bit x whose x * 255 / 31 or bit replication is v, else 0xFF;
+ * q6 likewise for 6 bits. 4 bits: x * 255 / 15 and replication are both 17x. */
+static uint8_t s_q5[256], s_q6[256];
+static void quant_tables(void) {
+    int x;
+    memset(s_q5, 0xFF, sizeof s_q5);
+    memset(s_q6, 0xFF, sizeof s_q6);
+    for (x = 0; x < 32; x++) {
+        s_q5[x * 255 / 31] = (uint8_t)x;
+        s_q5[(x << 3) | (x >> 2)] = (uint8_t)x;
+    }
+    for (x = 0; x < 64; x++) {
+        s_q6[x * 255 / 63] = (uint8_t)x;
+        s_q6[(x << 2) | (x >> 4)] = (uint8_t)x;
+    }
+}
+
+/* since boot: uploads by stored size (1, 2, 4 bytes a texel) and the bytes
+ * the smaller formats saved over A8R8G8B8, for perf.log's minute line */
+static uint32_t s_tex_by_bpp[5];
+static unsigned long long s_tex_saved_bytes;   /* totals since boot */
+
+/* src: w x h texels, `bpp` bytes each (4 RGBA8, 3 RGB8) */
+static uint32_t classify(const uint8_t* src, int w, int h, int bpp) {
+    enum { GREY = 1, AY = 2, OPAQUE = 4, A1 = 8, C5 = 16, G6 = 32, C4 = 64 };
+    uint32_t ok = GREY | AY | OPAQUE | A1 | C5 | G6 | C4;
+    int i, n = w * h;
+    for (i = 0; i < n && ok; i++, src += bpp) {
+        uint32_t r = src[0], g = src[1], b = src[2], a = bpp == 4 ? src[3] : 255;
+        if (r != g || g != b) ok &= ~(uint32_t)(GREY | AY);
+        if (a != r) ok &= ~(uint32_t)AY;
+        if (a != 255) ok &= ~(uint32_t)OPAQUE;
+        if (a != 255 && a != 0) ok &= ~(uint32_t)A1;
+        if ((s_q5[r] | s_q5[b]) == 0xFF) ok &= ~(uint32_t)(C5 | G6);
+        if (s_q5[g] == 0xFF) ok &= ~(uint32_t)C5;
+        if (s_q6[g] == 0xFF) ok &= ~(uint32_t)G6;
+        if (r % 17 || g % 17 || b % 17 || a % 17) ok &= ~(uint32_t)C4;
+    }
+    if ((ok & (GREY | OPAQUE)) == (GREY | OPAQUE)) return FMT_Y8;
+    if ((ok & (GREY | AY)) == (GREY | AY)) return FMT_AY8;
+    if (ok & GREY) return FMT_A8Y8;
+    if ((ok & (OPAQUE | G6)) == (OPAQUE | G6)) return FMT_R5G6B5;
+    if ((ok & (A1 | C5)) == (A1 | C5)) return FMT_A1R5G5B5;
+    if (ok & C4) return FMT_A4R4G4B4;
+    return FMT_A8R8G8B8;
+}
+
+static uint32_t fmt_bpp(uint32_t f) {
+    switch (f) {
+        case FMT_Y8: case FMT_AY8: return 1;
+        case FMT_A8R8G8B8: return 4;
+        default: return 2;
+    }
+}
+
+/* one texel in format f from RGBA8 bytes */
+static inline uint32_t texel(uint32_t f, uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
+    switch (f) {
+        case FMT_Y8: case FMT_AY8: return r;
+        case FMT_A8Y8: return (a << 8) | r;
+        case FMT_R5G6B5: return ((uint32_t)s_q5[r] << 11) | ((uint32_t)s_q6[g] << 5) | s_q5[b];
+        case FMT_A1R5G5B5:
+            return (a ? 0x8000u : 0) | ((uint32_t)s_q5[r] << 10) | ((uint32_t)s_q5[g] << 5) | s_q5[b];
+        case FMT_A4R4G4B4: return ((a / 17) << 12) | ((r / 17) << 8) | ((g / 17) << 4) | (b / 17);
+        default: return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+}
+
+/* A re-upload of the same size and format rewrites the texture where it is
+ * (the NES screen every frame, EFB captures): no pool churn, no deferred
+ * free. Only when the GPU can't be reading it: frame_open has drained last
+ * frame's work, and this frame hasn't drawn it yet. Kill switch:
+ * -DXBOX_TEX_REUSE=0, or texture_reuse = 0 in settings.ini. */
+#ifndef XBOX_TEX_REUSE
+#define XBOX_TEX_REUSE 1
+#endif
+static int s_tex_reuse = XBOX_TEX_REUSE;
+static uint32_t s_tex_reused, s_tex_reused_total;   /* this [FRAME] window, since boot */
 
 static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
                          GLenum fmt, GLenum type, const void* data) {
     GLuint id = s_bound[s_active_unit];
     XTex* t;
     int pw, ph, x, y, bpp;
-    uint32_t* dst;
+    uint32_t nvfmt, tbpp;
+    uint8_t* dst;
     const uint8_t* src = (const uint8_t*)data;
     (void)target; (void)ifmt; (void)border;
     /* pc_gx_texture.c uploads RGBA8; the NES screen (pc_nes_fixnes.c) is
@@ -586,15 +812,40 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
     else { bpp = 4; src = NULL; }
     if (level != 0 || !id || !s_tex[id].used || w <= 0 || h <= 0 || w > 1024 || h > 1024) return;
     t = &s_tex[id];
-    if (t->mem) { defer_free(t->mem); t->mem = NULL; }
+    s_tex_epoch++;
+    if (!s_native_tex || !src) nvfmt = FMT_A8R8G8B8;
+    else if (bpp == 2) nvfmt = FMT_R5G6B5;
+    else nvfmt = classify(src, w, h, bpp);
+    tbpp = fmt_bpp(nvfmt);
     pw = pot(w);
     ph = pot(h);
-    dst = (uint32_t*)tex_alloc((uint32_t)(pw * ph * 4), w, h);
-    if (!dst) {
-        if ((s_tex_fail++ & 255) == 0) xbox_logf("[NV2A] texture pool full (%u used), %dx%d dropped\n", s_pool_used, w, h);
-        return;
+    if (t->mem && s_tex_reuse && t->w == w && t->h == h && t->nvfmt == nvfmt) {
+        frame_open();   /* with the GPU overlap, this drains last frame's draws */
+        if (t->drawn == s_frame + 1) {   /* queued in this frame: can't touch it */
+            defer_free(t->mem);
+            t->mem = NULL;
+        } else {
+            s_tex_reused++;
+            s_tex_reused_total++;
+        }
+    } else if (t->mem) {
+        defer_free(t->mem);
+        t->mem = NULL;
     }
-    t->w = w; t->h = h; t->pw = pw; t->ph = ph; t->mem = dst;
+    if (!t->mem) {
+        t->mem = tex_alloc((uint32_t)(pw * ph) * tbpp, w, h);
+        if (!t->mem) {
+            if ((s_tex_fail++ & 255) == 0) xbox_logf("[NV2A] texture pool full (%u used), %dx%d dropped\n", s_pool_used, w, h);
+            return;
+        }
+        s_tex_by_bpp[tbpp]++;
+        s_tex_saved_bytes += (uint32_t)(pw * ph) * (4 - tbpp);
+    }
+    dst = (uint8_t*)t->mem;
+    t->w = w; t->h = h; t->pw = pw; t->ph = ph;
+    t->nvfmt = nvfmt;
+    t->bpp = tbpp;
+    t->drawn = 0;
     swz_tables(pw, ph);
     for (y = 0; y < ph; y++) {
         int sy = y < h ? y : h - 1;   /* pad by edge replication */
@@ -602,19 +853,24 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
         const uint8_t* row = src ? src + (size_t)sy * (size_t)w * (size_t)bpp : NULL;
         for (x = 0; x < pw; x++) {
             int sx = x < w ? x : w - 1;
-            uint32_t argb = 0xFFFFFFFFu;
+            uint32_t v, k = yo | swz_x[x];
             if (row && bpp == 4) {
                 const uint8_t* p = row + sx * 4;
-                argb = ((uint32_t)p[3] << 24) | ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
+                v = texel(nvfmt, p[0], p[1], p[2], p[3]);
             } else if (row && bpp == 2) {
-                uint32_t v = (uint32_t)row[sx * 2] | ((uint32_t)row[sx * 2 + 1] << 8);
-                uint32_t r = v & 31, g = (v >> 5) & 63, b = v >> 11;
-                argb = 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
+                uint32_t c = (uint32_t)row[sx * 2] | ((uint32_t)row[sx * 2 + 1] << 8);
+                uint32_t r = c & 31, g = (c >> 5) & 63, b = c >> 11;
+                if (nvfmt == FMT_R5G6B5) v = (r << 11) | (g << 5) | b;
+                else v = 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
             } else if (row) {
                 const uint8_t* p = row + sx * 3;
-                argb = 0xFF000000u | ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
+                v = texel(nvfmt, p[0], p[1], p[2], 255);
+            } else {
+                v = 0xFFFFFFFFu;
             }
-            dst[yo | swz_x[x]] = argb;
+            if (tbpp == 4) ((uint32_t*)dst)[k] = v;
+            else if (tbpp == 2) ((uint16_t*)dst)[k] = (uint16_t)v;
+            else dst[k] = (uint8_t)v;
         }
     }
 }
@@ -668,15 +924,21 @@ static void to_fb(GLint x, GLint y, GLsizei w, GLsizei h, int* ox, int* oy, int*
     *ox = x0; *oy = y0; *ow = x1 - x0; *oh = y1 - y0;
 }
 static void gl_scissor(GLint x, GLint y, GLsizei w, GLsizei h) { to_fb(x, y, w, h, &G.sx, &G.sy, &G.sw, &G.sh); }
-static void gl_viewport(GLint x, GLint y, GLsizei w, GLsizei h) { to_fb(x, y, w, h, &G.vx, &G.vy, &G.vw, &G.vh); }
-static void gl_depth_range(GLdouble n, GLdouble f) { G.dn = (float)n; G.df = (float)f; }
+static void gl_viewport(GLint x, GLint y, GLsizei w, GLsizei h) {
+    int vx = G.vx, vy = G.vy, vw = G.vw, vh = G.vh;
+    to_fb(x, y, w, h, &G.vx, &G.vy, &G.vw, &G.vh);
+    if (vx != G.vx || vy != G.vy || vw != G.vw || vh != G.vh) s_udirty |= D_PROJ;
+}
+static void gl_depth_range(GLdouble n, GLdouble f) {
+    if (G.dn != (float)n || G.df != (float)f) s_udirty |= D_PROJ;
+    G.dn = (float)n;
+    G.df = (float)f;
+}
 static void gl_clear_color(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {
     G.clear_c[0] = r; G.clear_c[1] = g; G.clear_c[2] = b; G.clear_c[3] = a;
 }
 static void gl_clear_depth(GLdouble d) { G.clear_d = (float)d; }
 
-static int s_frame_open;
-static void frame_open(void);
 
 static void clear_rect(int* x, int* y, int* w, int* h) {
     if (G.scissor) {
@@ -725,9 +987,68 @@ static void gl_clear(GLbitfield mask) {
     }
 }
 
+/* pb_busy only compares the pusher's GET with PUT and reads PGRAPH's status:
+ * methods already fetched into PFIFO's CACHE1 but not yet handed to PGRAPH
+ * pass as idle whenever PGRAPH is between two of them. The callers free or
+ * rewrite memory the GPU reads right after this (deferred textures, the
+ * vertex ring at each frame and mid-frame, texture memory rewritten in
+ * place), so idle also means CACHE1 empty and the pusher stopped, seen twice
+ * (Melee-X, which relies on it for the same things). A GPU that stops
+ * fetching would otherwise hang here with nothing in the log: after 2 s,
+ * report once where the FIFO stopped. Kill switch: -DXBOX_STRICT_IDLE=0, or
+ * strict_gpu_wait = 0 in settings.ini (pb_busy alone, as before). */
+#ifndef XBOX_STRICT_IDLE
+#define XBOX_STRICT_IDLE 1
+#endif
+static int s_strict_idle = XBOX_STRICT_IDLE;
+
+static int gpu_quiet(void) {
+    volatile const uint32_t* r = (volatile const uint32_t*)0xFD000000u;
+    return !pb_busy() && (r[0x3214 / 4] & 0x10) && !(r[0x3220 / 4] & 0x10) && !r[0x400700 / 4];
+}
+
+static int gpu_busy(void) {
+    if (!s_strict_idle) return pb_busy();
+    return !gpu_quiet() || !gpu_quiet();
+}
+
+static void report_gpu_stall(void) {
+    volatile const uint32_t* g = (volatile const uint32_t*)0xFD400000u;
+    uint32_t get = *(volatile uint32_t*)(0xFD000000u + 0x3244), put = *(volatile uint32_t*)(0xFD000000u + 0x3240);
+    const uint32_t* w = (const uint32_t*)(0x80000000u | (get & 0x03FFFFFCu));
+    xbox_logf("[NV2A] GPU stalled: get %08x put %08x dma_state %08x pgraph %08x, faults %u (last kind %u %08x %08x "
+              "%08x %08x)\n",
+              get, put, *(volatile uint32_t*)(0xFD000000u + 0x3228), g[0x700 / 4], (unsigned)s_gf_count,
+              (unsigned)s_gf_last[0], (unsigned)s_gf_last[1], (unsigned)s_gf_last[2], (unsigned)s_gf_last[3],
+              (unsigned)s_gf_last[4]);
+    log_first_fault();
+    /* GET can be anywhere once the pusher has run off into other data */
+    if (MmIsAddressValid((PVOID)(w - 8)) && MmIsAddressValid((PVOID)(w + 7))) {
+        xbox_logf("[NV2A]  at get-32: %08x %08x %08x %08x %08x %08x %08x %08x\n", w[-8], w[-7], w[-6], w[-5], w[-4],
+                  w[-3], w[-2], w[-1]);
+        xbox_logf("[NV2A]  at get:    %08x %08x %08x %08x %08x %08x %08x %08x\n", w[0], w[1], w[2], w[3], w[4], w[5],
+                  w[6], w[7]);
+    } else {
+        xbox_logf("[NV2A]  get is outside mapped memory (pushbuffer at %08x)\n",
+                  (unsigned)((uint32_t)s_pb_base & 0x03FFFFFFu));
+    }
+    xbox_logf("[NV2A]  pgraph intr %08x nsource %08x trapped %08x data %08x surface %08x | clear %08x %08x "
+              "window %08x %08x | frame %u draws %u\n",
+              g[0x100 / 4], g[0x108 / 4], g[0x704 / 4], g[0x708 / 4], g[0x710 / 4], g[0x1864 / 4], g[0x1868 / 4],
+              g[0x1A44 / 4], g[0x1A64 / 4], s_frame, s_draws);
+}
+
 static void wait_idle(void) {
+    unsigned long long t0 = xbox_ticks();
+    int reported = 0;
     pb_close();
-    while (pb_busy()) {}
+    while (gpu_busy()) {
+        if (!reported && xbox_ticks() - t0 > 2 * xbox_ticks_per_sec()) {
+            report_gpu_stall();
+            reported = 1;
+        }
+    }
+    s_wait_ticks += xbox_ticks() - t0;
 }
 
 /* x, y, w, h are logical (pc_gx) pixels; each samples the framebuffer pixel
@@ -777,7 +1098,6 @@ static int s_vc_valid;
 static XRcProg s_rc_cur;
 static int s_rc_valid;
 static uint32_t s_rc_consts[XRC_MAX_STAGES][2], s_rc_fconsts[2];
-static uint32_t s_draws, s_approx_draws, s_frame;
 
 typedef struct { uint32_t hash; XTevCfg cfg; XRcProg prog; } RcEntry;
 #define RC_CACHE 256
@@ -911,9 +1231,15 @@ static void build_tev_cfg(XTevCfg* c) {
 #endif
 }
 
-static void emit_combiners(const XRcProg* rp) {
+/* the program emit_combiners last sent with its constants; with draw_skip
+ * the same program and unchanged TEV colours send nothing (NULL: resend) */
+static const XRcProg* s_rc_emitted;
+
+static void emit_combiners(const XRcProg* rp, int consts_dirty) {
     int i;
     uint32_t cst[XRC_MAX_STAGES][2], fc[2];
+    if (rp == s_rc_emitted && !consts_dirty) return;
+    s_rc_emitted = rp;
     for (i = 0; i < rp->nstages; i++) {
         cst[i][0] = pack_const(rp->cref[i][0], rp->cref[i][1]);
         cst[i][1] = pack_const(rp->cref[i][2], rp->cref[i][3]);
@@ -970,11 +1296,11 @@ static void emit_textures(const XTevCfg* c, float scale[3][2]) {
         } else {
             uint32_t filt_min = t->min_f == GL_NEAREST ? 1 : 2, filt_mag = t->mag_f == GL_NEAREST ? 1 : 2;
             v[0] = (uint32_t)t->mem & 0x03FFFFFF;
-            v[1] = 1 /* DMA A */ | (1u << 3) /* border from colour: no border texels in the image */ | (2u << 4) /* 2D */ | (NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8R8G8B8 << 8) |
+            v[1] = 1 /* DMA A */ | (1u << 3) /* border from colour: no border texels in the image */ | (2u << 4) /* 2D */ | (t->nvfmt << 8) |
                    (1u << 16) /* 1 mip level */ | ((uint32_t)log2i(t->pw) << 20) | ((uint32_t)log2i(t->ph) << 24);
             v[2] = wrap_mode(t->wrap_s) | (wrap_mode(t->wrap_t) << 8) | (3u << 16);
             v[3] = 0x4003FFC0u;   /* ENABLE | MAX_LOD_CLAMP (the nxdk mesh sample's value) */
-            v[4] = (uint32_t)(t->pw * 4) << 16;
+            v[4] = (uint32_t)t->pw * t->bpp << 16;
             v[5] = 0x2000u | (filt_min << 16) | (filt_mag << 24);
             v[6] = ((uint32_t)t->pw << 16) | (uint32_t)t->ph;
             scale[s][0] = (float)t->w / (float)t->pw;
@@ -1018,34 +1344,40 @@ static void mat4_rows_mul(const float* p /*4x4 row-major*/, float out[16]) {
     }
 }
 
-static void build_vconsts(float vc[41][4], const float scale[3][2]) {
-    float proj[16];
+/* Builds the rows of the groups in `g` (D_PROJ rows 0-3, D_MV 4-9, D_MAT
+ * 10-15, D_LIGHT 16-31, D_TEXGEN 32-40) and leaves the others as they are. */
+static void build_vconsts(float vc[41][4], const float scale[3][2], uint32_t g) {
     int i, s;
-    memset(vc, 0, sizeof(float) * 41 * 4);
-    mat4_rows_mul(&UF(U_PROJ, 0, 0), proj);
-    memcpy(vc[0], proj, sizeof proj);
-    for (i = 0; i < 3; i++) {
-        vc[4 + i][0] = UF(U_MV, 0, i * 4 + 0); vc[4 + i][1] = UF(U_MV, 0, i * 4 + 1);
-        vc[4 + i][2] = UF(U_MV, 0, i * 4 + 2); vc[4 + i][3] = UF(U_MV, 0, i * 4 + 3);
-        vc[7 + i][0] = UF(U_NRM, 0, i * 3 + 0); vc[7 + i][1] = UF(U_NRM, 0, i * 3 + 1);
-        vc[7 + i][2] = UF(U_NRM, 0, i * 3 + 2);
+    if (g & D_PROJ) mat4_rows_mul(&UF(U_PROJ, 0, 0), vc[0]);
+    if (g & D_MV) {
+        memset(vc[4], 0, sizeof(float) * 6 * 4);
+        for (i = 0; i < 3; i++) {
+            vc[4 + i][0] = UF(U_MV, 0, i * 4 + 0); vc[4 + i][1] = UF(U_MV, 0, i * 4 + 1);
+            vc[4 + i][2] = UF(U_MV, 0, i * 4 + 2); vc[4 + i][3] = UF(U_MV, 0, i * 4 + 3);
+            vc[7 + i][0] = UF(U_NRM, 0, i * 3 + 0); vc[7 + i][1] = UF(U_NRM, 0, i * 3 + 1);
+            vc[7 + i][2] = UF(U_NRM, 0, i * 3 + 2);
+        }
     }
-    vc[10][0] = 0.0f; vc[10][1] = 1.0f; vc[10][2] = 0.5f;
-    for (i = 0; i < 4; i++) { vc[11][i] = UF(U_CHANCOL, 0, i); vc[12][i] = UF(U_CHANCOL, 1, i); }
-    vc[13][0] = UI(U_LCFG0, 0, 1) != 0;
-    vc[13][1] = UI(U_LCFG0, 0, 2) != 0;
-    vc[13][2] = UI(U_LCFG0, 0, 0) != 0;
-    vc[13][3] = UI(U_LCFG0, 0, 3) != 0;
-    vc[14][0] = UI(U_LCFG1, 0, 1) != 0;
-    vc[14][1] = UI(U_LCFG1, 0, 0) != 0;
-    vc[14][2] = UI(U_FOGEN, 0, 0) != 0;
-    {
-        float st = UF(U_FOGP, 0, 1), en = UF(U_FOGP, 0, 2), d = en - st;
-        vc[15][0] = st;
-        vc[15][1] = 1.0f / (d > 1e-6f ? d : 1e-6f);
+    if (g & D_MAT) {
+        memset(vc[10], 0, sizeof(float) * 6 * 4);
+        vc[10][0] = 0.0f; vc[10][1] = 1.0f; vc[10][2] = 0.5f;
+        for (i = 0; i < 4; i++) { vc[11][i] = UF(U_CHANCOL, 0, i); vc[12][i] = UF(U_CHANCOL, 1, i); }
+        vc[13][0] = UI(U_LCFG0, 0, 1) != 0;
+        vc[13][1] = UI(U_LCFG0, 0, 2) != 0;
+        vc[13][2] = UI(U_LCFG0, 0, 0) != 0;
+        vc[13][3] = UI(U_LCFG0, 0, 3) != 0;
+        vc[14][0] = UI(U_LCFG1, 0, 1) != 0;
+        vc[14][1] = UI(U_LCFG1, 0, 0) != 0;
+        vc[14][2] = UI(U_FOGEN, 0, 0) != 0;
+        {
+            float st = UF(U_FOGP, 0, 1), en = UF(U_FOGP, 0, 2), d = en - st;
+            vc[15][0] = st;
+            vc[15][1] = 1.0f / (d > 1e-6f ? d : 1e-6f);
+        }
     }
-    {
+    if (g & D_LIGHT) {
         int mask = UI(U_LCFG1, 0, 2);
+        memset(vc[16], 0, sizeof(float) * 16 * 4);
         for (i = 0; i < 8; i++) {
             float x = UF(U_LPOS, i, 0), y = UF(U_LPOS, i, 1), z = UF(U_LPOS, i, 2);
             float l = sqrtf(x * x + y * y + z * z);
@@ -1056,14 +1388,17 @@ static void build_vconsts(float vc[41][4], const float scale[3][2]) {
             }
         }
     }
-    for (s = 0; s < 3; s++) {
-        int tc = UI(U_TCSRC, s, 0) & 1;
-        float r0[4] = {1, 0, 0, 0}, r1[4] = {0, 1, 0, 0};
-        if (UI(U_TMEN, tc, 0)) {
-            for (i = 0; i < 4; i++) { r0[i] = UF(U_TMR0, tc, i); r1[i] = UF(U_TMR1, tc, i); }
+    if (g & D_TEXGEN) {
+        memset(vc[32], 0, sizeof(float) * 9 * 4);
+        for (s = 0; s < 3; s++) {
+            int tc = UI(U_TCSRC, s, 0) & 1;
+            float r0[4] = {1, 0, 0, 0}, r1[4] = {0, 1, 0, 0};
+            if (UI(U_TMEN, tc, 0)) {
+                for (i = 0; i < 4; i++) { r0[i] = UF(U_TMR0, tc, i); r1[i] = UF(U_TMR1, tc, i); }
+            }
+            for (i = 0; i < 4; i++) { vc[32 + s * 3][i] = r0[i] * scale[s][0]; vc[33 + s * 3][i] = r1[i] * scale[s][1]; }
+            vc[34 + s * 3][0] = UI(U_TGSRC, tc, 0) == 1 ? 1.0f : 0.0f;
         }
-        for (i = 0; i < 4; i++) { vc[32 + s * 3][i] = r0[i] * scale[s][0]; vc[33 + s * 3][i] = r1[i] * scale[s][1]; }
-        vc[34 + s * 3][0] = UI(U_TGSRC, tc, 0) == 1 ? 1.0f : 0.0f;
     }
 }
 
@@ -1079,20 +1414,25 @@ static void push_vconst_rows(const uint32_t* w, int first, int nrows) {
     put1(NV097_SET_TRANSFORM_CONSTANT_LOAD, (uint32_t)(96 + first));
     w += first * 4;
     for (i = 0; i < words; i += 32) {
-        int n = words - i < 32 ? words - i : 32;
+        int n = words - i < 32 ? words - i : 32, k;
         pb_push(P++, NV097_SET_TRANSFORM_CONSTANT, n);
-        memcpy(P, w + i, (size_t)n * 4);
+        for (k = 0; k < n; k++) P[k] = w[i + k];   /* a few rows: a call to memcpy cost more */
         P += n;
     }
 }
 
-static void emit_vconsts(const XTevCfg* c, const float scale[3][2]) {
-    float vc[41][4];
+/* the constants as last built: groups that didn't change keep their rows */
+static float s_vc_cur[41][4];
+
+static void emit_vconsts(const float scale[3][2], uint32_t groups) {
+    float (*vc)[4] = s_vc_cur;
     const uint32_t* w = (const uint32_t*)vc;
-    (void)c;
-    build_vconsts(vc, scale);
+    if (!s_vc_valid) groups = D_ALL;
+    else if (!groups) return;
+    build_vconsts(vc, scale, groups);
     if (!s_vc_valid || !XBOX_VC_DELTA) {
         push_vconst_rows(w, 0, 41);
+        memcpy(s_shadow_vc, s_vc_cur, sizeof s_vc_cur);
     } else {
         int r = 0;
         while (r < 41) {
@@ -1104,12 +1444,23 @@ static void emit_vconsts(const XTevCfg* c, const float scale[3][2]) {
                 else gap++;
             }
             push_vconst_rows(w, r, end - r);
+            {   /* only what was sent */
+                int k;
+                for (k = r * 4; k < end * 4; k++) s_shadow_vc[k] = w[k];
+            }
             r = end;
         }
     }
-    memcpy(s_shadow_vc, vc, sizeof vc);
     s_vc_valid = 1;
 }
+
+/* The window clip's maximum is inclusive on the NV2A (xemu adds 1 to it as
+ * well, Melee-X renderer.md): x + w let one more column and row through
+ * than the scissor asked for. Kill switch: -DXBOX_CLIP_INCLUSIVE=0. */
+#ifndef XBOX_CLIP_INCLUSIVE
+#define XBOX_CLIP_INCLUSIVE 1
+#endif
+#define CLIP_INCL (XBOX_CLIP_INCLUSIVE ? 1 : 0)
 
 static int s_fixed_last[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 
@@ -1137,8 +1488,8 @@ static void emit_fixed(void) {
             last[10] = v;
             last[11] = h;
             if (w <= 0 || h <= 0) { x = y = 0; w = h = 1; }
-            put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)x | ((uint32_t)(x + w) << 16));
-            put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)y | ((uint32_t)(y + h) << 16));
+            put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)x | ((uint32_t)(x + w - CLIP_INCL) << 16));
+            put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)y | ((uint32_t)(y + h - CLIP_INCL) << 16));
         }
     }
     /* alpha test from the TEV alpha compare (two refs -> one when possible) */
@@ -1194,6 +1545,17 @@ static int prim_count(GLenum mode, int count) {
 }
 
 static int s_logged_nes;
+
+/* draw()'s TEV config and program, kept while D_TEV and the texture epoch
+ * stand still (draw_skip), and the texture-unit scale that went with them */
+static int s_draw_skip = XBOX_DRAW_SKIP;
+static XTevCfg s_cfg;
+static const XRcProg* s_rp;
+static int s_cfg_valid;
+static uint32_t s_cfg_epoch;
+static float s_scale[3][2];
+static uint32_t s_skip_cfg, s_skip_vc;   /* draws that reused the config / sent no constants */
+static unsigned long long s_draw_ticks;  /* CPU time in draw(), for the [FRAME] line */
 
 /* The one non-GX program is pc_nes_fixnes.c's: a quad covering the viewport
  * that samples texture unit 0 (uv 0,0 at the top left). Drawn here with the
@@ -1252,14 +1614,15 @@ static void blit_draw(void) {
         if (x + w > SCR_W) w = SCR_W - x;
         if (y + h > SCR_H) h = SCR_H - y;
         if (w <= 0 || h <= 0) { x = y = 0; w = h = 1; }
-        put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)x | ((uint32_t)(x + w) << 16));
-        put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)y | ((uint32_t)(y + h) << 16));
+        put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)x | ((uint32_t)(x + w - CLIP_INCL) << 16));
+        put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)y | ((uint32_t)(y + h - CLIP_INCL) << 16));
     }
     memset(s_fixed_last, 0xFF, sizeof s_fixed_last);   /* -1: resend on the next GX draw */
 
+    s_tex[tex].drawn = s_frame + 1;
     emit_textures(&cfg, scale);
-    emit_vconsts(&cfg, scale);
-    emit_combiners(&k_blit_rc);
+    emit_vconsts(scale, D_ALL);
+    emit_combiners(&k_blit_rc, 1);
 
     ring_reserve(6);
     start = s_ring_pos;
@@ -1282,38 +1645,59 @@ static void blit_draw(void) {
     put1(NV097_SET_BEGIN_END, NV097_SET_BEGIN_END_OP_END);
 
     for (i = 0; i < (int)(sizeof saved_u / sizeof saved_u[0]); i++) memcpy(s_uv[saved_u[i]], save[i], sizeof save[i]);
+    /* the GX draw after this rebuilds and resends everything */
+    s_udirty = D_ALL;
+    s_cfg_valid = 0;
+    s_rc_emitted = NULL;
     s_draws++;
 }
 
 static void draw(GLenum mode, int count) {
     const uint8_t* src = (const uint8_t*)s_array_data;
-    XTevCfg cfg;
-    const XRcProg* rp;
     float scale[3][2];
-    int i;
+    int i, st;
     uint32_t start;
-    uint32_t prim;
+    uint32_t prim, groups;
+    unsigned long long t0, w0;
 
     if (s_program != s_uber_prog) {
         blit_draw();
         return;
     }
     if (count <= 0 || !src) return;
+    t0 = xbox_ticks();
+    w0 = s_wait_ticks;
     frame_open();
     if ((uint32_t)count > s_ring_cap) count = (int)s_ring_cap;
     count = prim_count(mode, count);
     if (count <= 0) return;
     pb_budget();
 
-    build_tev_cfg(&cfg);
-    rp = rc_lookup(&cfg);
-    if (rp->approximated) s_approx_draws++;
-
+    if (!s_draw_skip) s_udirty = D_ALL;
+    groups = s_udirty;
     pb_open();
     emit_fixed();
-    emit_textures(&cfg, scale);
-    emit_vconsts(&cfg, scale);
-    emit_combiners(rp);
+    if (!s_cfg_valid || (groups & D_TEV) || s_cfg_epoch != s_tex_epoch) {
+        build_tev_cfg(&s_cfg);
+        s_rp = rc_lookup(&s_cfg);
+        s_cfg_valid = 1;
+        s_cfg_epoch = s_tex_epoch;
+        emit_textures(&s_cfg, scale);
+        if (memcmp(scale, s_scale, sizeof scale) != 0) {
+            memcpy(s_scale, scale, sizeof scale);
+            groups |= D_TEXGEN;
+        }
+        groups |= D_TEVK;   /* a new program reads other constants */
+    } else {
+        s_skip_cfg++;
+    }
+    if (s_rp->approximated) s_approx_draws++;
+    for (st = 0; st < s_cfg.nstages && st < 4; st++)
+        if (s_cfg.st[st].use_tex) s_tex[s_bound[st]].drawn = s_frame + 1;
+    if (!(groups & (D_PROJ | D_MV | D_MAT | D_LIGHT | D_TEXGEN)) && s_vc_valid) s_skip_vc++;
+    emit_vconsts(s_scale, groups);
+    emit_combiners(s_rp, (groups & D_TEVK) != 0);
+    s_udirty = 0;
     ring_reserve(count);
     start = s_ring_pos;
     for (i = 0; i < count; i++) {
@@ -1328,13 +1712,13 @@ static void draw(GLenum mode, int count) {
 #ifdef XBOX_DBG_DRAWLOG
     if (s_frame == XBOX_DBG_DRAWLOG) {
         const XVtx* v0 = &s_ring[start];
-        const XTex* t0 = cfg.st[0].use_tex ? &s_tex[s_bound[0]] : NULL;
+        const XTex* t0 = s_cfg.st[0].use_tex ? &s_tex[s_bound[0]] : NULL;
         int k;
         float ez = 0.0f;
         for (k = 0; k < 4; k++) ez += UF(U_MV, 0, 8 + k) * (k < 3 ? v0->pos[k] : 1.0f);
         xbox_logf("[DRAW] %u m%d n%d z%d/%d/%d b%d %d/%d c%d/%d st%d tex%dx%d fog%d proj00 %d p0 %d,%d,%d ez %d col %08x\n",
                   s_draws, (int)mode, count, G.depth_test, G.depth_func & 0xF, G.depth_mask, G.blend, G.sfac, G.dfac,
-                  G.cull, G.cull_face & 0xF, cfg.nstages, t0 ? t0->w : 0, t0 ? t0->h : 0, cfg.fog_on,
+                  G.cull, G.cull_face & 0xF, s_cfg.nstages, t0 ? t0->w : 0, t0 ? t0->h : 0, s_cfg.fog_on,
                   (int)(UF(U_PROJ, 0, 0) * 1000), (int)v0->pos[0], (int)v0->pos[1], (int)v0->pos[2], (int)ez,
                   *(const uint32_t*)v0->col);
     }
@@ -1361,8 +1745,9 @@ static void draw(GLenum mode, int count) {
         }
     }
     put1(NV097_SET_BEGIN_END, NV097_SET_BEGIN_END_OP_END);
-    if (P - s_pb_mark >= XBOX_PB_KICK) pb_close();
+    if ((uint32_t)(P - s_pb_mark) >= s_pb_kick) pb_close();
     s_draws++;
+    s_draw_ticks += xbox_ticks() - t0 - (s_wait_ticks - w0);   /* waits count as gpu wait */
 }
 
 static void gl_draw_arrays(GLenum mode, GLint first, GLsizei count) {
@@ -1534,6 +1919,15 @@ static void video_standard(void) {
 int xbox_nv2a_init(void) {
     int err;
     s_overlap = XBOX_GPU_OVERLAP && g_xbox_settings_boot.gpu_overlap;
+    /* the backport's switches (settings.ini [Xbox], docs/backport.md): a
+     * compile-time 0 wins, otherwise the setting decides */
+    s_native_tex = XBOX_NATIVE_TEX && g_xbox_settings_boot.native_tex;
+    s_tex_reuse = XBOX_TEX_REUSE && g_xbox_settings_boot.tex_reuse;
+    s_draw_skip = XBOX_DRAW_SKIP && g_xbox_settings_boot.draw_skip;
+    s_vb_break = XBOX_VB_CACHE_BREAK && g_xbox_settings_boot.vb_cache_break;
+    s_strict_idle = XBOX_STRICT_IDLE && g_xbox_settings_boot.strict_gpu_wait;
+    s_pb_kick = XBOX_PB_KICK ? (uint32_t)g_xbox_settings_boot.pb_kick_kb * 256 : 0;   /* 0: a kick per draw */
+    quant_tables();
     video_select();
     pb_size(1024 * 1024);
     for (;;) {
@@ -1579,6 +1973,9 @@ int xbox_nv2a_init(void) {
     xbox_logf("[NV2A] up: %dx%d %d-bit, tex pool %u KB, vertex ring %u verts, gpu overlap %d, vblank pacing %d "
               "(replaces the VI timer at max_fps 60)\n",
               s_fbw, s_fbh, s_fb_bpp, s_pool_bytes / 1024, s_ring_cap, s_overlap, XBOX_VBL_PACE);
+    xbox_logf("[NV2A] native textures %d, texture reuse %d, draw skip %d, vertex cache break %d, strict gpu wait %d, "
+              "kick %u KB, clip inclusive %d\n",
+              s_native_tex, s_tex_reuse, s_draw_skip, s_vb_break, s_strict_idle, s_pb_kick / 256, XBOX_CLIP_INCLUSIVE);
     return 1;
 }
 
@@ -1725,14 +2122,16 @@ static void perf_account(unsigned t10, unsigned cpu10) {
     perf_flush_notes();   /* the minute's notes go above its summary */
     h = perf_open() ? s_perf_h : INVALID_HANDLE_VALUE;
     if (h != INVALID_HANDLE_VALUE) {
-        char line[200];
+        char line[300];
         DWORD w;
         int len = snprintf(line, sizeof line,
                            "min %u (frame %u): %u.%u fps avg, cpu %u.%u ms avg, worst %u ms, >17ms %u, >33ms %u, >100ms %u | "
-                           "pb peak %u KB, tex %u KB, free %u KB, gpu faults %u\r\n",
+                           "pb peak %u KB, tex %u KB, free %u KB, gpu faults %u | since boot: uploads 1/2/4 B "
+                           "%u/%u/%u, %u KB saved, %u rewritten in place\r\n",
                            minute, s_frame, (unsigned)(n * 100000ull / sum) / 10, (unsigned)(n * 100000ull / sum) % 10,
                            (unsigned)(cpu_sum / n) / 10, (unsigned)(cpu_sum / n) % 10, worst / 10, over17, over33, over100,
-                           s_pb_peak / 1024, s_pool_used / 1024, xbox_mem_free_kb(), (unsigned)s_gf_count);
+                           s_pb_peak / 1024, s_pool_used / 1024, xbox_mem_free_kb(), (unsigned)s_gf_count,
+                           s_tex_by_bpp[1], s_tex_by_bpp[2], s_tex_by_bpp[4], (unsigned)(s_tex_saved_bytes / 1024), s_tex_reused_total);
         s_pb_peak = 0;
         WriteFile(h, line, (DWORD)len, &w, NULL);
         xbox_flush_file(h);
@@ -1740,6 +2139,47 @@ static void perf_account(unsigned t10, unsigned cpu10) {
     }
     n = worst = over17 = over33 = over100 = 0;
     sum = cpu_sum = 0;
+}
+
+/* [FRAME]: every 5 s, where the frames went, in ms per frame: the shim's
+ * own draw work (GL calls to pushbuffer), texture uploads, every wait for
+ * the GPU, the pacing waits after the flip, file reads (all threads), and
+ * the rest (game logic, emu64, pc_gx). Plus how often draw_skip reused the
+ * TEV config or sent no vertex constants. Kill switch: -DXBOX_FRAME_LOG=0. */
+#ifndef XBOX_FRAME_LOG
+#define XBOX_FRAME_LOG 1
+#endif
+static unsigned long long s_pace_ticks;   /* this frame's flip + scanout + vblank waits */
+static void frame5_account(unsigned long long frame) {
+    static unsigned n, draws, skip_cfg, skip_vc;
+    static unsigned long long sum, shim, tex, gpu, pace, file;
+    unsigned long long f = xbox_ticks_per_sec() / 10000;   /* 0.1 ms */
+    if (!XBOX_FRAME_LOG) return;
+    n++;
+    sum += frame;
+    shim += s_draw_ticks;
+    tex += g_xfs.tex_ticks;
+    gpu += s_wait_ticks;
+    pace += s_pace_ticks;
+    file += g_xfs.fread_ticks;
+    draws += s_draws;
+    skip_cfg += s_skip_cfg;
+    skip_vc += s_skip_vc;
+    if (sum >= 5 * xbox_ticks_per_sec()) {
+        unsigned fps10 = (unsigned)(n * 10ull * xbox_ticks_per_sec() / sum);
+        unsigned t = (unsigned)(sum / n / f), sh = (unsigned)(shim / n / f), tx = (unsigned)(tex / n / f);
+        unsigned gw = (unsigned)(gpu / n / f), pc = (unsigned)(pace / n / f), fl = (unsigned)(file / n / f);
+        unsigned busy = sh + tx + gw + pc, rest = t > busy ? t - busy : 0;
+        xbox_logf_quiet("[FRAME] %u.%u fps, ms/frame: total %u.%u | game+emu64 %u.%u, shim %u.%u, tex %u.%u, gpu wait %u.%u, "
+                  "pace %u.%u (file %u.%u) | draws %u, cfg reused %u%%, no constants %u%% | tex in place %u\n",
+                  fps10 / 10, fps10 % 10, t / 10, t % 10, rest / 10, rest % 10, sh / 10, sh % 10, tx / 10, tx % 10,
+                  gw / 10, gw % 10, pc / 10, pc % 10, fl / 10, fl % 10, draws / n,
+                  draws ? (unsigned)(skip_cfg * 100ull / draws) : 0, draws ? (unsigned)(skip_vc * 100ull / draws) : 0,
+                  s_tex_reused);
+        n = draws = skip_cfg = skip_vc = 0;
+        sum = shim = tex = gpu = pace = file = 0;
+        s_tex_reused = 0;
+    }
 }
 
 static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
@@ -1774,10 +2214,13 @@ static void hitch_log(unsigned long long t_enter, unsigned long long t_done) {
         unsigned t10 = (unsigned)((t_done - t_last) * 10 / f), cpu10 = (unsigned)(cpu_ticks * 10 / f);
         perf_account(t10, cpu10);
         pace_account(t10, cpu10, s_draws, g_xfs.tex_n);
+        frame5_account(t_done - t_last);
     }
     t_last = t_done;
     memset(&g_xfs, 0, sizeof g_xfs);
     s_n_clr_frame = 0;
+    s_draw_ticks = s_wait_ticks = s_pace_ticks = 0;
+    s_skip_cfg = s_skip_vc = 0;
 }
 
 /* one line of renderer state for last.log / hang.log / crash.log */
@@ -1827,7 +2270,7 @@ static void vbl_pace(void) {
 }
 
 void xbox_nv2a_present(void) {
-    unsigned long long t_enter = xbox_ticks();
+    unsigned long long t_enter = xbox_ticks(), t_pace;
     int dump;
     frame_open();
     pb_note_peak();
@@ -1855,6 +2298,7 @@ void xbox_nv2a_present(void) {
         { extern int pc_audio_get_buffer_fill(void); xbox_logf("[AUDIO] fill=%d\n", pc_audio_get_buffer_fill()); }
         xbox_fbdump(pb_back_buffer(), SCR_W, SCR_H, s_fb_bpp, (int)pb_back_buffer_pitch());
     }
+    t_pace = xbox_ticks();
     while (pb_finished()) {}
     /* pbkit triple-buffers but only refuses a flip once its ready table is
      * full: with two flips queued, the next back buffer IS the one being
@@ -1870,6 +2314,7 @@ void xbox_nv2a_present(void) {
     }
 #endif
     vbl_pace();
+    s_pace_ticks = xbox_ticks() - t_pace;
     hitch_log(t_enter, xbox_ticks());
     s_frame_open = 0;
     s_draws = 0;

@@ -182,9 +182,24 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   catching up, a disc read) and any wait count in it. The cold-boot title
   chug read as "cpu 80 ms" with the game thread mostly starved. Before
   vblank pacing it also included `pc_vi.c`'s pacing spin.
-- **Which hardware log covers what:** `boot.log` is every line of the
-  first 120 frames (boot and the start of the first title demo), `last.log`
-  only the last 4 KB (seconds to minutes, depending on log volume), and
-  `perf.log` the whole session a minute at a time. A problem in the first
-  seconds after boot is in `boot.log`; anything later, in `perf.log`.
-
+- **Which hardware log covers what:** `boot.log` holds every line of the
+  session's first 4 MB, then `boot2.log` / `boot3.log` alternate (2 MB each),
+  so a late hang is in whichever was written last; after frame 120 they are
+  up to a second behind (queued, written by the watchdog). `last.log` is the
+  last 4 KB plus `[STATE]`, rewritten within 3 s of any non-heartbeat line,
+  and `perf.log` the whole session a minute at a time. Every boot deletes
+  `boot2/3.log`: pull before relaunching.
+- **memcpy & co. are macros in C files** (`xbox_prelude.h`, `__builtin_*`).
+  A declaration of one after the prelude breaks (`void* memcpy(...)` expands);
+  the prelude includes `<string.h>` and the decomp's `_mem.h` first for that
+  reason, and `xbox_mem.c`, which defines them, `#undef`s them. C++ is left
+  alone: libc++ spells `std::memcpy`.
+- **`pb_busy` is not idle.** It compares GET with PUT and reads PGRAPH's
+  status only: methods already in PFIFO's CACHE1 pass. Anything that frees
+  or rewrites GPU-read memory after a wait needs `wait_idle`'s strict check.
+- **A new default for a key that is already written stays unseen.** The
+  `[Xbox]` writer puts every key in the file, so consoles keep the old
+  default (`gpu_overlap = 0`). Migrate with a version key (`opt_version`).
+- **Another session's xemu harness may `pkill -9` xemu.** Two sessions on one
+  Mac killed each other's runs (2026-10-03); check `pgrep -fl MacOS/xemu`
+  before a run and never kill a run you didn't start.

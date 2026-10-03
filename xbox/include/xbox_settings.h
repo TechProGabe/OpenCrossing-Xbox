@@ -25,6 +25,17 @@ typedef struct {
     int widescreen;     /* XBOX_WS_*: 16:9 picture (anamorphic at 480) */
     int gpu_overlap;    /* hidden (settings.ini only): 0 = drain the GPU at present,
                          * for A/B tests on hardware; read once at GPU init */
+    /* Hidden switches for the Melee-X backport (docs/backport.md), each read
+     * once at boot: 1 = the new behaviour (default), 0 = the old one, so a
+     * regression on hardware is undone by editing settings.ini over FTP. */
+    int native_tex;     /* textures in the smallest lossless NV2A format */
+    int tex_reuse;      /* a re-upload of the same size rewrites the texture in place */
+    int draw_skip;      /* per-draw rebuilds only for the state that changed */
+    int vb_cache_break; /* BREAK_VERTEX_BUFFER_CACHE at each pushbuffer batch */
+    int strict_gpu_wait;/* wait_idle also waits for PFIFO's CACHE1 and pusher */
+    int pb_kick_kb;     /* pushbuffer kick size, KB (16 = the old 4096 words) */
+    int audio_fix;      /* AC97: queue before the run bit, stuck/halt recovery */
+    int opt_version;    /* 1 once the file has the keys above (migration) */
 } XboxSettings;
 
 extern XboxSettings g_xbox_settings;

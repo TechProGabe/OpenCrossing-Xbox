@@ -31,8 +31,9 @@
 /* last.log: every XBOX_LASTLOG_SECS in which something was logged (and every
  * 30 s regardless) the watchdog rewrites E:\UDATA\4f430001\last.log with the
  * log tail and a [STATE] line, flushed, so a hard freeze or power-off still
- * leaves the seconds before it on disk (boot.log stops at frame 120). Quiet
- * stretches don't touch the disk. 0 disables. */
+ * leaves the seconds before it on disk (boot.log is up to a second behind).
+ * Quiet stretches don't touch the disk: heartbeat lines ([BEAT], [FRAME],
+ * [PROF]) don't count as something logged. 0 disables. */
 #ifndef XBOX_LASTLOG_SECS
 #define XBOX_LASTLOG_SECS 3
 #endif
@@ -166,6 +167,7 @@ static void dump_all(const char* why) {
         xbox_flush_file(h);
         CloseHandle(h);
     }
+    xbox_bootlog_pump();
 
 }
 
@@ -194,6 +196,14 @@ static void write_last_log(void) {
 /* the fatal error card owns the screen for good */
 void xbox_watchdog_disable(void) { s_disabled = 1; }
 
+/* [BEAT] every XBOX_HEARTBEAT_SECS (from Melee-X): if the log ends with
+ * [BEAT] lines whose vblank count climbs while `presented` stands still, the
+ * game loops without drawing; if [BEAT] stops too, the whole machine
+ * stopped. Free memory in each one shows a leak over a long session. 0 = off. */
+#ifndef XBOX_HEARTBEAT_SECS
+#define XBOX_HEARTBEAT_SECS 5
+#endif
+
 static int watchdog_body(void* arg) {
     unsigned last = 0, still = 0, secs = 0, fired = 0;
     (void)arg;
@@ -201,11 +211,15 @@ static int watchdog_body(void* arg) {
         unsigned f;
         Sleep(1000);
         secs++;
+        xbox_bootlog_pump();   /* the queued log lines (xbox_io.c) */
         if (s_disabled) continue;
         f = xbox_frame_count();
+        if (XBOX_HEARTBEAT_SECS && f && secs % XBOX_HEARTBEAT_SECS == 0)
+            xbox_logf_quiet("[BEAT] %us: vblank %u, presented %u, free %u KB\n", secs, (unsigned)pb_get_vbl_counter(), f,
+                      xbox_mem_free_kb());
         if (XBOX_LASTLOG_SECS && f && secs % XBOX_LASTLOG_SECS == 0) {
             static unsigned logged_at;
-            unsigned pos = xbox_log_pos();
+            unsigned pos = xbox_log_pos_loud();
             if (pos != logged_at || secs % 30 == 0) {
                 logged_at = pos;
                 write_last_log();

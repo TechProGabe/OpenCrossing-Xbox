@@ -63,13 +63,20 @@ game writes logs to `E:\UDATA\4f430001\`:
 
 | file | written |
 |---|---|
-| `boot.log` | every log line until frame 120, flushed per line |
+| `boot.log` | every log line: flushed per line until frame 120, then queued and written by the watchdog once a second. The first 4 MB; then `boot2.log` and `boot3.log` in turn, 2 MB each (all deleted at boot). `[BEAT]` every 5 s (vblank count, frames presented, free KB), `[FRAME]` every 5 s, `[PROF]` in profiler builds |
 | `last.log` | rewritten by the watchdog within 3 s of anything being logged (and every 30 s): the last 4 KB of log plus a `[STATE]` line (renderer, pushbuffer, texture pool, GPU faults). After a hard freeze it holds the seconds before it |
 | `crash.log` | written when a CPU exception (page fault, ...) hits a game thread: fault address, registers, `[STATE]`, stack words; the same report is drawn on screen |
 | `perf.log` | once a minute a `min N` line: fps, CPU ms, frames over 17 (missed vblank) / 33 / 100 ms, pushbuffer peak, texture pool use, free RAM, GPU faults. Above each, indented, that minute's `[HITCH]` lines of 100 ms and over, `[PACE]` and `[NES]` lines (written every 15 s) |
 | `hang.log` | by the watchdog when frames stop for 6 s (or none in 90 s after boot): log tail + every thread's stack words; the same report is drawn on screen |
 | `input.log` | left-stick swings over 120° in one frame |
 | `stickN.log` | last 10 s of stick readings, written when L3 is clicked |
+
+`tools/xbox/console.py` does a round in three steps (`OCX_FTP_HOST=<ip>`):
+`stage vNN` copies the build and its map (plus static functions) to
+`~/xemu/ochw`, `deploy vNN` pulls and deletes the console's old logs,
+keeps the replaced XBE as `default.xbe.prev` and uploads with a read-back
+check, `pull vNN` fetches the logs and `settings.ini`. `rollback` swaps
+`default.xbe` and `default.xbe.prev`.
 
 From the Mac, curl does both directions (dashboard FTP login `xbox`/`xbox`):
 

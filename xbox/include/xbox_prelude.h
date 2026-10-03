@@ -39,6 +39,27 @@ int strncasecmp(const char* a, const char* b, unsigned int n);
 #define fread    xbox_fread   /* timed for the hitch log (disc reads) */
 #endif
 #define fclose   xbox_fclose  /* flushes FATX so saves survive a power-off */
+
+/* memcpy, memmove, memset and memcmp as compiler builtins (from Melee-X,
+ * where they were ~18% of a console frame). nxdk-cc builds freestanding,
+ * which implies -fno-builtin: every fixed-size copy and compare was a real
+ * call into xbox_mem.c (81 call sites in pc_gx.o alone). As builtins,
+ * constant sizes become inline moves and compares; the rest still call
+ * xbox_mem.c. C only: libc++ headers spell std::memcpy. string.h and the
+ * decomp's _mem.h first, so their prototypes are declared before the names
+ * become macros. xbox_mem.c,
+ * which defines the four, undefines them. Kill switch: -DXBOX_BUILTIN_MEM=0. */
+#ifndef XBOX_BUILTIN_MEM
+#define XBOX_BUILTIN_MEM 1
+#endif
+#if XBOX_BUILTIN_MEM
+#include <string.h>
+#include "_mem.h"   /* the decomp declares them again: here, before the macros */
+#define memcpy(d, s, n) __builtin_memcpy((d), (s), (n))
+#define memmove(d, s, n) __builtin_memmove((d), (s), (n))
+#define memset(d, c, n) __builtin_memset((d), (c), (n))
+#define memcmp(a, b, n) __builtin_memcmp((a), (b), (n))
+#endif
 #endif
 
 #endif /* XBOX_PRELUDE_H */

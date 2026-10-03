@@ -48,10 +48,10 @@ Whole tree at `-O2`; no per-TU profiles yet (not needed so far).
 - Hardware, 2026-09-29, 7 min (title, town, NES, a demolish): town 56-60
   fps a minute, with stretches at 18-20 ms of CPU per frame around 290
   draws; judged smooth enough by eye. NES: see `known-issues.md`.
-- CPU/GPU overlap (2026-09-28, `gpu_overlap = 1` in `settings.ini`, off by
-  default): present no longer waits for the GPU; the drain moves to the next
-  frame's first GL call, so game logic overlaps the GPU (`renderer.md`). Not
-  measured on hardware yet.
+- CPU/GPU overlap (2026-09-28; on by default since the 2026-10-03 backport,
+  `gpu_overlap = 0` in `settings.ini` turns it off): present no longer waits
+  for the GPU; the drain moves to the next frame's first GL call, so game
+  logic overlaps the GPU (`renderer.md`). Not measured on hardware yet.
 - Vblank pacing (2026-09-29, `xbox_nv2a.c` `vbl_pace`, kill switch
   `-DXBOX_VBL_PACE=0`). `pc_vi.c` paced each frame 16.667 ms after the end
   of the previous one: an overrun was never made up (the average period is
@@ -77,7 +77,38 @@ Whole tree at `-O2`; no per-TU profiles yet (not needed so far).
   one `ReadFile` per request, straight into the caller's buffer. xemu
   (loaded host): 320 KB in 10 ms, was 83 ms. Hardware: pending.
 
+## Melee-X backport (2026-10-03, `backport.md`)
+
+From Melee-X, each with a kill switch and most with a `settings.ini` key:
+memcpy & co. as builtins (`xbox_prelude.h`; `pc_gx.o` 81 → 18 calls), CPU/GPU
+overlap on by default, per-draw skips and native texture formats
+(`renderer.md`), 32 KB kicks. xemu title demo, same build with and without
+native textures and draw skip: shim 1.3 → 0.8 ms a frame, texture pool 440
+KB smaller of 864. Hardware: pending (first console round).
+
+## Profiling on the console
+
+`-DXBOX_PROF=1` (`xbox_prof.c`, from Melee-X): a time-critical thread reads
+the game thread's interrupted EIP about 1000 times a second; every 20 s the
+hottest 64-byte buckets go to the log as `[PROF]` lines, with callers one
+frame up (`[PROFC]`) and the callers of memcpy & co. (`[PROFL]`). Fold them
+with the map of the same build:
+
+```sh
+tools/xbox/prof_report.py boot.log boot2.log --map ~/xemu/ochw/ac_xbox.vNN.map
+```
+
+Static functions come from `<map>.statics` (`static_syms.py`, made by
+`console.py stage`); without it a static's samples go to the public function
+before it. `while waiting` counts samples where the game thread wasn't
+preempted (pacing, GPU waits). xemu's profile is skewed (slow GPU: `wait_idle`
+on top; SSE through softfloat): trust the console's.
+
 ## What the logs give (`toolchain.md` has where they live)
+
+- `[FRAME]` every 5 s: fps and ms per frame split into game + emu64 (the
+  rest), the shim's draw work, texture uploads, GPU waits, pacing and file
+  reads, plus draws and how often draw_skip saved work.
 
 - `[HITCH]`: a frame over 40 ms (`XBOX_HITCH_MS`), split into cpu, GPU +
   flip, texture uploads and file reads; a run of frames with < 3 draws (a

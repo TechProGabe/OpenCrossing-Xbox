@@ -34,14 +34,30 @@ int xbox_controller_ini_deadzone(void);   /* xbox_pad_axis.c, -1 if none */
 void xbox_watchdog_disable(void);
 
 /* 4:3 by default: 16:9 draws more of the town (hor+), which costs frame time.
- * GPU overlap off until it is measured on hardware (gpu_overlap = 1 tries it). */
-XboxSettings g_xbox_settings = { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 0 };
-XboxSettings g_xbox_settings_boot = { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 0 };
+ * GPU overlap on since the Melee-X backport (Melee-X runs it by default since
+ * its v33); the backport's switches default to the new behaviour, and 0 in
+ * settings.ini puts each one back (docs/backport.md). */
+#define XBOX_OPT_VERSION 1
+#define XBOX_SETTINGS_DEFAULTS { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION }
+XboxSettings g_xbox_settings = XBOX_SETTINGS_DEFAULTS;
+XboxSettings g_xbox_settings_boot = XBOX_SETTINGS_DEFAULTS;
 
 static const char k_file[] = "settings.ini";
 static DWORD encoder_settings(void);
 
-enum { HAVE_DZ = 1, HAVE_RUMBLE = 2, HAVE_720P = 4, HAVE_WS = 8, HAVE_OVERLAP = 16, HAVE_ALL = 31 };
+enum { HAVE_DZ = 1, HAVE_RUMBLE = 2, HAVE_720P = 4, HAVE_WS = 8, HAVE_OVERLAP = 16, HAVE_OPT = 32, HAVE_ALL = 63 };
+
+/* the backport's switches: key, field, range */
+static const struct { const char* key; int* v; int lo, hi; } k_opt_keys[] = {
+    { "native_textures", &g_xbox_settings.native_tex, 0, 1 },
+    { "texture_reuse", &g_xbox_settings.tex_reuse, 0, 1 },
+    { "draw_skip", &g_xbox_settings.draw_skip, 0, 1 },
+    { "vertex_cache_break", &g_xbox_settings.vb_cache_break, 0, 1 },
+    { "strict_gpu_wait", &g_xbox_settings.strict_gpu_wait, 0, 1 },
+    { "pushbuffer_kick_kb", &g_xbox_settings.pb_kick_kb, 4, 256 },
+    { "audio_fix", &g_xbox_settings.audio_fix, 0, 1 },
+};
+#define N_OPT_KEYS ((int)(sizeof k_opt_keys / sizeof k_opt_keys[0]))
 
 static int parse_int(const char* s, int lo, int hi, int* out) {
     char* end;
@@ -54,7 +70,7 @@ static int parse_int(const char* s, int lo, int hi, int* out) {
 /* reads [Xbox] keys into g_xbox_settings; returns the HAVE_* found */
 static int read_xbox_section(void) {
     char line[256];
-    int in_xbox = 0, have = 0;
+    int in_xbox = 0, have = 0, overlap = 1, version = 0, opt_have = 0;
     FILE* f = fopen(k_file, "r");
     if (!f) return 0;
     while (fgets(line, sizeof line, f)) {
@@ -79,10 +95,23 @@ static int read_xbox_section(void) {
         } else if (!strcmp(key, "widescreen")) {
             if (parse_int(val, 0, 2, &g_xbox_settings.widescreen)) have |= HAVE_WS;
         } else if (!strcmp(key, "gpu_overlap")) {
-            if (parse_int(val, 0, 1, &g_xbox_settings.gpu_overlap)) have |= HAVE_OVERLAP;
+            if (parse_int(val, 0, 1, &overlap)) have |= HAVE_OVERLAP;
+        } else if (!strcmp(key, "opt_version")) {
+            parse_int(val, 0, 1000, &version);
+        } else {
+            int k;
+            for (k = 0; k < N_OPT_KEYS; k++)
+                if (!strcmp(key, k_opt_keys[k].key) && parse_int(val, k_opt_keys[k].lo, k_opt_keys[k].hi, k_opt_keys[k].v))
+                    opt_have++;
         }
     }
     fclose(f);
+    /* Files from before the backport were written with gpu_overlap = 0, the
+     * old default: that value was nobody's choice, so it gives way to the
+     * new default once, and the save below writes opt_version. */
+    if ((have & HAVE_OVERLAP) && version >= 1) g_xbox_settings.gpu_overlap = overlap;
+    if (version >= XBOX_OPT_VERSION && opt_have == N_OPT_KEYS) have |= HAVE_OPT;
+    g_xbox_settings.opt_version = XBOX_OPT_VERSION;
     return have;
 }
 
@@ -106,6 +135,17 @@ static void append_xbox_section(void) {
     fprintf(f, "\n# Testing: 1 = the next frame's game logic runs while the GPU draws,\n");
     fprintf(f, "# 0 = wait for the GPU at the end of every frame (the old way). Needs a restart.\n");
     fprintf(f, "gpu_overlap = %d\n", g_xbox_settings.gpu_overlap);
+    fprintf(f, "\n# Testing (docs/backport.md): each 1 is a speed or stability change from\n");
+    fprintf(f, "# Melee-X; set one to 0 to go back to the old behaviour. Needs a restart.\n");
+    fprintf(f, "native_textures = %d\n", g_xbox_settings.native_tex);
+    fprintf(f, "texture_reuse = %d\n", g_xbox_settings.tex_reuse);
+    fprintf(f, "draw_skip = %d\n", g_xbox_settings.draw_skip);
+    fprintf(f, "vertex_cache_break = %d\n", g_xbox_settings.vb_cache_break);
+    fprintf(f, "strict_gpu_wait = %d\n", g_xbox_settings.strict_gpu_wait);
+    fprintf(f, "# 16 = the old value\n");
+    fprintf(f, "pushbuffer_kick_kb = %d\n", g_xbox_settings.pb_kick_kb);
+    fprintf(f, "audio_fix = %d\n", g_xbox_settings.audio_fix);
+    fprintf(f, "opt_version = %d\n", g_xbox_settings.opt_version);
     fclose(f);
 }
 
@@ -139,6 +179,11 @@ void pc_settings_load(void) {
               "(encoder %08x)\n",
               g_xbox_settings.stick_deadzone, g_xbox_settings.rumble, g_xbox_settings.video_720p,
               g_xbox_settings.widescreen, g_xbox_settings.gpu_overlap, (unsigned)encoder_settings());
+    xbox_logf("[Settings] backport: native_textures %d texture_reuse %d draw_skip %d vertex_cache_break %d "
+              "strict_gpu_wait %d pushbuffer_kick_kb %d audio_fix %d\n",
+              g_xbox_settings.native_tex, g_xbox_settings.tex_reuse, g_xbox_settings.draw_skip,
+              g_xbox_settings.vb_cache_break, g_xbox_settings.strict_gpu_wait, g_xbox_settings.pb_kick_kb,
+              g_xbox_settings.audio_fix);
     xbox_settings_apply();
 }
 

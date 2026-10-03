@@ -39,14 +39,52 @@ pointers with the shim, so `pc/` has no Xbox branches. Only `pc_gx_tev.c`
 
 ## Textures
 
-RGBA8 from `pc_gx_texture.c` → A8R8G8B8 **swizzled**, NPOT padded to POT by
-edge replication, texcoords rescaled in the vertex program. 8 MB contiguous
-pool, first-fit + coalesce, frees deferred until the frame's GPU work is done.
+RGBA8 from `pc_gx_texture.c`, **swizzled**, NPOT padded to POT by edge
+replication, texcoords rescaled in the vertex program. 8 MB contiguous pool,
+first-fit + coalesce, frees deferred until the frame's GPU work is done.
+
+Native formats (`classify` in `xbox_nv2a.c`, from Melee-X): each upload is
+stored in the smallest format that holds every texel: Y8 / AY8 (grey, I4/I8),
+A8Y8 (grey with alpha, IA), R5G6B5, A1R5G5B5 (most RGB5A3 and CI), A4R4G4B4,
+else A8R8G8B8. Grey and alpha are exact. A 5/6-bit channel is accepted when
+it is `x * 255 / 31` (the decoder) or bit replication (a framebuffer read
+back) of some x; the NV2A expands by replication, as the GameCube does, so
+such a texel can be 1/255 off the decoder's value. The NES screen is stored
+as R5G6B5. xemu title demo: 440 of 864 KB saved, screenshots identical but
+for ±1 on 16-bit texels. A re-upload of the same size and format rewrites
+the texture in place (`texture_reuse`) when the GPU can't be reading it.
+`perf.log`'s minute line counts uploads by stored size and the KB saved.
+
+## Per-draw work
+
+`pc_gx.c` sets every uniform before every draw, mostly to the value it
+already has. Setters compare and mark dirty groups (`k_ugroup`); `draw()`
+rebuilds only the TEV config and combiner program (D_TEV, or a texture
+binding/upload: `s_tex_epoch`), the combiner constants (D_TEVK) and the
+vertex-constant blocks that changed (projection, modelview, material,
+lights, texgen); unchanged rows are not sent (`XBOX_VC_DELTA`). xemu title
+demo: ~40% of draws reuse the config, ~20% send no constants, shim CPU
+1.3 → 0.8 ms a frame. `draw_skip = 0` rebuilds everything per draw.
+
+`wait_idle` (Melee-X): idle means the pusher caught up, PFIFO's CACHE1 is
+empty, the pusher stopped and PGRAPH is idle, seen twice; `pb_busy` alone
+passes while methods sit in CACHE1. After 2 s it logs `[NV2A] GPU stalled`
+with GET/PUT, the words around GET and PGRAPH's trap and surface registers.
+The first GPU fault also logs PGRAPH 0x400700-0x4008FC and the pushbuffer
+around GET as it was then.
+
+Every pushbuffer batch starts with `BREAK_VERTEX_BUFFER_CACHE` (the NV2A's
+vertex cache reads ahead past a draw's last vertex into ring memory the CPU
+writes next; Melee-X saw wedges on hardware only). The window clip's maximum
+is inclusive (`x + w - 1`). Batches are kicked every 32 KB.
 
 ## Frame pacing: CPU/GPU overlap
 
-Off by default until measured on hardware: `gpu_overlap = 1` in the `[Xbox]`
-section of `settings.ini` turns it on (read once at GPU init). Then
+On by default since the Melee-X backport (Melee-X runs it on hardware since
+its v33); `gpu_overlap = 0` in the `[Xbox]` section of `settings.ini` turns
+it off (read once at GPU init). Settings files from before the backport say
+`gpu_overlap = 0` because that was the default: without `opt_version` the
+value is ignored once and the file rewritten. Then
 `xbox_nv2a_present` kicks the pushbuffer and queues the flip without waiting
 for the GPU. The next frame's game logic (`game_main`, before emu64 issues
 any GL call) runs while the GPU still draws; the first GL call of the next
@@ -101,6 +139,15 @@ drops pc_gx.c's full-res EFB captures (up to 4, 2 MB each for a screen grab).
 | `XBOX_PACE_MISSES=N` | `[PACE]` threshold, missed vblanks a second (6; 0 = off) |
 
 | `-DXBOX_AUTOPAD=script` (CMake var) | plays `D:\autopad.txt`: timed pad buttons, SDL controller events (pause menu, rebinding), one-shot screenshots, log marks, `@480`/`@720` lines (`xbox_autopad.c` header) |
+
+Backport kill switches (default on; compile-time 0, or the `settings.ini`
+key where there is one): `XBOX_NATIVE_TEX` (`native_textures`),
+`XBOX_TEX_REUSE` (`texture_reuse`), `XBOX_DRAW_SKIP` (`draw_skip`),
+`XBOX_VB_CACHE_BREAK` (`vertex_cache_break`), `XBOX_STRICT_IDLE`
+(`strict_gpu_wait`), `XBOX_PB_KICK` (`pushbuffer_kick_kb`, 16 = the old size),
+`XBOX_AUDIO_FIX` (`audio_fix`), `XBOX_CLIP_INCLUSIVE`, `XBOX_BUILTIN_MEM`
+(prelude), `XBOX_LOG_SESSION`, `XBOX_FRAME_LOG`, `XBOX_HEARTBEAT_SECS=0`.
+`-DXBOX_PROF=1` adds the sampling profiler (`perf.md`).
 
 Kill switches (default on): `XBOX_PB_GUARD=0` (no mid-frame pushbuffer
 restart), `XBOX_VC_DELTA=0` (upload all 41 vertex-constant rows per draw
