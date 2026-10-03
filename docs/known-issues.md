@@ -6,6 +6,16 @@ we have. Add the build and date when you log one; delete it when it's fixed
 
 ## Not yet tested on hardware
 
+- The Melee-X backport combo build (2026-10-03, `backport.md`): native
+  texture formats, texture reuse, per-draw skips, vertex cache break, strict
+  GPU wait, 32 KB kicks, GPU overlap on by default, AC97 start/recovery/
+  shutdown, session-long `boot.log`, `[FRAME]` / `[BEAT]` / `[PROF]`.
+  Audio risk: the AC97 start order and recovery change the hardware path
+  (xemu plays the APU voice, so it never ran them); a healthy boot logs one
+  `[AUDIO] AC97 pump` line and no `halted`/`stuck`/`cold reset`. Any
+  regression: set that change's key to 0 in `settings.ini`, or
+  `console.py rollback`.
+
 - 720p's 5 MB texture pool in the busiest rooms (museum, full houses):
   `perf.log` tex KB and `[NV2A] texture pool full` lines. 720p itself runs
   at 60 fps on hardware (beta-3, 2026-09-28).
@@ -14,9 +24,21 @@ we have. Add the build and date when you log one; delete it when it's fixed
   for ~15 s until the villager walks down from the station; a later title
   visit never did. Judge it on perf.log minute 1 (`>17ms` was 622, `[PACE]`
   windows at 88 ms average) over several cold boots.
-- CPU/GPU overlap (`gpu_overlap = 1`): frame times in town vs off (`perf.log`).
+- CPU/GPU overlap (on by default since the backport): frame times in town vs `gpu_overlap = 0` (`perf.log`).
 - Shop upgrade defaulting to Singleplayer on a console whose `settings.ini`
   predates the `[Xbox]` section.
+
+## Z-fighting on the player model and the pockets glove (2026-10-03)
+
+- User report on hardware (build and video mode not noted): where the
+  villager's shirt and trousers meet there seems to be z-fighting, and the
+  glove hand in the pockets menu shows the same. To look into later.
+- Leads: depth precision. 480 runs Z24S8, 720p Z16, where Melee-X needed a
+  depth remap (its `docs/renderer.md` "Depth", `XGX_Z16_DEPTH_RATIO`) for the
+  same symptom; check which mode it was. Also `ZMIN_MAX_CONTROL`, the depth
+  range folded into the projection (`mat4_rows_mul`), and whether the seam's
+  polygons share depth on the GameCube (Dolphin) too. Get a screenshot pair
+  of 480 vs 720p.
 
 ## Saves under any other name are never found (2026-09-29)
 
@@ -41,6 +63,9 @@ we have. Add the build and date when you log one; delete it when it's fixed
 
 - User report on hardware: the in-game date seems to default to 2083,
   apparently at random. Not reproduced or logged yet.
+- Second report (2026-10-03): the clock may not keep time correctly. To
+  look into later; the `osGetTime` overflow below would also make the clock
+  jump or drift over a long session.
 - The clock is set once at boot in `OSInit` (`pc_os.c`): `time(NULL)` from
   nxdk, turned into GameCube ticks since 2000 with a timezone offset from
   `gmtime`/`mktime`. Leads: what nxdk's `time()` returns when the console
