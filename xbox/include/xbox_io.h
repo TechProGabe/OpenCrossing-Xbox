@@ -47,6 +47,11 @@ void xbox_bootlog_pump(void);
 void* xbox_bootlog_event(void);
 void xbox_mem_log(const char* where);
 unsigned xbox_mem_free_kb(void);
+/* xbox_ramlock.c: on a 128 MB console, hold every free page above 64 MB
+ * (first thing at boot), so the game runs as on a stock console; the log
+ * line comes once boot.log is open. -DXBOX_RAM_LOCK64=0 turns it off. */
+void xbox_mem_lock64(void);
+void xbox_mem_lock64_log(void);
 /* xbox_crash.c: CPU exceptions -> crash.log + on-screen report. Call
  * xbox_crash_guard(fn, arg) as a thread body wrapper; main() uses it too. */
 int  xbox_crash_guard(int (*fn)(void*), void* arg);
@@ -69,6 +74,8 @@ typedef struct {
 extern XboxFrameStats g_xfs;
 unsigned long long xbox_ticks(void);
 unsigned long long xbox_ticks_per_sec(void);
+/* time the CPU clock against the ACPI timer once at boot (CPU upgrades) */
+void xbox_clock_check(void);
 size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f);
 /* the disc image, from pc_disc.c only (XBOX_DISC_TU) */
 size_t xbox_disc_fread(void* buf, size_t size, size_t n, FILE* f);

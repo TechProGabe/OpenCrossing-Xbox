@@ -63,7 +63,21 @@ the texture in place (`texture_reuse`) when the GPU can't be reading it.
 drawn at present as clear-rect colour fills (one pushbuffer block) of the
 lit runs of 5x7 digits, yellow on black, 2x (3x at 720p), inside the TV-safe area. `fps_counter` in
 `settings.ini` / Options > Video, live. `-DXBOX_FPS_DEFAULT=1` makes it the
-default for test builds.
+default for test builds. It sets the window clip to the whole screen first
+(the NES picture leaves a pillarboxed one) and makes the next GX draw send
+its own again.
+
+## Screenshots
+
+`screenshots = 1` (Options > Video, default off): a right stick click
+(`pc_platform_poll_events`; BACK is the pause menu here, unlike Melee-X)
+asks `xbox_nv2a_shot`, and the next present writes the frame, FPS counter
+included, as a 24-bit BMP (`xbox_fbdump_bmp`, from Melee-X) to UDATA
+`shotNN.bmp`. The first shot of a boot takes the first free number, so
+older shots stay; after 99 it wraps. ~0.27 s at 720p in xemu (rows written
+8 at a time; one write a row took 1.2 s). `console.py pull` fetches them and
+never deletes them. `-DXBOX_NES_SHOT=N` writes `nes_shot.bmp` the same way
+at the Nth frame of each NES game.
 
 Clear colours go to `pb_fill` as A8R8G8B8: pbkit converts them to the
 surface's format itself. Converting them to R5G6B5 first made every clear
@@ -161,7 +175,8 @@ key where there is one): `XBOX_NATIVE_TEX` (`native_textures`),
 `XBOX_TEX_REUSE` (`texture_reuse`), `XBOX_DRAW_SKIP` (`draw_skip`),
 `XBOX_VB_CACHE_BREAK` (`vertex_cache_break`), `XBOX_STRICT_IDLE`
 (`strict_gpu_wait`), `XBOX_PB_KICK` (`pushbuffer_kick_kb`, 16 = the old size),
-`XBOX_AUDIO_FIX` (`audio_fix`), `XBOX_CLIP_INCLUSIVE`, `XBOX_BUILTIN_MEM`
+`XBOX_AUDIO_FIX` (`audio_fix`), `XBOX_NES_FAST` (the NES screen upload,
+two texels a word), `XBOX_CLIP_INCLUSIVE`, `XBOX_BUILTIN_MEM`
 (prelude), `XBOX_LOG_SESSION`, `XBOX_FRAME_LOG`, `XBOX_HEARTBEAT_SECS=0`.
 `-DXBOX_PROF=1` adds the sampling profiler (`perf.md`).
 

@@ -266,6 +266,15 @@ set_source_files_properties(${CXX_FROM_C} PROPERTIES
     COMPILE_OPTIONS "-xc++;-Wno-register;${DECOMP_FLAGS}")
 set_source_files_properties(${PC_REUSED} ${XBOX_SOURCES} PROPERTIES
     COMPILE_OPTIONS "-Wno-unused-parameter;-Wno-sign-compare;-Wno-comment;-Wno-unused-function;-Wno-error=implicit-function-declaration;-Wno-error=incompatible-pointer-types;-Wno-error=int-conversion")
+# pc_card.c's "any .gci in the folder" scan: its _WIN32 branch calls
+# FindFirstFileA on a relative "save/card_a\*.gci", which never resolves on
+# the Xbox; the opendir branch goes through xbox_posix.c (save/ -> UDATA).
+# After the line above, which sets (not appends) these files' options.
+set_property(SOURCE "${PC_DIR}/src/pc_card.c" APPEND PROPERTY COMPILE_OPTIONS -U_WIN32)
+# The CPU clock for these: nxdk's guess is replaced when it's more than 3%
+# off (CPU upgrades, xbox_clock_check in xbox_io.c).
+set_property(SOURCE "${PC_DIR}/src/pc_os.c" "${PC_DIR}/src/pc_vi.c" "${PC_DIR}/src/pc_profiler.c"
+    APPEND PROPERTY COMPILE_DEFINITIONS "SDL_GetPerformanceFrequency=xbox_perf_frequency")
 
 # Object-only target for triage (XBOX_OBJS_ONLY=ON builds without linking).
 option(XBOX_OBJS_ONLY "Compile every TU, skip the link" OFF)

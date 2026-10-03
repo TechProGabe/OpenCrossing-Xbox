@@ -3448,6 +3448,11 @@ void emu64::dl_G_SPNOOP() {
 #endif
 }
 
+#if defined(TARGET_XBOX)
+extern "C" int xbox_ptr_readable(const void* p, unsigned size);
+extern "C" int xbox_logf(const char* fmt, ...);
+#endif
+
 void emu64::dl_G_DL(void) {
     static char s[256];
     Gfx* gfx = this->gfx_p;
@@ -3457,6 +3462,21 @@ void emu64::dl_G_DL(void) {
     if (this->work_ptr == NULL) {
         return;
     }
+#if defined(TARGET_XBOX)
+    /* A display list address that isn't mapped (freed heap is decommitted
+     * on the Xbox; v8 on hardware jumped to 0xc1180000, the float -9.5):
+     * skip the call and log it instead of faulting (docs/patches.md). */
+    {
+        static unsigned logged;
+        if (!xbox_ptr_readable(this->work_ptr, sizeof(Gfx))) {
+            if (logged++ < 16)
+                xbox_logf("[EMU64] gsSPDisplayList(%08x) at %p: not mapped, skipped (seg %08x, DL level %d)\n",
+                          (unsigned)gfx->dma.addr, (void*)gfx, (unsigned)this->segments[(gfx->dma.addr >> 24) & 0xF],
+                          (int)this->DL_stack_level);
+            return;
+        }
+    }
+#endif
     {
         /* Validate only regular F3DEX display lists.
          * G_DL_GXDL payload is a GX binary command stream, not a Gfx list. */

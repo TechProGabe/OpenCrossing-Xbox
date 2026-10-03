@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 void xbox_fbdump(const void* fb, int w, int h, int bpp, int pitch);
+/* 24-bit BMP file; 0 if it could not be written */
+int xbox_fbdump_bmp(const char* path, const void* fb, int w, int h, int bpp, int pitch);
 #ifdef __cplusplus
 }
 #endif

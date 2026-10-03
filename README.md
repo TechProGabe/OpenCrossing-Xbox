@@ -84,14 +84,14 @@ To continue a town from your GameCube or Dolphin:
 
 1. Export the save. Dolphin's memory card manager gives you a `.gci`. GameShark and GC Memcard Manager exports are `.gcs`.
 2. Convert it: `python3 tools/gcs_to_gci.py mysave.gcs`. This writes `DobutsunomoriP_MURA.gci`. A `.gci` from Dolphin needs no conversion.
-3. Name it exactly `DobutsunomoriP_MURA.gci`. Dolphin names its exports `01-GAFE-DobutsunomoriP_MURA.gci`, and other names aren't found yet.
-4. Launch the game once so it creates its folders. Then FTP the `.gci` to `E:\UDATA\4f430001\save\card_a\`, replacing the file there. If you already started a town on the Xbox, copy its `DobutsunomoriP_MURA.gci` off first: the file of that name is the one that loads.
+3. Launch the game once so it creates its folders. Then FTP the `.gci` to `E:\UDATA\4f430001\save\card_a\`. Any name ending in `.gci` works, such as Dolphin's `01-GAFE-DobutsunomoriP_MURA.gci`.
+4. If you already started a town on the Xbox, move its `DobutsunomoriP_MURA.gci` out of that folder first: a file with exactly that name always loads ahead of any other.
 
 Settings are in **Options** on the title screen, or **Settings** in the pause menu (Back button):
 
 | tab | settings |
 |---|---|
-| Video | Output (480i/480p, or 720p with a component cable and 720p enabled in the dashboard; needs a restart), Widescreen (4:3, 16:9, or Auto to follow the dashboard), texture filter |
+| Video | Output (480i/480p, or 720p with a component cable and 720p enabled in the dashboard; needs a restart), Widescreen (4:3, 16:9, or Auto to follow the dashboard), texture filter, FPS counter, screenshots |
 | Audio | master volume |
 | Controls | left and right stick dead zones, rumble strength, button remapping |
 | Gameplay | Mr. Resetti, shop upgrade (Singleplayer lets Nook upgrade to Nookington's without a visitor from another town), borderless acres (Off brings back the original acre-by-acre camera), NES aspect |
@@ -99,6 +99,8 @@ Settings are in **Options** on the title screen, or **Settings** in the pause me
 They are saved to `E:\UDATA\4f430001\settings.ini`, which you can also edit over FTP.
 
 **Quit Game** on the title screen or in the pause menu goes back to the dashboard.
+
+**Screenshots:** turn them on in Options > Video, then click the right stick to save what's on screen as `shot00.bmp`, `shot01.bmp` and so on in `E:\UDATA\4f430001\`. Copy them off over FTP. Handy for bug reports.
 
 ## Controls
 
@@ -112,16 +114,16 @@ They are saved to `E:\UDATA\4f430001\settings.ini`, which you can also edit over
 | Right stick | C-stick |
 | D-pad | D-pad |
 | Back | pause menu |
+| Right stick click | screenshot (when turned on in Options > Video) |
 
 Buttons can be remapped in Options > Controls > Buttons.
 
-The left stick's dead zone defaults to 43%, which suits a worn controller whose stick doesn't return to the centre. If your controller is in good shape, lower it to 15-20% in Options > Controls so small pushes register sooner; the page shows how far the stick is tilted right now, so set the dead zone just above where yours rests.
+Both sticks' dead zones default to 40%, so worn controllers whose sticks don't return to the centre don't walk on their own. If your controller is in good shape, lower it to 15-20% in Options > Controls so small pushes register sooner. The page shows how far the stick is tilted right now, so set the dead zone just above where yours rests.
 
 ## Known issues
 
-- The left stick has a large dead zone (43%) by default, tuned on a worn controller. Lower it in Options > Controls (see Controls).
-- NES games run a little choppy.
-- A save only loads if it is named `DobutsunomoriP_MURA.gci` (see Saves and settings).
+- Clu Clu Land D (a Famicom Disk System game) doesn't run yet: the game goes back to the room. The other NES games work.
+- No sound? Turn the console fully off and on again. A reset or in-game reset (IGR) can leave the sound chip stuck after a crash, and only a full power-off clears it.
 
 The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
 

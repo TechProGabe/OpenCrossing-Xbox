@@ -5,11 +5,15 @@
  *                      [FBDUMP] END
  * tools/xbox/fbdump_to_png.py turns a serial log into PNGs. Reads the linear
  * framebuffer the caller passes (unified RAM: the NV2A's colour buffer is plain
- * system memory, so this works for the GPU backend too). */
+ * system memory, so this works for the GPU backend too).
+ *
+ * On the console there is no COM1: xbox_fbdump_bmp writes a frame to a BMP
+ * file instead (the screenshots setting, and -DXBOX_NES_SHOT). */
 #include <stdlib.h>
 #include <string.h>
 #define Z_SOLO   /* how nxdk builds libzlib: no compress.c, caller-supplied allocator */
 #include <zlib.h>
+#include <windows.h>
 #include "xbox_io.h"
 #include "xbox_fbdump.h"
 
@@ -77,4 +81,57 @@ void xbox_fbdump(const void* fb, int w, int h, int bpp, int pitch) {
     xbox_log_exclusive(0);
     g_xbox_log = prev;
     deflateEnd(&zs);
+}
+
+/* 24-bit bottom-up BMP (from Melee-X's xhw_fbdump_file). Rows are converted
+ * one at a time (the framebuffer is write-combined: each row is read once,
+ * in order) and written 8 at a time. Returns 0 if the file could not be
+ * written. */
+int xbox_fbdump_bmp(const char* path, const void* fb, int w, int h, int bpp, int pitch) {
+    enum { ROWS = 8 };
+    static unsigned char buf[ROWS * (1280 * 3 + 4)];
+    unsigned char hdr[54];
+    unsigned stride = ((unsigned)w * 3 + 3) & ~3u, size = 54 + stride * (unsigned)h;
+    DWORD done;
+    HANDLE f;
+    int x, y, n = 0;
+    if (w > 1280 || w <= 0 || h <= 0) return 0;
+    f = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) return 0;
+    memset(hdr, 0, sizeof hdr);
+    hdr[0] = 'B';
+    hdr[1] = 'M';
+    memcpy(hdr + 2, &size, 4);
+    hdr[10] = 54;
+    hdr[14] = 40;
+    memcpy(hdr + 18, &w, 4);
+    memcpy(hdr + 22, &h, 4);
+    hdr[26] = 1;
+    hdr[28] = 24;
+    WriteFile(f, hdr, sizeof hdr, &done, NULL);
+    memset(buf, 0, sizeof buf);
+    for (y = h - 1; y >= 0; y--) {
+        const unsigned char* src = (const unsigned char*)fb + (size_t)y * (size_t)pitch;
+        unsigned char* row = buf + n * stride;
+        for (x = 0; x < w; x++) {
+            unsigned char* d = row + x * 3;
+            if (bpp == 16) {
+                unsigned v = ((const unsigned short*)src)[x], r = v >> 11, g = (v >> 5) & 63, b = v & 31;
+                d[0] = (unsigned char)(b << 3 | b >> 2);
+                d[1] = (unsigned char)(g << 2 | g >> 4);
+                d[2] = (unsigned char)(r << 3 | r >> 2);
+            } else {
+                unsigned v = ((const unsigned*)src)[x];
+                d[0] = (unsigned char)v;
+                d[1] = (unsigned char)(v >> 8);
+                d[2] = (unsigned char)(v >> 16);
+            }
+        }
+        if (++n == ROWS || y == 0) {
+            WriteFile(f, buf, (DWORD)(n * stride), &done, NULL);
+            n = 0;
+        }
+    }
+    CloseHandle(f);
+    return 1;
 }

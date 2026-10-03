@@ -98,6 +98,12 @@ static GLuint fixnes_vbo = 0;
 static GLuint fixnes_texture = 0;
 static GLint fixnes_tex_uniform = -1;
 static int fixnes_initialized = 0;
+static int fixnes_failed = 0;   /* the last init rejected its ROM (pc_fixnes_failed) */
+
+/* 1 when the last pc_fixnes_init couldn't start the game: not an iNES image
+ * (Clu Clu Land D is a Famicom Disk System disk, which this path doesn't
+ * run) or out of memory. famicom_emu.c then goes back to the room. */
+int pc_fixnes_failed(void) { return fixnes_failed; }
 
 static GLuint fixnes_compile_shader(GLenum type, const char *src) {
     GLuint s = glCreateShader(type);
@@ -228,6 +234,7 @@ void pc_fixnes_init(uint8_t *ines_data, int ines_size) {
     ppuMapper5 = false;
     emuInitialNT = NT_UNKNOWN;
     fixnes_initialized = 0;
+    fixnes_failed = 1;   /* until the end of this function */
 
     /* Free any previous allocation */
     if (emuPrgRAM) {
@@ -242,6 +249,13 @@ void pc_fixnes_init(uint8_t *ines_data, int ines_size) {
     /* Parse iNES header */
     if (ines_size < 16)
         return;
+    if (memcmp(emuNesROM, "NES\x1a", 4) != 0) {
+        /* a Famicom Disk System image (Clu Clu Land D): the header below
+         * would be read from disk data */
+        fprintf(stderr, "[NES] not an iNES image (%02x %02x %02x %02x): Famicom Disk System games aren't supported\n",
+                emuNesROM[0], emuNesROM[1], emuNesROM[2], emuNesROM[3]);
+        return;
+    }
 
     uint8_t mapper = ((emuNesROM[6] & 0xF0) >> 4) | ((emuNesROM[7] & 0xF0));
     emuSaveEnabled = (emuNesROM[6] & (1<<1)) != 0;
@@ -268,6 +282,10 @@ void pc_fixnes_init(uint8_t *ines_data, int ines_size) {
         if (emuPrgRAMsize == 0) emuPrgRAMsize = 0x2000;
     }
     emuPrgRAM = malloc(emuPrgRAMsize);
+    if (!emuPrgRAM) {
+        fprintf(stderr, "[NES] PRG RAM (%u bytes) could not be allocated\n", (unsigned)emuPrgRAMsize);
+        return;
+    }
     memset(emuPrgRAM, 0, emuPrgRAMsize);
 
     uint8_t *prgROM = emuNesROM + 16;
@@ -309,6 +327,7 @@ void pc_fixnes_init(uint8_t *ines_data, int ines_size) {
     cpuCycleTimer = nesPAL ? 16 : 12;
     vrc7CycleTimer = 432 / cpuCycleTimer;
     fixnes_initialized = 1;
+    fixnes_failed = 0;
 
     memset(textureImage, 0, sizeof(textureImage));
     fixnes_audio_pos = 0;
@@ -366,6 +385,8 @@ uint16_t *pc_fixnes_frame(void) {
 }
 
 void pc_fixnes_cleanup(void) {
+    fixnes_failed = 0;
+
     /* Free APU output buffers */
     apuDeinitBufs();
 

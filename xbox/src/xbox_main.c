@@ -150,6 +150,10 @@ int pc_platform_poll_events(void) {
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
             case SDL_CONTROLLERBUTTONDOWN:
+                /* BACK is the pause menu here, so screenshots are on the right stick click */
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK && g_xbox_settings.screenshots &&
+                    !pc_settings_menu_capture_active())
+                    xbox_nv2a_shot();
                 if (pc_settings_menu_capture_active()) {
                     pc_settings_menu_handle_capture_event(&event);
                     break;
@@ -264,6 +268,9 @@ static int main_body(void* arg) {
     char disc_name[260];
     (void)arg;
 
+    /* 128 MB consoles run as 64 MB: the RAM above it is held before
+     * anything else allocates (xbox_ramlock.c) */
+    xbox_mem_lock64();
     xbox_logf("\n[XBOX] OpenCrossing-Xbox boot\n");
 
     if (!nxIsDriveMounted('E') && !nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\"))
@@ -274,6 +281,8 @@ static int main_body(void* arg) {
     xbox_watchdog_start();
 
     xbox_mem_log("boot");
+    xbox_mem_lock64_log();
+    xbox_clock_check();   /* before anything reads a timer frequency */
     read_image_range();
     xbox_logf("[XBOX] image %08x-%08x\n", pc_image_base, pc_image_end);
     xbox_prof_start();   /* -DXBOX_PROF=1 builds only; this thread runs the game */
@@ -282,6 +291,7 @@ static int main_body(void* arg) {
      * (480i, xbox_settings_safe_video); USB enumerates during the splash */
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
         xbox_logf("[XBOX] SDL gamecontroller init failed: %s\n", SDL_GetError());
+    xbox_settings_early();
     xbox_splash_show();
 
     if (!disc_image_present(disc_name, sizeof disc_name)) fatal_no_disc();

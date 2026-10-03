@@ -98,6 +98,17 @@ extern void famicom_emu_main(GAME* famicom) {
             famicom_done = TRUE;
             famicom_done_countdown = 0;
         } else {
+#if defined(TARGET_XBOX)
+            /* fixNES couldn't start this game (pc_nes_fixnes.c: Clu Clu Land
+             * D is a disk image; or out of memory): back to the room, not a
+             * black screen or a crash (docs/patches.md) */
+            extern int pc_fixnes_failed(void);
+            if (pc_fixnes_failed()) {
+                OSReport("[NES] this game can't run here: back to the room\n");
+                famicom_done = TRUE;
+                famicom_done_countdown = 0;
+            }
+#endif
             for (padid = 0; padid < 4; padid++) {
                 current_pad = &gamePT->pads[padid];
                 combo = current_pad->now.button | current_pad->on.button;

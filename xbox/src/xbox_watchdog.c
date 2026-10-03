@@ -145,7 +145,8 @@ static void dump_all(const char* why) {
     pb_show_debug_screen();
     debugClearScreen();
     debugPrint("OpenCrossing-Xbox: %s at frame %u\n", why, xbox_frame_count());
-    debugPrint("Log: E:\\UDATA\\4f430001\\hang.log + boot.log\n\n");
+    debugPrint("Log: E:\\UDATA\\4f430001\\hang.log + boot.log\n");
+    debugPrint("(hang_prev.log + boot_prev.log once the game is restarted)\n\n");
     screen_tail(14, 76);
     debugPrint("\n");
     for (i = 0; i < n; i++) {
@@ -213,8 +214,12 @@ static int watchdog_body(void* arg) {
         unsigned f;
         HANDLE ev = (HANDLE)xbox_bootlog_event();
         /* an urgent line wakes us early: write it, the second goes on */
-        if (ev) WaitForSingleObject(ev, 1000 - (GetTickCount() - tick < 1000 ? GetTickCount() - tick : 1000));
-        else Sleep(1000);
+        if (ev) {
+            /* one read: two could straddle a tick and wrap to INFINITE */
+            DWORD el = GetTickCount() - tick;
+            WaitForSingleObject(ev, el < 1000 ? 1000 - el : 0);
+        } else
+            Sleep(1000);
         xbox_bootlog_pump();   /* the queued log lines (xbox_io.c) */
         if (GetTickCount() - tick < 1000) continue;
         tick = GetTickCount();
