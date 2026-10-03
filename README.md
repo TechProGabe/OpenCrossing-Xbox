@@ -4,8 +4,10 @@ OpenCrossing-Xbox runs Animal Crossing (GameCube, USA) natively on an original X
 
 - 480i, 480p or 720p output. 720p needs a component cable.
 - 4:3 or 16:9 widescreen.
-- An Options menu, on the title screen and in the pause menu, for video, audio, controls (including button remapping) and gameplay settings.
+- An Options menu in the game's own style, on the title screen and in the pause menu, for video, audio, controls (including button remapping) and gameplay settings.
+- The NES games in your house are playable (all but Clu Clu Land D).
 - Saves use the GameCube `.gci` format, so a town can move between the Xbox, Dolphin and the PC port.
+- Screenshots and an FPS counter, both optional.
 
 Status: beta. The game is mostly playable, but it still crashes now and then and has bugs (see [Known issues](#known-issues)). Save often.
 
@@ -120,12 +122,21 @@ Buttons can be remapped in Options > Controls > Buttons.
 
 Both sticks' dead zones default to 40%, so worn controllers whose sticks don't return to the centre don't walk on their own. If your controller is in good shape, lower it to 15-20% in Options > Controls so small pushes register sooner. The page shows how far the stick is tilted right now, so set the dead zone just above where yours rests.
 
+## Troubleshooting
+
+- **Black screen after changing the output?** Hold Back on the controller while OpenCrossing starts, until the splash screen ends. That boot runs at 480i and saves it, so you can pick another output in Options > Video.
+- **No sound?** Turn the console fully off and on again. A reset or in-game reset (IGR) can leave the sound chip stuck after a crash, and only a full power-off clears it.
+- **Character walks on its own, or menus scroll by themselves?** Raise the dead zone in Options > Controls.
+- **A save doesn't load?** It has to be in `E:\UDATA\4f430001\save\card_a\` and end in `.gci`. A file named exactly `DobutsunomoriP_MURA.gci` always wins over any other.
+- 128 MB consoles work too; the game uses 64 MB of it, like a stock Xbox.
+
 ## Known issues
 
 - Clu Clu Land D (a Famicom Disk System game) doesn't run yet: the game goes back to the room. The other NES games work.
-- No sound? Turn the console fully off and on again. A reset or in-game reset (IGR) can leave the sound chip stuck after a crash, and only a full power-off clears it.
+- Where the villager's shirt meets the trousers, and on the glove in the pockets menu, the two surfaces can flicker against each other.
+- At 16:9 some 2D art, such as the title logo, is drawn a little too wide.
 
-The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist. If the screen shows a crash report, a photo of it helps too.
+The full list with technical detail is in [docs/known-issues.md](docs/known-issues.md). When you report a crash or freeze, include `crash.log`, `last.log`, `hang.log`, `perf.log` and `boot.log` from `E:\UDATA\4f430001\` if they exist (after a restart they're named `crash_prev.log` and so on). A screenshot or a photo of the screen helps too, and say whether your Xbox has any upgrades (RAM, CPU, modchip).
 
 ## Building from source
 

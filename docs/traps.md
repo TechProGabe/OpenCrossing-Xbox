@@ -233,3 +233,8 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   upgrade that guess can be wrong (`xbox_clock_check`). Don't time anything
   against `KeQueryInterruptTime` in xemu: it runs ~7% apart from both
   counters there.
+- **nxdk's `mktime` returns -1.** The PC port took its time-zone offset
+  from `difftime(now, mktime(gmtime(now)))`, which became the whole Unix
+  time: the game clock read ~2083 and moved on by the time between boots.
+  The Xbox takes the offset from `GetTimeZoneInformation` (the dashboard's
+  zone, `xbox_local_offset_secs`). Any other `mktime` use: check for -1.

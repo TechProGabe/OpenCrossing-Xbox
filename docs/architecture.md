@@ -72,14 +72,16 @@ or from a disc. `xbox_main.c` scans it for the first `.iso`, `.gcm` or
 Everything written goes to `E:\UDATA\4f430001\` in every launch mode (a disc
 is read-only): `settings.ini`, `keybindings.ini`, `save/card_a/*.gci` and
 the logs (`boot.log`, `last.log`, `crash.log`, `hang.log`, `perf.log`,
-`input.log`, `stickN.log`). Saves use the GameCube `.gci` format, so they
+`input.log`, `stickN.log`; the previous boot's as `*_prev.log`) and
+screenshots (`shotNN.bmp`). Saves use the GameCube `.gci` format, so they
 move between this port, Dolphin, the PC port and the other OpenCrossing
 ports.
 
 The home town is `save/card_a/DobutsunomoriP_MURA.gci` (also accepted:
-`8P-GAFE-DobutsunomoriP_MURA.gci`). That file wins when it exists; the scan
-for any other `.gci` name (Dolphin exports `01-GAFE-...`) is broken on the
-Xbox (`known-issues.md`). Each save rotates the previous file to
+`8P-GAFE-DobutsunomoriP_MURA.gci`). That file wins when it exists;
+otherwise the first `.gci` in the folder whose header says GAF loads
+(Dolphin exports `01-GAFE-...`; `pc_card.c`, `patches.md`). `save/card_b`
+is scanned the same way for a town to visit. Each save rotates the previous file to
 `.bak1`..`.bak3`, which are only read if the main file can't be; "clear
 village data" writes the town with its save check cleared, so its previous
 state is `.bak1`.
@@ -111,10 +113,18 @@ Quit Game) in game. Both drive the Options page in `xbox_settings_menu.c`:
 
 | tab | rows |
 |---|---|
-| Video | Output (480i, 480p and 720p as the dashboard allows; needs a restart), Widescreen (4:3 default, 16:9, Auto = dashboard; 16:9 draws more of the scene and costs frame time), Texture filter, FPS counter (live) |
+| Video | Output (480i, 480p and 720p as the dashboard allows; needs a restart), Widescreen (4:3 default, 16:9, Auto = dashboard; 16:9 draws more of the scene and costs frame time), Texture filter, FPS counter (live), Screenshots (R-Stick; live) |
 | Audio | Master volume |
-| Controls | Stick deadzone (radial, 0-60%, live stick readout), C-stick deadzone, Rumble (0-100%), Buttons (controller rebinding) |
+| Controls | Stick deadzone (radial, 0-60%, 40% default, live stick meter), C-stick deadzone (40% default), Rumble (0-100%), Buttons (controller rebinding) |
 | Gameplay | Resetti, Shop upgrade (Singleplayer by default on the Xbox: the visitor Nookington's wants needs a second town in `save/card_b`; switched once on the first boot without an `[Xbox]` section), Borderless acres, NES aspect |
+
+The page is drawn in the game's own style (cream notebook sheet in a wood
+frame, a green name tag, speech-bubble prompts, the selected row on a
+yellow band with value arrows, unapplied values in orange) from untextured
+triangles in the font display list: no textures, allocations or file I/O.
+Changes wait for Apply; leaving with unapplied changes asks first. The
+pause menu's own Resume / Settings / Quit page (`pc_pause_menu.c`) keeps
+the PC port's look.
 
 Quit Game goes back to the dashboard (`XLaunchXBE(NULL)`; nxdk's `exit`
 reboots, which relaunches a disc). Applying a new output offers a restart

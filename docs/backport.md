@@ -95,38 +95,38 @@ rebuild (`architecture.md`, Files on the console).
 
 ## Status
 
-Rounds A and B, 2026-10-03, one combo build for the console. `settings.ini`
-key (`[Xbox]`, 0 = old behaviour) or compile switch for each:
+Done and on hardware (v1-v10, 2026-10-03; committed through `c7a0da51`).
+`settings.ini` key (`[Xbox]`, 0 = old behaviour) or compile switch for each:
 
 | item | where | switch | state |
 |---|---|---|---|
-| sampling profiler, `prof_report.py`, `static_syms.py` | `xbox_prof.c`, `tools/xbox/` | `-DXBOX_PROF=1` | works in xemu |
-| `[FRAME]` every 5 s | `xbox_nv2a.c` | `XBOX_FRAME_LOG` | works in xemu |
-| session-long `boot.log` (+ `boot2/3.log`), `[BEAT]` | `xbox_io.c`, `xbox_watchdog.c` | `XBOX_LOG_SESSION`, `XBOX_HEARTBEAT_SECS` | built; hardware pending |
-| `console.py` stage/deploy/pull/rollback | `tools/xbox/` | — | written; console was off |
-| first-fault PGRAPH + pushbuffer dump, stall report | `xbox_nv2a.c` | — | built |
-| strict `wait_idle` | `xbox_nv2a.c` | `strict_gpu_wait` | xemu ok |
-| vertex cache break per batch | `xbox_nv2a.c` | `vertex_cache_break` | xemu ok |
-| inclusive window clip | `xbox_nv2a.c` | `XBOX_CLIP_INCLUSIVE` | xemu ok |
-| AC97 start order, stuck/halt recovery, shutdown reset | `xbox_audio.c` | `audio_fix` | hardware only (xemu uses the APU) |
-| memcpy & co. builtins | `xbox_prelude.h` | `XBOX_BUILTIN_MEM` | `pc_gx.o` 81 → 18 calls |
-| GPU overlap on by default (+ migration) | `xbox_settings.c` | `gpu_overlap` | xemu ok |
-| 32 KB kicks | `xbox_nv2a.c` | `pushbuffer_kick_kb` | xemu ok |
-| per-draw skips | `xbox_nv2a.c` | `draw_skip` | xemu: shim 1.3 → 0.8 ms |
-| native texture formats | `xbox_nv2a.c` | `native_textures` | xemu: 440 of 864 KB saved, shots match |
-| texture reuse (NES screen in place) | `xbox_nv2a.c` | `texture_reuse` | built; NES not exercised in xemu |
+| sampling profiler, `prof_report.py`, `static_syms.py` | `xbox_prof.c`, `tools/xbox/` | `-DXBOX_PROF=1` | hardware: first profile v4 (`perf.md`) |
+| `[FRAME]` every 5 s | `xbox_nv2a.c` | `XBOX_FRAME_LOG` | hardware |
+| session-long `boot.log` (+ `boot2/3.log`), `[BEAT]`, `*_prev.log` | `xbox_io.c`, `xbox_watchdog.c` | `XBOX_LOG_SESSION`, `XBOX_HEARTBEAT_SECS` | hardware |
+| `console.py` stage/deploy/pull/rollback | `tools/xbox/` | — | used for every round |
+| first-fault PGRAPH + pushbuffer dump, stall report | `xbox_nv2a.c` | — | hardware (caught the v4 pitch fault) |
+| strict `wait_idle` | `xbox_nv2a.c` | `strict_gpu_wait` | hardware |
+| vertex cache break per batch | `xbox_nv2a.c` | `vertex_cache_break` | hardware |
+| inclusive window clip | `xbox_nv2a.c` | `XBOX_CLIP_INCLUSIVE` | hardware |
+| AC97 start order, stuck/halt recovery, shutdown reset | `xbox_audio.c` | `audio_fix` | hardware |
+| audio producer above the game's priority, `[BEAT] audio starved` | `xbox_audio.c` | `audio_priority` | hardware: no starvation after boot (v7) |
+| memcpy & co. builtins, inline `words_eq` | `xbox_prelude.h`, `xbox_nv2a.c` | `XBOX_BUILTIN_MEM` | hardware |
+| GPU overlap on by default (+ migration) | `xbox_settings.c` | `gpu_overlap` | hardware |
+| 32 KB kicks | `xbox_nv2a.c` | `pushbuffer_kick_kb` | hardware |
+| per-draw skips | `xbox_nv2a.c` | `draw_skip` | hardware |
+| native texture formats | `xbox_nv2a.c` | `native_textures` | hardware |
+| texture reuse, NES upload two texels a word | `xbox_nv2a.c` | `texture_reuse`, `XBOX_NES_FAST` | hardware: NES 52 -> 59 fps |
+| texture cache index | `pc_gx_texture.c` | `PC_TEX_CACHE_INDEX` | hardware (with the rest) |
+| FPS counter, screenshots, safe video | `xbox_nv2a.c`, `xbox_main.c`, `xbox_settings.c` | `fps_counter`, `screenshots` | hardware |
+| 128 MB consoles run as 64 MB | `xbox_ramlock.c` | `XBOX_RAM_LOCK64` | xemu (Cerbios); not on a 128 MB console yet |
+| Options menu in the game's style | `xbox_settings_menu.c` | — | hardware |
 
-Round C (2026-10-03, after v1 on hardware: stable, audio fine): FPS
-counter, safe video (BACK at boot, `progressive`, a 480i/480p/720p Output
-row), `*_prev.log` kept across boots, the clock overflow fix in `pc_os.c`,
-16-bit clear colours no longer converted twice.
+Fixed on the way, from console logs: the clock (`osGetTime` overflow,
+nxdk's failing `mktime`, a save's bad `time_delta`), the NES heap at 720p,
+the NES picture drawn twice (`famicom_draw`), the texture pitch fault, a
+watchdog wait that could last forever, Clu Clu Land D's crash.
 
-v2-v4 on hardware: stable, NES plays at 720p, the first console profile
-(`perf.md`). v5 (2026-10-03), from that profile and the v4 report: texture
-cache index (`PC_TEX_CACHE_INDEX`), inline compares in the shim, the NES
-upload fast path, the audio producer's priority (`audio_priority`) with an
-underrun count in `[BEAT]`, the texture pitch fault.
-
-Not done in this round: atomic `settings.ini` writes, the 128 MB hold,
-sampled texture rechecks, EFB copies on the GPU, SSE matrices, prefetches,
-per-TU levels (all wait for the console profile), round C.
+Not done: atomic `settings.ini` writes, sampled texture rechecks, EFB
+copies on the GPU, SSE matrices, prefetches, per-TU levels, combiners
+(round C's plan), a long burn-in. Each waits for a console profile that
+points at it.
