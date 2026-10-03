@@ -51,6 +51,27 @@ GameCube-matching build keeps the original macros):
 |---|---|---|
 | `include/m_lib.h` | `DEG2SHORT_ANGLE`, `RAD2SHORTANGLE`, `RAD2SHORT_ANGLE2` convert through `int` | `(s16)32768.0f` is undefined behaviour in C (the value doesn't fit). Clang folds `DEG2SHORT_ANGLE(180)` to poison and deletes the code that depends on it: `aMR_JudgeBreedNewFurniture` was compiled down to "refuse", so no furniture could be put down indoors. 14 files had such constants (museum, igloo and buggy doors, museum fish and insects, Majin, effects, `f_furniture.c`). Through `int` the value wraps to -32768 like the GameCube's `fctiwz` + truncate |
 
+## `src/`: NES diagnostics (Xbox only)
+
+`[NES]` log lines under `#if defined(TARGET_XBOX)`, to find the "memory card
+in slot A could not be read" error (`known-issues.md`); no behaviour change:
+
+| file | symbol | logs |
+|---|---|---|
+| `src/actor/ac_my_room_msg_ctrl.c_inc` | `aMR_SetEmulatorStartMessage` | internal ROM or not, player, the card check's result |
+| `src/famicom_emu.c` | `famicom_emu_init`, `famicom_emu_main` | the ROM id, `famicom_init` and ROM load failures, the emulator heap's size |
+| `src/static/Famicom/famicom.cpp` | `pc_nes_rom_scan`, the ROM load, `famicom_internal_data_load/_save` | a missing `nes_roms` folder, a memory-card game not found, the NES save file read/write |
+
+Behaviour change, `src/famicom_emu.c` `famicom_emu_init` (Xbox only): the
+NES emulator's heap falls back to 3.5, 3 or 2.75 MB when the PC branch's
+4 MB `malloc` fails. At 720p only ~3.8 MB is free, the 4 MB heap failed and
+the room showed "memory card in slot A could not be read"; `famicom_init`'s
+buffers take ~2.6 MB.
+
+`famicom.cpp` is also built with `fopen=xbox_fopen`, `fclose=xbox_fclose`
+(CMake): C++ files don't get the prelude's path routing, so its NES save file
+(a relative `save/card_a/...` path) was never read or written on the Xbox.
+
 ## `pc/`
 
 All are bug fixes that apply upstream too; worth sending to
@@ -59,6 +80,11 @@ flyngmt/ACGC-PC-Port.
 | file | change | why |
 |---|---|---|
 | `pc/src/pc_gx_texture.c` | `tex_cache_insert` drops older entries for the same large (≥128×128) buffer | every inventory open grabs the screen into one reused buffer; old versions stayed cached (eviction only at 2048 entries) and filled the Xbox's 8 MB texture pool, so the menu background went white |
+| `pc/src/pc_gx_texture.c` | `tex_cache_find` walks a per-pointer chain instead of the whole cache (`PC_TEX_CACHE_INDEX`, 0 = the linear scan) | the scan of up to 2048 entries on every `GXLoadTexObj` was the top function of a busy town frame on the Xbox (8.6% of ~19 ms, v4 profile). Chains are rebuilt after any compaction. Worth upstreaming |
+| `pc/src/pc_os.c` | `OSInit`: a failed `mktime` gives a 0 time-zone offset; on the Xbox the offset is the dashboard's time zone and DST (`#ifdef TARGET_XBOX`, `xbox_local_offset_secs`) | nxdk's `mktime` returns -1, and `difftime(now, -1)` made the "offset" the whole Unix time: the console clock read ~2083 and moved on by the real time between two boots at every boot, so a clock set in the game came back hours off after a reboot. The guard is an upstream bug fix |
+| `src/static/Famicom/famicom.cpp` | `famicom_emu` frame: `famicom_draw()` skipped (`#if defined(TARGET_XBOX)`) | fixNES (`pc_fixnes_render_frame`) already draws the frame, 4:3 or stretched per `nes_aspect`. The GameCube quad samples `result_bufp`, which fixNES never fills, but pc_gx's texture bind cache didn't know fixNES had rebound unit 0, so it drew the NES picture a second time, full screen, over the 4:3 one (hardware shot, v6) |
+| `pc/src/pc_m_card.c` | a loaded save's `time_delta` beyond ±40 years goes to 0 (`#ifdef TARGET_XBOX`) | deltas set under the old Xbox clock are ~-56 years and would put the fixed clock in ~1970; the game's years make anything past 40 impossible otherwise |
+| `pc/src/pc_os.c` | `osGetTime` multiplies whole seconds and the remainder apart | `(now - start) * 40.5 MHz` overflowed 64 bits 10.4 minutes after boot with the Xbox's 733 MHz counter, and the game clock jumped back every 10.4 minutes (on a PC, after ~12.7 hours at 10 MHz). Upstream bug |
 | `pc/src/pc_disc.c` | `pc_disc_read` takes an SDL mutex | fseek+fread pair on one `FILE*` raced between DVD, audio and game threads |
 | `pc/include/pc_gx_internal.h` | `PC_GX_MAX_VERTS` is `#ifndef`-guarded | the Xbox build passes 16384 (vertex batch 6 MB → 1.5 MB) |
 | `pc/src/pc_gx_texture.c` | logs a decode buffer that couldn't be allocated (`#ifdef TARGET_XBOX`) | the texture is drawn white then; the log says why |

@@ -84,7 +84,16 @@ memcpy & co. as builtins (`xbox_prelude.h`; `pc_gx.o` 81 → 18 calls), CPU/GPU
 overlap on by default, per-draw skips and native texture formats
 (`renderer.md`), 32 KB kicks. xemu title demo, same build with and without
 native textures and draw skip: shim 1.3 → 0.8 ms a frame, texture pool 440
-KB smaller of 864. Hardware: pending (first console round).
+KB smaller of 864.
+
+Hardware, v4 at 720p (2026-10-03, first console profile): quiet town 60 fps
+(game+emu64 ~3.5 ms, shim 0.6); busy town (340 draws) 51 fps, CPU-bound at
+~19 ms (game+emu64 14.3, shim 4.9); NES 52 fps (fixNES 13.3 ms, upload 3,
+gpu wait 2). Busy town's top functions: `GXLoadTexObj` 8.6% (a linear scan
+of the 2048-entry texture cache per bind: `PC_TEX_CACHE_INDEX` chains it by
+pointer), `GXPosition3f32` 8.3%, `draw` 6.8%, `memcmp` 6.4% (the shim's
+per-draw compares: `words_eq`). NES: `ppuCycle` 24%, the screen upload 14%
+(two texels a word now), `apuCycle` 11%, `cpuCycle` 8%.
 
 ## Profiling on the console
 

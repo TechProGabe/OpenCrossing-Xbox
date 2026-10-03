@@ -70,7 +70,10 @@ GLuint pc_texture_pack_lookup(const void* data, int data_size, int w, int h, uns
 }
 
 void pc_platform_init(void) {
-    if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
+    /* the controllers are up already (main_body, for safe video): init them
+     * once, so leave_game's SDL_QuitSubSystem still shuts them down */
+    Uint32 pads = SDL_WasInit(SDL_INIT_GAMECONTROLLER) ? 0 : SDL_INIT_GAMECONTROLLER;
+    if (SDL_Init(pads | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
         xbox_logf("[XBOX] SDL_Init failed: %s\n", SDL_GetError());
     }
     if (!xbox_nv2a_init()) {
@@ -275,6 +278,10 @@ static int main_body(void* arg) {
     xbox_logf("[XBOX] image %08x-%08x\n", pc_image_base, pc_image_end);
     xbox_prof_start();   /* -DXBOX_PROF=1 builds only; this thread runs the game */
 
+    /* controllers before the splash: BACK held as it ends is safe video
+     * (480i, xbox_settings_safe_video); USB enumerates during the splash */
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
+        xbox_logf("[XBOX] SDL gamecontroller init failed: %s\n", SDL_GetError());
     xbox_splash_show();
 
     if (!disc_image_present(disc_name, sizeof disc_name)) fatal_no_disc();
@@ -282,6 +289,7 @@ static int main_body(void* arg) {
     xbox_splash_progress(0.1f);
 
     pc_settings_load();
+    xbox_settings_safe_video();
     pc_keybindings_load();
 #ifdef XBOX_DBG_WEATHER
     /* test runs: force the weather (1 rain, 2 snow...; mEnv_WEATHER_*) */

@@ -12,7 +12,11 @@ extern "C" {
  * DVD for disc launches (verified in xemu 2026-09-27: D:\default.xbe opens). */
 #define XBOX_DISC_DIR  "D:\\"
 /* Saves + settings. Always on the HDD, so a burned-DVD boot can still save. */
+#ifdef XBOX_DBG_FRESH_UDATA   /* test runs: a first boot, no save or settings */
+#define XBOX_UDATA_ROOT "E:\\UDATA\\4f43ff01"
+#else
 #define XBOX_UDATA_ROOT "E:\\UDATA\\4f430001"
+#endif
 #define XBOX_UDATA_DIR  XBOX_UDATA_ROOT "\\"
 
 #ifndef XBOX_LOG_DEFAULT
@@ -39,6 +43,8 @@ void xbox_bootlog_close(void);
 /* after boot: queue log lines; the watchdog writes them (xbox_bootlog_pump) */
 void xbox_bootlog_async(void);
 void xbox_bootlog_pump(void);
+/* signalled when an urgent line is queued (the watchdog waits on it) */
+void* xbox_bootlog_event(void);
 void xbox_mem_log(const char* where);
 unsigned xbox_mem_free_kb(void);
 /* xbox_crash.c: CPU exceptions -> crash.log + on-screen report. Call

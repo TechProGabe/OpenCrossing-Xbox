@@ -193,7 +193,16 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   A declaration of one after the prelude breaks (`void* memcpy(...)` expands);
   the prelude includes `<string.h>` and the decomp's `_mem.h` first for that
   reason, and `xbox_mem.c`, which defines them, `#undef`s them. C++ is left
-  alone: libc++ spells `std::memcpy`.
+  alone: libc++ spells `std::memcpy`. `__builtin_memcmp` is still a call
+  under `-ffreestanding`, even for 16 constant bytes: clang only expands it
+  when memcmp counts as a library builtin. Compare words in hot code
+  (`words_eq` in `xbox_nv2a.c`).
+- **Threads that feed the hardware need more than the game's priority.**
+  A frame that misses the vblank never sleeps, so an equal-priority thread
+  waits out the game's whole time slice: the audio producer let the AC97
+  ring run dry at 51 fps (v4). It runs one step above now, the AC97 pump
+  above that; both sleep when they're ahead, and their locks must block in
+  the kernel (SDL mutexes do), never spin (`SDL_Atomic*`, above).
 - **`pb_busy` is not idle.** It compares GET with PUT and reads PGRAPH's
   status only: methods already in PFIFO's CACHE1 pass. Anything that frees
   or rewrites GPU-read memory after a wait needs `wait_idle`'s strict check.
@@ -203,3 +212,7 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
 - **Another session's xemu harness may `pkill -9` xemu.** Two sessions on one
   Mac killed each other's runs (2026-10-03); check `pgrep -fl MacOS/xemu`
   before a run and never kill a run you didn't start.
+- **C++ files don't get the prelude's path routing.** `fopen` & co. are only
+  remapped for C (libc++ spells `std::fopen`), so a C++ file opening a
+  relative path (`famicom.cpp`'s NES save) silently fails on the Xbox. Give
+  such a file `fopen=xbox_fopen` (and friends) in CMake.

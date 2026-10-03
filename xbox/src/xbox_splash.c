@@ -19,6 +19,7 @@
 #include "xbox_io.h"
 #include "xbox_splash.h"
 #include "xbox_fbdump.h"
+#include "xbox_settings.h"
 
 #ifndef XBOX_SPLASH_MS
 #define XBOX_SPLASH_MS 2000
@@ -87,26 +88,66 @@ static void draw_centered(const char* s, int y, int zoom, unsigned int col) {
 
 static int init_fb(void) {
     if (s_ready) return 1;
-    if (!XVideoSetMode(SCR_W, SCR_H, 32, REFRESH_DEFAULT)) return 0;
+    if (!xbox_video_set_480()) return 0;   /* 480i when progressive = 0 (safe video) */
     s_fb = (unsigned int*)XVideoGetFB();
     if (!s_fb) return 0;
     s_ready = 1;
     return 1;
 }
 
-/* Any controller button — used to skip the hold. SDL's gamecontroller
- * subsystem may not be up yet; then we simply wait out the timer. */
-static int any_button(void) {
-    int i, b;
-    if (!SDL_WasInit(SDL_INIT_GAMECONTROLLER)) return 0;
+/* Controllers during the splash: any button skips the hold, and BACK held
+ * as it ends is safe video (xbox_settings_safe_video). SDL's gamecontroller
+ * subsystem is started before the splash (xbox_main.c); pads are opened
+ * here as USB enumerates them and closed once the splash is done, and a
+ * pad's buttons read as down only from the update after its open. */
+#define MAX_PADS 4
+static SDL_GameController* s_pads[MAX_PADS];
+
+static void pads_open(void) {
+    int i;
+    if (!SDL_WasInit(SDL_INIT_GAMECONTROLLER)) return;
     SDL_GameControllerUpdate();
-    for (i = 0; i < SDL_NumJoysticks(); i++) {
-        SDL_GameController* gc = SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(i));
-        if (!gc) continue;
-        for (b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++)
-            if (SDL_GameControllerGetButton(gc, (SDL_GameControllerButton)b)) return 1;
+    for (i = 0; i < SDL_NumJoysticks() && i < MAX_PADS; i++)
+        if (!s_pads[i] && SDL_IsGameController(i)) s_pads[i] = SDL_GameControllerOpen(i);
+}
+
+/* button b down on any open pad; b < 0: any button */
+static int pad_down(int b) {
+    int i, k;
+    for (i = 0; i < MAX_PADS; i++) {
+        if (!s_pads[i]) continue;
+        for (k = b < 0 ? 0 : b; k < (b < 0 ? SDL_CONTROLLER_BUTTON_MAX : b + 1); k++)
+            if (SDL_GameControllerGetButton(s_pads[i], (SDL_GameControllerButton)k)) return 1;
     }
     return 0;
+}
+
+static void pads_close(void) {
+    int i;
+    for (i = 0; i < MAX_PADS; i++)
+        if (s_pads[i]) {
+            SDL_GameControllerClose(s_pads[i]);
+            s_pads[i] = NULL;
+        }
+}
+
+/* wait up to `ms` for the hold, polling the pads; 1 if a button ended it */
+static int pads_wait(DWORD ms, int stop_on_button) {
+    DWORD t0 = GetTickCount();
+    while (GetTickCount() - t0 < ms) {
+        pads_open();
+        if (stop_on_button && pad_down(-1)) return 1;
+        Sleep(16);
+    }
+    return 0;
+}
+
+/* BACK held now (one more update after the last open) */
+static void read_safe_video(void) {
+    pads_open();
+    SDL_GameControllerUpdate();
+    g_xbox_safe_video_held = pad_down(SDL_CONTROLLER_BUTTON_BACK);
+    pads_close();
 }
 
 #define TITLE_ZOOM 3
@@ -118,9 +159,12 @@ static int any_button(void) {
 
 void xbox_splash_show(void) {
 #ifndef XBOX_NO_SPLASH
-    DWORD t0;
     int step;
-    if (!init_fb()) return;
+    if (!init_fb()) {
+        pads_wait(1500, 0);   /* no splash: still give USB time for safe video */
+        read_safe_video();
+        return;
+    }
     fill_bg(0, SCR_H);
     /* fade in over ~500 ms: redraw only the title band */
     for (step = 0; step <= 16; step++) {
@@ -131,16 +175,17 @@ void xbox_splash_show(void) {
          * fails with -4 when the NV2A backend starts */
         Sleep(30);
     }
+    /* the way out for a TV that doesn't show the saved mode (720p, 480p) */
+    draw_centered("Hold BACK for 480i", SCR_H - 56, 1, rgb(110, 120, 140));
     xbox_logf("[XBOX] splash: %s\n", SPLASH_TEXT);
 #ifdef XBOX_SPLASH_DUMP
     xbox_fbdump(s_fb, SCR_W, SCR_H, 32, SCR_W * 4);
 #endif
-    t0 = GetTickCount();
-    while (GetTickCount() - t0 < XBOX_SPLASH_MS) {
-        if (any_button()) break;
-        Sleep(16);
-    }
+    pads_wait(XBOX_SPLASH_MS, 1);
+#else
+    pads_wait(1500, 0);   /* no splash: still give USB time for safe video */
 #endif
+    read_safe_video();
 }
 
 /* The GPU backend is about to change the video mode (720p): XVideoSetMode

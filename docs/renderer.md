@@ -50,10 +50,24 @@ else A8R8G8B8. Grey and alpha are exact. A 5/6-bit channel is accepted when
 it is `x * 255 / 31` (the decoder) or bit replication (a framebuffer read
 back) of some x; the NV2A expands by replication, as the GameCube does, so
 such a texel can be 1/255 off the decoder's value. The NES screen is stored
-as R5G6B5. xemu title demo: 440 of 864 KB saved, screenshots identical but
+as R5G6B5, two texels a word with red and blue swapped in place (256 wide:
+no column padding, and swizzled x, x + 1 are neighbours); the per-texel
+loop took 3 ms of a 19 ms NES frame on the console. xemu title demo: 440 of 864 KB saved, screenshots identical but
 for ±1 on 16-bit texels. A re-upload of the same size and format rewrites
 the texture in place (`texture_reuse`) when the GPU can't be reading it.
 `perf.log`'s minute line counts uploads by stored size and the KB saved.
+
+## FPS counter
+
+`fps_overlay` (from Melee-X): frames presented over the last half second,
+drawn at present as clear-rect colour fills (one pushbuffer block) of the
+lit runs of 5x7 digits, yellow on black, 2x (3x at 720p), inside the TV-safe area. `fps_counter` in
+`settings.ini` / Options > Video, live. `-DXBOX_FPS_DEFAULT=1` makes it the
+default for test builds.
+
+Clear colours go to `pb_fill` as A8R8G8B8: pbkit converts them to the
+surface's format itself. Converting them to R5G6B5 first made every clear
+colour near black at 720p (fixed in round C; Melee-X had the same bug).
 
 ## Per-draw work
 
@@ -117,6 +131,8 @@ drops pc_gx.c's full-res EFB captures (up to 4, 2 MB each for a screen grab).
 
 ## Register values that bit us (see traps.md)
 
+- `TEXTURE_CONTROL1` pitch: a multiple of 64 even for swizzled textures,
+  which don't use it. A 4x4 AY8 gave 4 and a PGRAPH data error on hardware.
 - `TEXTURE_FORMAT` bit 3 = 1 (border from colour).
 - `SPECULAR_ENABLE` 1 + `LIGHT_CONTROL` `ALPHA_FROM_MATERIAL_SPECULAR`.
 - `FRONT_FACE` CCW.

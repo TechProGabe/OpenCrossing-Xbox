@@ -35,7 +35,7 @@ USER = os.environ.get("OCX_FTP_USER", "xbox")
 PASS = os.environ.get("OCX_FTP_PASS", "xbox")
 APP = "/F/Applications/OpenCrossing"
 UDATA = "/E/UDATA/4f430001"
-LOGS = re.compile(r"^(boot\d?\.log|last\.log|perf\.log|crash\.log|hang\.log|input\.log|stick\d\.log)$")
+LOGS = re.compile(r"^((boot\d?|last|perf|crash|hang)(_prev)?\.log|input\.log|stick\d\.log|nes_shot\.raw)$")
 KEEP = ("settings.ini",)   # pulled, never deleted
 FILES = ("default.xbe", "default.tbn")
 

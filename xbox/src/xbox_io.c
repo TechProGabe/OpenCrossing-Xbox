@@ -133,11 +133,41 @@ static unsigned s_pend_len[2], s_pend_cur, s_pend_drops;
 static RTL_CRITICAL_SECTION s_pend_lock;
 static unsigned s_file_bytes, s_file_no = 1;   /* boot.log = 1, then 2, 3, 2, ... */
 static volatile int s_pump_seen;   /* the watchdog called xbox_bootlog_pump */
+static RTL_CRITICAL_SECTION s_pump_lock;   /* one writer at a time (watchdog, quit) */
+/* Lines of these kinds wake the watchdog to write the queue at once rather
+ * than within the second: they come right before a user turns the console
+ * off (an error on screen, a quit), and the NES card error of v2 left no
+ * line at all. */
+static HANDLE s_pump_event;
+static const char* const k_urgent[] = { "[NES]", "[AUDIO]", "[CARD]", "[VIDEO]", "[XBOX]", "[CRASH]", "[WDOG]", "[NV2A] GPU" };
+void* xbox_bootlog_event(void) { return s_pump_event; }
+static int urgent(const char* s, size_t n) {
+    size_t i, k;
+    for (i = 0; i < sizeof k_urgent / sizeof k_urgent[0]; i++) {
+        k = strlen(k_urgent[i]);
+        if (n >= k && memcmp(s, k_urgent[i], k) == 0) return 1;
+    }
+    return 0;
+}
+
+/* The previous boot's logs are kept as *_prev.log (from Melee-X): a restart
+ * from the Options menu, or a relaunch to try again, used to delete the
+ * logs of the boot that had the problem. One generation only. */
+static void keep_prev(const char* name) {
+    char from[64], to[64];
+    snprintf(from, sizeof from, XBOX_UDATA_DIR "%s.log", name);
+    snprintf(to, sizeof to, XBOX_UDATA_DIR "%s_prev.log", name);
+    DeleteFileA(to);
+    MoveFileA(from, to);
+}
 
 void xbox_bootlog_open(void) {
+    static const char* const logs[] = { "boot", "boot2", "boot3", "last", "perf", "hang", "crash" };
+    int i;
     RtlInitializeCriticalSection(&s_pend_lock);
-    DeleteFileA(XBOX_UDATA_DIR "boot2.log");   /* a previous session's tail */
-    DeleteFileA(XBOX_UDATA_DIR "boot3.log");
+    RtlInitializeCriticalSection(&s_pump_lock);
+    s_pump_event = CreateEventA(NULL, FALSE, FALSE, NULL);
+    for (i = 0; i < (int)(sizeof logs / sizeof logs[0]); i++) keep_prev(logs[i]);
     s_bootlog = CreateFileA(XBOX_UDATA_DIR "boot.log", GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
                             FILE_ATTRIBUTE_NORMAL, NULL);
 }
@@ -180,6 +210,7 @@ static void bootlog_write(const char* s, size_t n) {
             s_pend_drops++;
         }
         RtlLeaveCriticalSection(&s_pend_lock);
+        if (s_pump_event && urgent(s, n)) SetEvent(s_pump_event);
         return;
     }
     WriteFile(h, s, (DWORD)n, &w, NULL);
@@ -187,12 +218,21 @@ static void bootlog_write(const char* s, size_t n) {
     s_file_bytes += (unsigned)n;
 }
 
-/* the watchdog thread, once a second: write what was queued, flush once */
+/* the watchdog thread, once a second or woken by an urgent line, and a quit
+ * or restart before it leaves: write what was queued, flush once */
+static void bootlog_pump_locked(void);
 void xbox_bootlog_pump(void) {
+    s_pump_seen = 1;
+    if (!s_bootlog_async) return;
+    RtlEnterCriticalSection(&s_pump_lock);
+    bootlog_pump_locked();
+    RtlLeaveCriticalSection(&s_pump_lock);
+}
+
+static void bootlog_pump_locked(void) {
     unsigned c, len, drops;
     DWORD w;
-    s_pump_seen = 1;
-    if (!s_bootlog_async || s_bootlog == INVALID_HANDLE_VALUE) return;
+    if (s_bootlog == INVALID_HANDLE_VALUE) return;
     RtlEnterCriticalSection(&s_pend_lock);
     c = s_pend_cur;
     len = s_pend_len[c];
@@ -445,10 +485,10 @@ const char* xbox_resolve(const char* in, int mode, char* out, size_t cap) {
             break;
         default: /* XBOX_PATH_READ */
 #ifdef XBOX_DBG_SAVE_FROM_D
-            /* test runs: a save packed on the disc wins over the HDD copy a
-             * previous run left (harness OCX_STAGE_EXTRA) */
+            /* test runs: a save or settings.ini packed on the disc wins over
+             * the HDD copy a previous run left (harness OCX_STAGE_EXTRA) */
             join(out, cap, XBOX_DISC_DIR, in);
-            if (strncmp(in, "save/", 5) == 0 && file_exists(out)) break;
+            if ((strncmp(in, "save/", 5) == 0 || strcmp(in, "settings.ini") == 0) && file_exists(out)) break;
 #endif
             join(out, cap, XBOX_UDATA_DIR, in);
             if (!file_exists(out)) join(out, cap, XBOX_DISC_DIR, in);
@@ -518,4 +558,24 @@ int xbox_rename(const char* from, const char* to) {
     /* xbox_resolve always NUL-terminates; resolved HDD paths are "E:\\..." */
     if (b[0] && b[1] == ':') flush_volume(b[0]);
     return ok ? 0 : -1;
+}
+
+/* local time minus UTC, in seconds, from the dashboard's time zone and DST
+ * rule (what nxdk's GetLocalTime applies). pc_os.c's OSInit adds it to UTC,
+ * so the game clock reads the dashboard's local time, as a GameCube's RTC
+ * holds local time. */
+long xbox_local_offset_secs(void) {
+    TIME_ZONE_INFORMATION tz;
+    long bias;
+    switch (GetTimeZoneInformation(&tz)) {
+        case TIME_ZONE_ID_UNKNOWN: bias = tz.Bias; break;
+        case TIME_ZONE_ID_STANDARD: bias = tz.Bias + tz.StandardBias; break;
+        case TIME_ZONE_ID_DAYLIGHT: bias = tz.Bias + tz.DaylightBias; break;
+        default: bias = 0; break;
+    }
+    {
+        static int logged;   /* OSInit runs twice */
+        if (!logged++) xbox_logf("[CLOCK] dashboard time zone: UTC%+ld:%02ld\n", -bias / 60, (bias < 0 ? -bias : bias) % 60);
+    }
+    return -bias * 60L;
 }

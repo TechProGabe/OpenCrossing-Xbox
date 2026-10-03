@@ -116,6 +116,17 @@ key (`[Xbox]`, 0 = old behaviour) or compile switch for each:
 | native texture formats | `xbox_nv2a.c` | `native_textures` | xemu: 440 of 864 KB saved, shots match |
 | texture reuse (NES screen in place) | `xbox_nv2a.c` | `texture_reuse` | built; NES not exercised in xemu |
 
+Round C (2026-10-03, after v1 on hardware: stable, audio fine): FPS
+counter, safe video (BACK at boot, `progressive`, a 480i/480p/720p Output
+row), `*_prev.log` kept across boots, the clock overflow fix in `pc_os.c`,
+16-bit clear colours no longer converted twice.
+
+v2-v4 on hardware: stable, NES plays at 720p, the first console profile
+(`perf.md`). v5 (2026-10-03), from that profile and the v4 report: texture
+cache index (`PC_TEX_CACHE_INDEX`), inline compares in the shim, the NES
+upload fast path, the audio producer's priority (`audio_priority`) with an
+underrun count in `[BEAT]`, the texture pitch fault.
+
 Not done in this round: atomic `settings.ini` writes, the 128 MB hold,
 sampled texture rechecks, EFB copies on the GPU, SSE matrices, prefetches,
 per-TU levels (all wait for the console profile), round C.

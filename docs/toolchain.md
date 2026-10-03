@@ -32,8 +32,9 @@ tools/xbox/fbdump_to_png.py ~/xemu/run/serial.log out   # [FBDUMP] -> PNG
 `run.sh` packs the XBE and the image into an XISO, boots it with COM1
 logged to `~/xemu/run/serial.log`, and stops at the regex or the timeout.
 `OCX_STAGE_EXTRA=<dir>` adds files to the disc (for example a
-`save/card_a/*.gci`; build with `-DXBOX_DBG_SAVE_FROM_D` to read saves from
-`D:\`). xemu needs your own MCPX ROM, BIOS and HDD image, set to 64 MB.
+`save/card_a/*.gci`; build with `-DXBOX_DBG_SAVE_FROM_D` to read saves and
+`settings.ini` from `D:\` over the HDD's; `-DXBOX_DBG_FRESH_UDATA` uses an
+empty `E:\UDATA\4f43ff01`, a first boot). xemu needs your own MCPX ROM, BIOS and HDD image, set to 64 MB.
 xemu has no screenshot command; use `-DXBOX_FBDUMP_EVERY=N`.
 
 xemu is not hardware: it never plays AC97 on macOS, has no CPU cache model,
@@ -63,7 +64,8 @@ game writes logs to `E:\UDATA\4f430001\`:
 
 | file | written |
 |---|---|
-| `boot.log` | every log line: flushed per line until frame 120, then queued and written by the watchdog once a second. The first 4 MB; then `boot2.log` and `boot3.log` in turn, 2 MB each (all deleted at boot). `[BEAT]` every 5 s (vblank count, frames presented, free KB), `[FRAME]` every 5 s, `[PROF]` in profiler builds |
+| `boot.log` | every log line: flushed per line until frame 120, then queued and written by the watchdog once a second, or at once for urgent lines (`[NES]`, `[AUDIO]`, `[CARD]`, `[VIDEO]`, `[XBOX]`, crashes, GPU faults) and on a quit or restart. The first 4 MB; then `boot2.log` and `boot3.log` in turn, 2 MB each (all deleted at boot). `[BEAT]` every 5 s (vblank count, frames presented, free KB), `[FRAME]` every 5 s, `[PROF]` in profiler builds |
+| `*_prev.log` | each boot first renames the previous boot's `boot*.log`, `last.log`, `perf.log`, `hang.log` and `crash.log` to `*_prev.log` (one generation): a restart no longer loses the logs of the boot before it |
 | `last.log` | rewritten by the watchdog within 3 s of anything being logged (and every 30 s): the last 4 KB of log plus a `[STATE]` line (renderer, pushbuffer, texture pool, GPU faults). After a hard freeze it holds the seconds before it |
 | `crash.log` | written when a CPU exception (page fault, ...) hits a game thread: fault address, registers, `[STATE]`, stack words; the same report is drawn on screen |
 | `perf.log` | once a minute a `min N` line: fps, CPU ms, frames over 17 (missed vblank) / 33 / 100 ms, pushbuffer peak, texture pool use, free RAM, GPU faults. Above each, indented, that minute's `[HITCH]` lines of 100 ms and over, `[PACE]` and `[NES]` lines (written every 15 s) |

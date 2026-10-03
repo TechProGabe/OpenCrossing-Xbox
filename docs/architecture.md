@@ -90,10 +90,13 @@ lectured after a clean power-off.
 
 `settings.ini` is the PC port's file plus an `[Xbox]` section
 (`xbox_stick_deadzone`, `rumble`, `video_720p`, `widescreen` (default 0 =
-4:3), and menu-less test switches: `gpu_overlap` and the Melee-X backport's
+4:3), `progressive` (0 = 480i where the dashboard allows 480p),
+`fps_counter`, and menu-less test switches: `gpu_overlap` and the Melee-X backport's
 `native_textures`, `texture_reuse`, `draw_skip`, `vertex_cache_break`,
-`strict_gpu_wait`, `pushbuffer_kick_kb`, `audio_fix`, each 1 = new behaviour,
-0 = the old one, read at boot; `opt_version` marks a file that has them). The PC writer
+`strict_gpu_wait`, `pushbuffer_kick_kb`, `audio_fix`, `audio_priority`, each
+1 = new behaviour, 0 = the old one, read at boot; `opt_version` marks a file
+that has them and drives one-time moves: 2 raised the C-stick dead zone to
+30%). The PC writer
 rewrites the whole file, so `xbox_settings.c` appends the section after
 every save. The left stick dead zone used to live in `controller.ini`; the
 first boot without `xbox_stick_deadzone` takes that value over, and the old
@@ -107,7 +110,7 @@ Quit Game) in game. Both drive the Options page in `xbox_settings_menu.c`:
 
 | tab | rows |
 |---|---|
-| Video | Output (480i/480p as the dashboard allows, or 720p; needs a restart), Widescreen (4:3 default, 16:9, Auto = dashboard; 16:9 draws more of the scene and costs frame time), Texture filter |
+| Video | Output (480i, 480p and 720p as the dashboard allows; needs a restart), Widescreen (4:3 default, 16:9, Auto = dashboard; 16:9 draws more of the scene and costs frame time), Texture filter, FPS counter (live) |
 | Audio | Master volume |
 | Controls | Stick deadzone (radial, 0-60%, live stick readout), C-stick deadzone, Rumble (0-100%), Buttons (controller rebinding) |
 | Gameplay | Resetti, Shop upgrade (Singleplayer by default on the Xbox: the visitor Nookington's wants needs a second town in `save/card_b`; switched once on the first boot without an `[Xbox]` section), Borderless acres, NES aspect |
@@ -117,13 +120,27 @@ reboots, which relaunches a disc). Applying a new output offers a restart
 (`XLaunchXBE` of `D:\<this xbe>`). Both first stop the sound and the USB
 host controller (`leave_game`, `traps.md`).
 
+## Safe video
+
+Holding BACK on any controller as the splash ends (the splash says so) runs
+this boot at 480i and saves `video_720p = 0` and `progressive = 0`, so a TV
+that doesn't show the saved mode never stays black; Options > Video > Output
+turns them back on (from Melee-X). The controllers are started before the
+splash for it, opened during it and closed after; without a splash the boot
+still waits 1.5 s for them. 480i on an HDTV pack set to 480p uses nxdk's
+`XVideoInit` with the 640x480i mode (`xbox_video_set_480`), for the GPU and
+for the splash and error screens alike. Other packs and PAL have no 480p, so
+the Output row offers 480i/480p only on a component (HDTV) pack.
+
 ## Screen size
 
 `pc_gx.c` draws into a logical screen of `g_pc_window_w` x `g_pc_window_h`:
 640x480, or 854x480 for 16:9, where its hor+ correction widens the 3D view
-and pillarboxes 2D art. The GL shim scales viewports, scissors and read-backs
-onto the real framebuffer: 854x480 onto 640x480 is the anamorphic squeeze a
-16:9 TV undoes; 720p is 1280x720 and always 16:9 (`renderer.md`).
+and pillarboxes some 2D art (not all: the title logo comes out ~1.3x wide).
+The GL shim scales viewports, scissors and read-backs onto the real
+framebuffer: 854x480 onto 640x480 is the anamorphic squeeze a 16:9 TV
+undoes; 720p is 1280x720 and always 16:9 (`renderer.md`). NES games are 4:3
+between black bars inside it (`nes_aspect`, `pc_nes_fixnes.c`).
 
 ## Distribution
 
