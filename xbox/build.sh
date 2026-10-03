@@ -7,7 +7,9 @@
 # so a knob from an earlier test build never leaks into the next one.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-bdir="build-xbox${XBOX_TARGET:+-$XBOX_TARGET}"
+#   XBOX_BUILD_DIR    build directory under the repo (default build-xbox), so two
+#                     builds can run side by side
+bdir="${XBOX_BUILD_DIR:-build-xbox${XBOX_TARGET:+-$XBOX_TARGET}}"
 objs=OFF; [ "${XBOX_TARGET:-}" = objs ] && objs=ON
 docker run --rm -v "$root":/src -w /src opencrossing-xbox:sdk bash -c "
   set -e

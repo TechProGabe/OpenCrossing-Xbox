@@ -62,3 +62,32 @@ pool full` lines) in town, houses and the museum.
 
 On hardware (beta-3, 2026-09-28) 720p starts, looks right and runs at
 60 fps; the pool in busy rooms has no measurement yet.
+
+## 128 MB consoles (2026-10-03)
+
+A console upgraded to 128 MB runs as a stock 64 MB one. cxbe marks every
+nxdk XBE "limit to 64 MB" (XBE init flags `0x124`, bit `0x4`), and a 128
+MB-aware BIOS honours it: Cerbios in xemu at `mem_limit = '128'` reports
+`free 38184 KB of 131072 KB` at boot, as GitHub issue #2's console did
+(`free 38644 KB of 131072 KB`). The stock (Complex 4627) BIOS in xemu sees
+only 64 MB at `mem_limit = '128'`.
+
+For a kernel that hands the upper 64 MB out anyway, `xbox_mem_lock64`
+(`xbox_ramlock.c`, first thing in `main_body`) commits every free page in a
+top-down reservation, keeps the ones at or above 64 MB, decommits the rest,
+and repeats while a pass finds some. They are never given back. Melee-X's
+way (`xhw_mem_hold_upper`: contiguous blocks between 64 and 128 MB) held
+4 KB of the 64 MB in xemu with the flag cleared. Kill switch
+`-DXBOX_RAM_LOCK64=0`. Why not use the RAM: `architecture.md`, "Decided
+against".
+
+xemu, 480, fresh UDATA, autopad new game through Rover's train into town
+(frame ~12000), no crash in any:
+
+| | 64 MB (Complex) | 128 MB, Cerbios, XBE as built | 128 MB, Cerbios, flag cleared |
+|---|---|---|---|
+| boot log | no `128 MB` line | nothing above 64 MB is free (60 ms) | upper 64 MB held: 65140 KB, 2 passes, 137 ms |
+| free at boot | 38236 KB | 38184 KB | 38332 KB |
+| after GPU init | 20236 KB | 20184 KB | 20332 KB |
+| in town | 4584 KB | 4532 KB | 4676 KB |
+| texture pool peak | 5240 KB | 5130 KB | 5130 KB |

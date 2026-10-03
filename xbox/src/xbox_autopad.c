@@ -15,6 +15,7 @@
  *   <call> SDL <button>      push an SDL controller button press+release (the
  *                            pause menu and the rebinding page read those):
  *                            A B X Y BACK START WHITE BLACK UP DOWN LEFT RIGHT
+ *                            RS (right stick click: screenshots)
  *   <call> STICK <x> <y> [hold]  hold the main stick at x,y (-100..100, up is
  *                            +y) for [hold] calls (default 4)
  *   <call> SHOT              one [FBDUMP] screenshot at the next present
@@ -63,7 +64,7 @@ static int sdl_button(const char* n, u32* out) {
         { "A", SDL_CONTROLLER_BUTTON_A }, { "B", SDL_CONTROLLER_BUTTON_B }, { "X", SDL_CONTROLLER_BUTTON_X },
         { "Y", SDL_CONTROLLER_BUTTON_Y }, { "BACK", SDL_CONTROLLER_BUTTON_BACK },
         { "START", SDL_CONTROLLER_BUTTON_START }, { "WHITE", SDL_CONTROLLER_BUTTON_LEFTSHOULDER },
-        { "BLACK", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER }, { "UP", SDL_CONTROLLER_BUTTON_DPAD_UP },
+        { "BLACK", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER }, { "RS", SDL_CONTROLLER_BUTTON_RIGHTSTICK }, { "UP", SDL_CONTROLLER_BUTTON_DPAD_UP },
         { "DOWN", SDL_CONTROLLER_BUTTON_DPAD_DOWN }, { "LEFT", SDL_CONTROLLER_BUTTON_DPAD_LEFT },
         { "RIGHT", SDL_CONTROLLER_BUTTON_DPAD_RIGHT },
     };

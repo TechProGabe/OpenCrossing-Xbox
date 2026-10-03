@@ -128,7 +128,8 @@ static void trace_dump(void) {
  * the character lurches backwards. Smooth data, no spikes. So:
  * Picked by replaying four hardware traces (tools: scratch stick_sim.py):
  * 43% radial -> 0 phantom frames at rest, 0 missed pushes; an adaptive
- * "learn the rest point" variant was worse (8 phantom frames).
+ * "learn the rest point" variant was worse (8 phantom frames). The default
+ * is 40% since 2026-10-03 (both sticks: most controllers are worn).
  *  - radial deadzone (g_xbox_settings.stick_deadzone, below) on
  *    the stick vector, zeroing both axes inside it and rescaling the rest so
  *    the whole tilt range past it still maps onto walk..run;

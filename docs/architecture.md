@@ -56,10 +56,11 @@ pointers with the shim, so `pc/` needs no Xbox branches. Only `pc_gx_tev.c`
 | `xbox_audio.c` | own polled AC97 driver on hardware, APU voice under xemu |
 | `xbox_pad_axis.c` | left-stick shaping for worn controllers, stick trace, rumble scaling |
 | `xbox_settings.c` | `[Xbox]` section of `settings.ini`, logical screen size, quit / restart |
-| `xbox_settings_menu.c` | the Options page (title screen and pause menu), replaces `pc_settings_menu.c` |
+| `xbox_settings_menu.c` | the Options page (title screen and pause menu), replaces `pc_settings_menu.c`; drawn in the game's style (cream notebook sheet, wood frame, green name tag, speech-bubble prompts) as untextured triangles in the font display list: no textures, allocations or file I/O; one `[MENU]` line per visit logs display-list headroom |
 | `xbox_watchdog.c` | hang reporter (screen + `hang.log`), rolling `last.log` |
 | `xbox_crash.c` | CPU exception reporter (screen + `crash.log`) |
 | `xbox_mem.c` | word-at-a-time `mem*` (pdclib's are byte loops); the prelude makes constant-size calls builtins |
+| `xbox_ramlock.c` | a 128 MB console runs as 64 MB: holds the free pages above 64 MB at boot (`memory.md`) |
 | `xbox_prof.c` | sampling profiler of the game thread (`-DXBOX_PROF=1`, `perf.md`) |
 
 ## Files on the console
@@ -91,12 +92,12 @@ lectured after a clean power-off.
 `settings.ini` is the PC port's file plus an `[Xbox]` section
 (`xbox_stick_deadzone`, `rumble`, `video_720p`, `widescreen` (default 0 =
 4:3), `progressive` (0 = 480i where the dashboard allows 480p),
-`fps_counter`, and menu-less test switches: `gpu_overlap` and the Melee-X backport's
+`fps_counter`, `screenshots`, and menu-less test switches: `gpu_overlap` and the Melee-X backport's
 `native_textures`, `texture_reuse`, `draw_skip`, `vertex_cache_break`,
 `strict_gpu_wait`, `pushbuffer_kick_kb`, `audio_fix`, `audio_priority`, each
 1 = new behaviour, 0 = the old one, read at boot; `opt_version` marks a file
 that has them and drives one-time moves: 2 raised the C-stick dead zone to
-30%). The PC writer
+30%, 3 moved both sticks' old defaults, 43% left and 30% C-stick, to 40%). The PC writer
 rewrites the whole file, so `xbox_settings.c` appends the section after
 every save. The left stick dead zone used to live in `controller.ini`; the
 first boot without `xbox_stick_deadzone` takes that value over, and the old
@@ -154,6 +155,12 @@ never an XISO.
 ## Decided against
 
 - 64-bit build: the decomp assumes 32-bit pointers, and the Xbox is 32-bit.
+- Using the RAM of a console upgraded to 128 MB (a Melee-X style `ram128`
+  setting, bigger texture pool and ARAM cache): everything is built and
+  tested for 64 MB, pbkit and the shim mask GPU addresses with `0x03FFFFFF`,
+  emu64's `seg2k0` reads a pointer in `0x03000000-0x0FFFFFFF` as a segment
+  address, and allocations that fail on 64 MB (and fall back) would succeed
+  and move the heap. A 128 MB console runs as a 64 MB one (`memory.md`).
 - The PC port's GLSL shader path: nxdk has no GLSL compiler.
 - pbgl for the renderer: replaced by the GL shim over pbkit.
 - Cg for the vertex program: `cgc` does not run in the arm64 SDK image;

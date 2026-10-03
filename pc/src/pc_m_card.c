@@ -459,6 +459,27 @@ static int pc_save_write_gci_ex(const char* gci_path, const char* tmp_path, int 
 }
 
 /* Read a GCI file into common_data (for home town / Card A) */
+#ifdef TARGET_XBOX
+/* The game clock is the console clock plus time_delta, set when the
+ * player adjusts the time. Until 2026-10-03 the Xbox's console clock
+ * read ~56 years ahead (pc_os.c: nxdk's mktime failed), so a delta set
+ * then is about -56 years and puts the fixed clock back in ~1970.
+ * Real deltas stay within the game's years (2000-2030ish): anything
+ * past 40 years can only be that, and goes to 0 (the console's local
+ * time). The player can set the clock again in the game. Card A's town
+ * and a visited town (Card B) alike. */
+static void pc_xbox_fix_time_delta(Save_t* save) {
+    s64 d = save->time_delta;
+    const s64 tps = 40500000;   /* GameCube timer ticks a second (bus clock / 4) */
+    s64 lim = (s64)40 * 365 * 24 * 3600 * tps;
+    if (d > lim || d < -lim) {
+        OSReport("[CLOCK] save's time offset %lld s is from the old clock bug: reset to 0 (console time)\n",
+                 (long long)(d / tps));
+        save->time_delta = 0;
+    }
+}
+#endif
+
 static int pc_save_read_gci(const char* path) {
     FILE* fp;
     CARDDir dir_hdr;
@@ -521,23 +542,7 @@ static int pc_save_read_gci(const char* path) {
     memcpy(&common_data.save.save, save_src, sizeof(Save_t));
     pc_save_bswap(&common_data.save.save, PC_BSWAP_FROM_BE);
 #ifdef TARGET_XBOX
-    /* The game clock is the console clock plus time_delta, set when the
-     * player adjusts the time. Until 2026-10-03 the Xbox's console clock
-     * read ~56 years ahead (pc_os.c: nxdk's mktime failed), so a delta set
-     * then is about -56 years and puts the fixed clock back in ~1970.
-     * Real deltas stay within the game's years (2000-2030ish): anything
-     * past 40 years can only be that, and goes to 0 (the console's local
-     * time). The player can set the clock again in the game. */
-    {
-        s64 d = common_data.save.save.time_delta;
-        const s64 tps = 40500000;   /* GameCube timer ticks a second (bus clock / 4) */
-        s64 lim = (s64)40 * 365 * 24 * 3600 * tps;
-        if (d > lim || d < -lim) {
-            OSReport("[CLOCK] save's time offset %lld s is from the old clock bug: reset to 0 (console time)\n",
-                     (long long)(d / tps));
-            common_data.save.save.time_delta = 0;
-        }
-    }
+    pc_xbox_fix_time_delta(&common_data.save.save);
 #endif
 
     /* --- Load ARAM blocks from Others section ---
@@ -634,6 +639,9 @@ static int pc_save_read_gci_to_keep(const char* path) {
             return FALSE;
         }
     }
+#ifdef TARGET_XBOX
+    pc_xbox_fix_time_delta(&l_keepSave.save);
+#endif
 
     /* Load ARAM blocks — detect GC vs legacy PC order (same landid check as main load) */
     {

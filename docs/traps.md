@@ -187,8 +187,10 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   so a late hang is in whichever was written last; after frame 120 they are
   up to a second behind (queued, written by the watchdog). `last.log` is the
   last 4 KB plus `[STATE]`, rewritten within 3 s of any non-heartbeat line,
-  and `perf.log` the whole session a minute at a time. Every boot deletes
-  `boot2/3.log`: pull before relaunching.
+  and `perf.log` the whole session a minute at a time. Each boot renames
+  the previous boot's logs to `*_prev.log` (one generation; a log the boot
+  didn't write, such as `crash.log`, keeps its `_prev` copy), so a relaunch
+  loses the logs of two boots back: pull before relaunching twice.
 - **memcpy & co. are macros in C files** (`xbox_prelude.h`, `__builtin_*`).
   A declaration of one after the prelude breaks (`void* memcpy(...)` expands);
   the prelude includes `<string.h>` and the decomp's `_mem.h` first for that
@@ -216,3 +218,18 @@ Known gotchas, most carried from the PC/Anbernic/DC siblings. Add new ones as pa
   remapped for C (libc++ spells `std::fopen`), so a C++ file opening a
   relative path (`famicom.cpp`'s NES save) silently fails on the Xbox. Give
   such a file `fopen=xbox_fopen` (and friends) in CMake.
+- **128 MB in xemu needs a 128 MB-aware BIOS.** At `[sys] mem_limit =
+  '128'` the Complex 4627 BIOS still reports 64 MB; Cerbios reports
+  131072 KB but, honouring the XBE's "limit to 64 MB" flag (cxbe always
+  sets it), keeps the upper 64 MB from the game. To test a kernel that
+  hands it out, clear bit `0x4` of the dword at `0x124` in a copy of the
+  XBE. Contiguous allocations between 64 and 128 MB (Melee-X's hold) got
+  4 KB there; `xbox_ramlock.c` commits pages and keeps the high ones
+  (`memory.md`).
+- **Timer frequencies.** `KeQueryPerformanceCounter` (`xbox_ticks`) is the
+  ACPI timer, 3.375 MHz from a crystal, on any CPU. nxdk's
+  `QueryPerformanceCounter` (SDL's) is the CPU's TSC, and its frequency is
+  worked out from the multiplier and FSB with a 733 MHz fallback; on a CPU
+  upgrade that guess can be wrong (`xbox_clock_check`). Don't time anything
+  against `KeQueryInterruptTime` in xemu: it runs ~7% apart from both
+  counters there.

@@ -25,10 +25,10 @@
 #include "xbox_settings.h"
 
 #ifndef XBOX_STICK_DZ
-#define XBOX_STICK_DZ 43   /* radial %: playtest pad rests up to 41% off centre */
+#define XBOX_STICK_DZ 40   /* radial %: suits worn controllers, and AC needs no fine aim (was 43) */
 #endif
 #ifndef XBOX_CSTICK_DZ
-#define XBOX_CSTICK_DZ 30  /* per-axis %: past the game's own C-button threshold */
+#define XBOX_CSTICK_DZ 40  /* per-axis %: past the game's own C-button threshold, worn sticks too */
 #endif
 
 void pc_settings_load_pc(void);
@@ -40,11 +40,13 @@ void xbox_watchdog_disable(void);
  * GPU overlap on since the Melee-X backport (Melee-X runs it by default since
  * its v33); the backport's switches default to the new behaviour, and 0 in
  * settings.ini puts each one back (docs/backport.md). */
-#define XBOX_OPT_VERSION 2   /* 2: the C-stick dead zone moved up once (pc_settings_load) */
+/* one-time moves in pc_settings_load: 2 raised the C-stick dead zone,
+ * 3 moved both sticks' old defaults (43% left, 30% C-stick) to 40% */
+#define XBOX_OPT_VERSION 3
 #ifndef XBOX_FPS_DEFAULT
 #define XBOX_FPS_DEFAULT 0   /* the FPS counter's default; 1 for test builds */
 #endif
-#define XBOX_SETTINGS_DEFAULTS { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION, XBOX_FPS_DEFAULT, 1, 1 }
+#define XBOX_SETTINGS_DEFAULTS { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION, XBOX_FPS_DEFAULT, 1, 1, 0 }
 XboxSettings g_xbox_settings = XBOX_SETTINGS_DEFAULTS;
 XboxSettings g_xbox_settings_boot = XBOX_SETTINGS_DEFAULTS;
 
@@ -65,6 +67,7 @@ static const struct { const char* key; int* v; int lo, hi; } k_opt_keys[] = {
     { "fps_counter", &g_xbox_settings.fps_counter, 0, 1 },
     { "progressive", &g_xbox_settings.progressive, 0, 1 },
     { "audio_priority", &g_xbox_settings.audio_priority, 0, 1 },
+    { "screenshots", &g_xbox_settings.screenshots, 0, 1 },
 };
 #define N_OPT_KEYS ((int)(sizeof k_opt_keys / sizeof k_opt_keys[0]))
 
@@ -127,6 +130,14 @@ static int read_xbox_section(void) {
     return have;
 }
 
+/* Before the splash: the [Xbox] keys alone, for progressive, so a console
+ * saved at 480i shows the splash and the no-disc screen at 480i too (the
+ * full load, pc_settings_load, comes after them and reads it again). */
+void xbox_settings_early(void) {
+    read_xbox_section();
+    g_xbox_settings_boot.progressive = g_xbox_settings.progressive;
+}
+
 static void append_xbox_section(void) {
     FILE* f = fopen(k_file, "a");
     if (!f) {
@@ -134,8 +145,8 @@ static void append_xbox_section(void) {
         return;
     }
     fprintf(f, "\n[Xbox]\n");
-    fprintf(f, "# Left stick dead zone in percent (0-60). 43 suits a worn controller whose\n");
-    fprintf(f, "# stick doesn't centre; one in good shape feels better at 15-20.\n");
+    fprintf(f, "# Left stick dead zone in percent (0-60). 40 by default, for worn sticks that\n");
+    fprintf(f, "# don't centre; 15-20 feels better on a controller in good shape.\n");
     fprintf(f, "xbox_stick_deadzone = %d\n", g_xbox_settings.stick_deadzone);
     fprintf(f, "\n# Rumble strength in percent (0 = off)\n");
     fprintf(f, "rumble = %d\n", g_xbox_settings.rumble);
@@ -147,6 +158,9 @@ static void append_xbox_section(void) {
     fprintf(f, "progressive = %d\n", g_xbox_settings.progressive);
     fprintf(f, "\n# On-screen frame rate: 1 = on (Options > Video)\n");
     fprintf(f, "fps_counter = %d\n", g_xbox_settings.fps_counter);
+    fprintf(f, "\n# Screenshots: 1 = clicking the right stick saves shot00.bmp, shot01.bmp...\n");
+    fprintf(f, "# next to this file (handy for bug reports). Options > Video\n");
+    fprintf(f, "screenshots = %d\n", g_xbox_settings.screenshots);
     fprintf(f, "\n# Widescreen: 0 = 4:3, 1 = 16:9, 2 = follow the dashboard setting\n");
     fprintf(f, "widescreen = %d\n", g_xbox_settings.widescreen);
     fprintf(f, "\n# Testing: 1 = the next frame's game logic runs while the GPU draws,\n");
@@ -187,10 +201,21 @@ void pc_settings_load(void) {
     /* AC turns the C-stick into the N64 C buttons past ~23% (29 of 127,
      * contreaddata.c), and the choice lists scroll on C-down: a worn right
      * stick resting a quarter off centre scrolled every list down by itself
-     * (2026-10-03). 30% on the Xbox, raised once for older files. */
+     * (2026-10-03). 40% on the Xbox (30% at first), raised once for older files. */
     if (s_file_version < 2 && g_pc_settings.cstick_deadzone < XBOX_CSTICK_DZ) {
         xbox_logf("[Settings] C-stick dead zone %d%% -> %d%%\n", g_pc_settings.cstick_deadzone, XBOX_CSTICK_DZ);
         g_pc_settings.cstick_deadzone = XBOX_CSTICK_DZ;
+    }
+    /* Until 2026-10-03 the defaults were 43% (left) and 30% (C-stick): a
+     * file still holding them never had them chosen, so they move to 40%
+     * once. 40% suits the worn controllers most people have. */
+    if (s_file_version >= 2 && s_file_version < 3 && g_pc_settings.cstick_deadzone == 30) {
+        xbox_logf("[Settings] C-stick dead zone 30%% -> %d%%\n", XBOX_CSTICK_DZ);
+        g_pc_settings.cstick_deadzone = XBOX_CSTICK_DZ;
+    }
+    if ((have & HAVE_DZ) && s_file_version < 3 && g_xbox_settings.stick_deadzone == 43) {
+        xbox_logf("[Settings] left stick dead zone 43%% -> %d%%\n", XBOX_STICK_DZ);
+        g_xbox_settings.stick_deadzone = XBOX_STICK_DZ;
     }
     if (!(have & HAVE_DZ)) {
         int dz = xbox_controller_ini_deadzone();
@@ -202,10 +227,10 @@ void pc_settings_load(void) {
     if (have != HAVE_ALL) pc_settings_save();   /* write the missing keys once */
     g_xbox_settings_boot = g_xbox_settings;
     xbox_logf("[Settings] Xbox: stick dead zone %d%%, rumble %d%%, 720p %d, progressive %d, widescreen %d, "
-              "gpu overlap %d, fps counter %d (encoder %08x)\n",
+              "gpu overlap %d, fps counter %d, screenshots %d (encoder %08x)\n",
               g_xbox_settings.stick_deadzone, g_xbox_settings.rumble, g_xbox_settings.video_720p,
               g_xbox_settings.progressive, g_xbox_settings.widescreen, g_xbox_settings.gpu_overlap,
-              g_xbox_settings.fps_counter, (unsigned)encoder_settings());
+              g_xbox_settings.fps_counter, g_xbox_settings.screenshots, (unsigned)encoder_settings());
     xbox_logf("[Settings] backport: native_textures %d texture_reuse %d draw_skip %d vertex_cache_break %d "
               "strict_gpu_wait %d pushbuffer_kick_kb %d audio_fix %d audio_priority %d\n",
               g_xbox_settings.native_tex, g_xbox_settings.tex_reuse, g_xbox_settings.draw_skip,
@@ -268,8 +293,8 @@ int xbox_video_480p_allowed(void) {
  * dashboard would give 480p but progressive = 0 (settings.ini, or safe
  * video). XVideoSetMode always picks 480p on an HDTV pack set to 480p, so
  * nxdk's own XVideoInit sets the 640x480i mode after it has recorded the
- * size for pbkit (Melee-X's set_mode_480). Before the settings load,
- * progressive is its default 1. */
+ * size for pbkit (Melee-X's set_mode_480). The splash reads progressive
+ * from xbox_settings_early. */
 void XVideoInit(DWORD dwMode, int width, int height, int bpp);   /* nxdk hal/video.c */
 #define MODE_640x480I_HDTV 0x0801010du
 int xbox_video_set_480(void) {

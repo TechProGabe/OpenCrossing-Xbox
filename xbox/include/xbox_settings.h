@@ -40,6 +40,7 @@ typedef struct {
     int progressive;    /* 0 = 480i even where the dashboard allows 480p; BACK
                          * held at boot sets it and video_720p to 0 (safe video) */
     int audio_priority; /* hidden: the audio producer thread above the game's */
+    int screenshots;    /* 1: clicking the right stick saves shotNN.bmp to UDATA (live) */
 } XboxSettings;
 
 extern XboxSettings g_xbox_settings;
@@ -57,6 +58,8 @@ int xbox_video_set_480(void);
  * xbox_settings_safe_video applies it after the settings load) */
 extern int g_xbox_safe_video_held;
 void xbox_settings_safe_video(void);
+/* the [Xbox] keys before the splash (its video mode follows progressive) */
+void xbox_settings_early(void);
 /* 1 when this boot actually runs at 720p (xbox_nv2a.c decides at init) */
 extern int g_xbox_video_720p;
 /* 1 when s asks for a 16:9 picture (Auto follows the dashboard) */

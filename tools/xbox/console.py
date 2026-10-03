@@ -3,7 +3,7 @@
 
     tools/xbox/console.py stage v12            # build-xbox -> hw/stage-v12 + hw/ac_xbox.v12.map(.statics)
     tools/xbox/console.py deploy v12           # pull the old logs, upload hw/stage-v12, verify
-    tools/xbox/console.py pull v12             # logs + settings.ini -> hw/logs-v12
+    tools/xbox/console.py pull v12             # logs + settings.ini + shotNN.bmp -> hw/logs-v12
     tools/xbox/console.py rollback             # put the XBE before the last deploy back
     tools/xbox/console.py ls                   # what's in the log folder
 
@@ -35,8 +35,9 @@ USER = os.environ.get("OCX_FTP_USER", "xbox")
 PASS = os.environ.get("OCX_FTP_PASS", "xbox")
 APP = "/F/Applications/OpenCrossing"
 UDATA = "/E/UDATA/4f430001"
-LOGS = re.compile(r"^((boot\d?|last|perf|crash|hang)(_prev)?\.log|input\.log|stick\d\.log|nes_shot\.raw)$")
+LOGS = re.compile(r"^((boot\d?|last|perf|crash|hang)(_prev)?\.log|input\.log|stick\d\.log|nes_shot\.bmp)$")
 KEEP = ("settings.ini",)   # pulled, never deleted
+SHOTS = re.compile(r"^shot\d\d\.bmp$")   # screenshots: pulled, never deleted
 FILES = ("default.xbe", "default.tbn")
 
 
@@ -90,7 +91,7 @@ def deploy(v):
     f = connect()
     have = names(f, UDATA)
     old = [n for n in have if LOGS.match(n)]
-    fetch(f, old + [n for n in KEEP if n in have], HW / f"logs-before-{v}")
+    fetch(f, old + [n for n in have if n in KEEP or SHOTS.match(n)], HW / f"logs-before-{v}")
     for n in old:
         f.delete(f"{UDATA}/{n}")
     print(f"pulled and deleted {len(old)} old logs")
@@ -126,7 +127,7 @@ def rollback():
 def pull(v):
     f = connect()
     have = names(f, UDATA)
-    fetch(f, [n for n in have if LOGS.match(n) or n in KEEP], HW / f"logs-{ver(v)}")
+    fetch(f, [n for n in have if LOGS.match(n) or n in KEEP or SHOTS.match(n)], HW / f"logs-{ver(v)}")
     f.quit()
 
 

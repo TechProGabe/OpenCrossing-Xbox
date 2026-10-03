@@ -157,6 +157,9 @@ static void keep_prev(const char* name) {
     char from[64], to[64];
     snprintf(from, sizeof from, XBOX_UDATA_DIR "%s.log", name);
     snprintf(to, sizeof to, XBOX_UDATA_DIR "%s_prev.log", name);
+    /* only when there is a new one: a crash.log stays (as crash_prev.log)
+     * until the next crash, however many clean boots come between */
+    if (GetFileAttributesA(from) == INVALID_FILE_ATTRIBUTES) return;
     DeleteFileA(to);
     MoveFileA(from, to);
 }
@@ -210,7 +213,16 @@ static void bootlog_write(const char* s, size_t n) {
             s_pend_drops++;
         }
         RtlLeaveCriticalSection(&s_pend_lock);
-        if (s_pump_event && urgent(s, n)) SetEvent(s_pump_event);
+        if (s_pump_event && urgent(s, n)) {
+            /* at most 10 early pumps a second: a GPU fault every frame
+             * would otherwise keep the watchdog writing to the disk */
+            static DWORD s_last_wake;
+            DWORD now = GetTickCount();
+            if (now - s_last_wake >= 100) {
+                s_last_wake = now;
+                SetEvent(s_pump_event);
+            }
+        }
         return;
     }
     WriteFile(h, s, (DWORD)n, &w, NULL);
@@ -355,8 +367,53 @@ char* getcwd(char* buf, size_t size) {
 /* ---- hitch stats ---- */
 XboxFrameStats g_xfs;
 
+/* CPU upgrades (GitHub #2: a 1 GHz swap). nxdk's QueryPerformanceCounter
+ * (SDL's, so pc_os.c's game clock and pc_vi.c's limiter) counts CPU cycles;
+ * nxdk derives its frequency from the CPU multiplier and FSB but falls back
+ * to 733 MHz for CPUs missing from its table. The kernel's counter
+ * (xbox_ticks) is the ACPI timer, 3.375 MHz from a crystal, whatever the CPU.
+ * Once at boot the CPU counter is timed against it for 100 ms, and if nxdk's
+ * frequency is more than 3% off the measured one replaces it; otherwise
+ * nothing changes. (Not against KeQueryInterruptTime: in xemu that runs 7%
+ * apart from both counters.) Kill switch: -DXBOX_CLOCK_CHECK=0. */
+#ifndef XBOX_CLOCK_CHECK
+#define XBOX_CLOCK_CHECK 1
+#endif
+static unsigned long long s_qpc_hz;
+
+void xbox_clock_check(void) {
+    LARGE_INTEGER qf, q0, q1;
+    unsigned long long ke = KeQueryPerformanceFrequency(), k0, k1, meas, diff;
+    QueryPerformanceFrequency(&qf);
+    s_qpc_hz = (unsigned long long)qf.QuadPart;
+    if (!XBOX_CLOCK_CHECK || !ke) return;
+    k0 = KeQueryPerformanceCounter();
+    QueryPerformanceCounter(&q0);
+    do {
+        k1 = KeQueryPerformanceCounter();
+    } while (k1 - k0 < ke / 10);
+    QueryPerformanceCounter(&q1);
+    meas = (unsigned long long)(q1.QuadPart - q0.QuadPart) * ke / (k1 - k0);
+    diff = meas > s_qpc_hz ? meas - s_qpc_hz : s_qpc_hz - meas;
+    if (diff * 100 > s_qpc_hz * 3) s_qpc_hz = meas;
+    xbox_logf("[CLOCK] CPU %llu.%llu MHz (nxdk says %llu.%llu)%s\n", meas / 1000000, meas / 100000 % 10,
+              (unsigned long long)qf.QuadPart / 1000000, (unsigned long long)qf.QuadPart / 100000 % 10,
+              s_qpc_hz != (unsigned long long)qf.QuadPart ? ": timers use the measured clock" : "");
+}
+
 unsigned long long xbox_ticks(void) { return KeQueryPerformanceCounter(); }
 unsigned long long xbox_ticks_per_sec(void) { return KeQueryPerformanceFrequency(); }
+
+/* SDL_GetPerformanceFrequency for pc_os.c, pc_vi.c, pc_profiler.c
+ * (xbox/CMakeLists.txt): the counter is SDL's own */
+unsigned long long xbox_perf_frequency(void) {
+    if (!s_qpc_hz) {
+        LARGE_INTEGER qf;
+        QueryPerformanceFrequency(&qf);
+        return (unsigned long long)qf.QuadPart;
+    }
+    return s_qpc_hz;
+}
 
 size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f) {
     unsigned long long t0 = xbox_ticks();

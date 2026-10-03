@@ -788,6 +788,9 @@ static inline uint32_t texel(uint32_t f, uint32_t r, uint32_t g, uint32_t b, uin
  * free. Only when the GPU can't be reading it: frame_open has drained last
  * frame's work, and this frame hasn't drawn it yet. Kill switch:
  * -DXBOX_TEX_REUSE=0, or texture_reuse = 0 in settings.ini. */
+#ifndef XBOX_NES_FAST
+#define XBOX_NES_FAST 1   /* tex_image_2d: the NES screen two texels a word */
+#endif
 #ifndef XBOX_TEX_REUSE
 #define XBOX_TEX_REUSE 1
 #endif
@@ -850,8 +853,8 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
     /* The NES screen, every frame: 256 wide, so no column padding, and x and
      * x + 1 (x even) are neighbours in the swizzled layout. Two texels a
      * word, red and blue swapped in place: 3 ms of a 19 ms NES frame on the
-     * console in the per-texel loop below. */
-    if (src && bpp == 2 && nvfmt == FMT_R5G6B5 && w == pw && !(w & 1) && !((uintptr_t)src & 3)) {
+     * console in the per-texel loop below. Kill switch: -DXBOX_NES_FAST=0. */
+    if (XBOX_NES_FAST && src && bpp == 2 && nvfmt == FMT_R5G6B5 && w == pw && !(w & 1) && !((uintptr_t)src & 3)) {
         uint32_t* d32 = (uint32_t*)dst;
         for (y = 0; y < ph; y++) {
             const uint32_t* row = (const uint32_t*)(src + (size_t)(y < h ? y : h - 1) * (size_t)w * 2);
@@ -1516,10 +1519,11 @@ static void emit_fixed(void) {
     {
         int x, y, w, h;
         clear_rect(&x, &y, &w, &h);
+        uint32_t wh = ((uint32_t)w & 0xFFFF) | ((uint32_t)h << 16);   /* h < 0 when off screen */
         v = (x & 0xFFFF) | (y << 16);   /* w kept whole: 8 bits of it once matched another clip */
-        if (last[10] != v || last[11] != ((w & 0xFFFF) | (h << 16))) {
+        if (last[10] != v || last[11] != (int)wh) {
             last[10] = v;
-            last[11] = (w & 0xFFFF) | (h << 16);
+            last[11] = (int)wh;
             if (w <= 0 || h <= 0) { x = y = 0; w = h = 1; }
             put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)x | ((uint32_t)(x + w - CLIP_INCL) << 16));
             put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)y | ((uint32_t)(y + h - CLIP_INCL) << 16));
@@ -2099,9 +2103,8 @@ static void pace_account(unsigned t10, unsigned cpu10, unsigned draws, unsigned 
  * (5 s) in perf.log, and in the log too when the average is over 14 ms
  * (then fixNES itself is what chops). */
 /* -DXBOX_NES_SHOT=N (test builds): the framebuffer of the Nth NES frame
- * of each game goes to UDATA nes_shot.raw (16-byte header "OCXS", width,
- * height, bpp; then the rows), for what the console really shows; the
- * serial dump only exists in xemu. tools/xbox/raw_to_png.py converts it. */
+ * of each game goes to UDATA nes_shot.bmp, for what the console really
+ * shows; the serial dump only exists in xemu. */
 #ifndef XBOX_NES_SHOT
 #define XBOX_NES_SHOT 0
 #endif
@@ -2347,12 +2350,14 @@ static void fps_overlay(void) {
         { 6, 8, 16, 30, 17, 17, 14 },   { 31, 1, 2, 4, 8, 8, 8 },    { 14, 17, 17, 14, 17, 17, 14 },
         { 14, 17, 17, 15, 1, 2, 12 },
     };
-    static uint32_t s_val, s_frames;
+    static uint32_t s_val, s_frames, s_last;
     static unsigned long long s_t0;
     unsigned long long now = xbox_ticks(), hz = xbox_ticks_per_sec();
     uint32_t v, digits[3], nd = 0, d, cy;
     int z = SCR_H >= 720 ? 3 : 2, x0 = SCR_W / 16, y0 = SCR_H / 16;
     s_frames++;
+    if (s_last + 1 != s_frame) s_t0 = 0;   /* just switched on: start over */
+    s_last = s_frame;
     if (!s_t0 || now - s_t0 > 2 * hz) {
         s_t0 = now;
         s_frames = 0;
@@ -2370,6 +2375,10 @@ static void fps_overlay(void) {
      * a kick per run); colours in the surface's format: black, yellow */
     pb_close();
     PB_BEGIN();
+    /* clears obey the window clip (the NES picture leaves a pillarboxed one) */
+    put1(NV097_SET_WINDOW_CLIP_HORIZONTAL, (uint32_t)(SCR_W - CLIP_INCL) << 16);
+    put1(NV097_SET_WINDOW_CLIP_VERTICAL, (uint32_t)(SCR_H - CLIP_INCL) << 16);
+    s_fixed_last[10] = s_fixed_last[11] = -1;   /* the next GX draw sends its own */
     fill_rect(x0, y0, (int)nd * 6 * z + 2 * z, 9 * z, 0);
     for (d = 0; d < nd; d++)
         for (cy = 0; cy < 7; cy++) {
@@ -2386,19 +2395,35 @@ static void fps_overlay(void) {
     PB_END();
 }
 
-static void shot_file(void) {
-    HANDLE h;
-    DWORD wr;
-    uint32_t hdr[4] = { 0x5358434Fu /* "OCXS" */, (uint32_t)SCR_W, (uint32_t)SCR_H, (uint32_t)s_fb_bpp };
-    const uint8_t* fb = (const uint8_t*)pb_back_buffer();
-    uint32_t pitch = pb_back_buffer_pitch(), row = (uint32_t)SCR_W * (uint32_t)s_fb_bpp / 8;
-    int y;
-    h = CreateFileA(XBOX_UDATA_DIR "nes_shot.raw", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return;
-    WriteFile(h, hdr, sizeof hdr, &wr, NULL);
-    for (y = 0; y < SCR_H; y++) WriteFile(h, fb + (size_t)y * pitch, row, &wr, NULL);
-    CloseHandle(h);
-    xbox_logf("[NV2A] nes_shot.raw written (%dx%d, %d-bit), frame %u\n", SCR_W, SCR_H, s_fb_bpp, s_frame);
+/* Screenshots (settings.ini screenshots = 1): clicking the right stick
+ * saves the next presented frame as shotNN.bmp next to settings.ini. The
+ * first shot of a boot looks for the first free number, so earlier shots
+ * are kept; after shot99 it wraps to shot00. */
+static int s_shot_req;
+void xbox_nv2a_shot(void) { s_shot_req = 1; }
+
+static void shot_file(const char* name) {
+    char path[64];
+    snprintf(path, sizeof path, XBOX_UDATA_DIR "%s", name);
+    if (xbox_fbdump_bmp(path, pb_back_buffer(), SCR_W, SCR_H, s_fb_bpp, (int)pb_back_buffer_pitch()))
+        xbox_logf("[SHOT] wrote %s (%dx%d), frame %u\n", name, SCR_W, SCR_H, s_frame);
+    else
+        xbox_logf("[SHOT] could not write %s\n", name);
+}
+
+static void shot_user(void) {
+    static int next = -1;
+    char name[16];
+    if (next < 0) {
+        char path[64];
+        for (next = 0; next < 99; next++) {
+            snprintf(path, sizeof path, XBOX_UDATA_DIR "shot%02d.bmp", next);
+            if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) break;
+        }
+    }
+    snprintf(name, sizeof name, "shot%02d.bmp", next);
+    shot_file(name);
+    next = (next + 1) % 100;
 }
 
 void xbox_nv2a_present(void) {
@@ -2413,10 +2438,11 @@ void xbox_nv2a_present(void) {
     if (s_overlap && !dump) pb_close();   /* kick; frame_open drains */
     else wait_idle();
     gpu_fault_log(s_frame - 1);
-    if (s_nes_shot) {
-        s_nes_shot = 0;
+    if (s_nes_shot || s_shot_req) {
         wait_idle();
-        shot_file();
+        if (s_nes_shot) shot_file("nes_shot.bmp");
+        if (s_shot_req) shot_user();
+        s_nes_shot = s_shot_req = 0;
     }
     if (dump) {
         xbox_logf("[NV2A] frame %u draws=%u approx=%u rc=%d pool=%uKB peak=%uKB\n", s_frame, s_draws,

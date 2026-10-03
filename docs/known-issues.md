@@ -6,6 +6,23 @@ we have. Add the build and date when you log one; delete it when it's fixed
 
 ## Not yet tested on hardware
 
+- CPU clock check (2026-10-03, `xbox_clock_check` in `xbox_io.c`): one
+  `[CLOCK] CPU ... MHz (nxdk says ...)` line at boot; a stock console reads
+  ~733 and changes nothing. A CPU upgrade nxdk doesn't know (its table
+  misses some Celerons and Tualatins) should say "timers use the measured
+  clock".
+- 128 MB consoles run as 64 MB (2026-10-03, `xbox_ramlock.c`, `memory.md`):
+  the boot log's `[MEM] 128 MB console:` line says whether the kernel kept
+  the upper 64 MB (expected with Cerbios and the XBE's 64 MB flag: "nothing
+  above 64 MB is free") or the game held it ("upper 64 MB held (N KB ...)").
+  `free` in `[MEM] boot` should be ~38 MB, as on a 64 MB console.
+- v8-v10 ran on hardware 2026-10-03: the Options menu redesign, screenshots
+  (right stick, `shotNN.bmp`), 40% dead zones (migrated from 43/30), the
+  `[CLOCK] CPU` line (733.3 MHz, unchanged), Clu Clu Land D back to the
+  room, 58-59 fps in town. Not tried yet: a save under another `.gci` name
+  in `save/card_a` (Dolphin's `01-GAFE-DobutsunomoriP_MURA.gci`; `pc_card.c`
+  built `-U_WIN32`, `patches.md`), the splash at 480i when
+  `progressive = 0`.
 - v5-v7 ran on hardware 2026-10-03 (NES, clock and audio confirmed; v7
   logged no audio starvation after boot). Not judged separately yet: the
   texture cache index (`PC_TEX_CACHE_INDEX`) and inline shim compares in a
@@ -63,7 +80,29 @@ we have. Add the build and date when you log one; delete it when it's fixed
   splash (USB up before the AC97) and test with `audio_fix = 0`.
 - Confirmed (2026-10-03): after a full power-off v3 has sound. The stuck
   codec came from the unclean end of the session before; a reset or IGR
-  doesn't clear it. Worth a README line ("no sound: power the console off").
+  doesn't clear it. The README says so (Known issues).
+
+## Clu Clu Land D doesn't run (2026-10-03, v9)
+
+- It's a Famicom Disk System game; the PC port feeds fixNES iNES
+  cartridge images only (upstream too). v9 crashed starting it (a `malloc`
+  sized from disk data failed, then `memset(NULL)`); v10 logs `[NES] not an
+  iNES image` and goes back to the room. To run it: fixNES has an FDS path
+  (`audio_fds.c`, disk sides), which needs a disk BIOS image and the AC
+  disk format mapped onto it.
+
+## Crash after an NES game: display list at a float (2026-10-03, v8)
+
+- Hardware, v8: Super Mario Bros played from the room (~200-235 s), back in
+  the room, a scene change at ~242 s, then 2 s into the new scene an access
+  violation in `emu64::dl_G_DL`: `gsSPDisplayList` with address
+  `0xc1180001` (tagged pointer `0xc1180000`, the float -9.5), read of
+  `c1180003`, called from the frame's top-level list (`emu64_taskstart_r`).
+  Some draw emitted a display-list call from a field that holds a float:
+  a stale or misread struct. Not reproduced (needs the save and the
+  route). v9 skips unmapped display lists with an `[EMU64]` line (address,
+  segment, DL level) instead of faulting; the next log says which. Retry:
+  NES game, quit, leave the house straight away.
 
 ## Crash on START at the title (GitHub #2, 2026-09-29)
 
@@ -77,6 +116,21 @@ we have. Add the build and date when you log one; delete it when it's fixed
   the reporter's release, console (RAM, 480/720p), what's in
   `save/card_a`, and any `crash.log` / `hang.log`; and whether the current
   release does it.
+- Second report (2026-10-03, beta-3 release, 128 MB, 1 GHz CPU swap, HDMI
+  modchip, 480i): a new game starts, then crashes right after Rover's train
+  dialog. `crash.log`: access violation, read of `d68301f8`, eip in
+  `lbRTC_Sub_DD` (called from `Kabu_manager` <- `mSDI_StartInitAfter`) on a
+  stack copy of the new save's Stalk Market date, which is all zero in a
+  new town on the GameCube too. The eip is `xor esi, esi`, which can't
+  read memory; the beta-3 release map matches the log's image range. Not a
+  memory layout problem: the boot line says 131072 KB total but 38644 KB
+  free, the 64 MB layout (Cerbios honours the XBE's 64 MB flag), and
+  beta-3 at 128 MB under Cerbios in xemu goes through the train into town.
+  Suspect the CPU swap. Done for it: the CPU clock check (`[CLOCK] CPU`,
+  `xbox_clock_check`: nxdk's timer frequency falls back to 733 MHz for CPUs
+  missing from its table, which ran the game clock and limiter fast) and the
+  64 MB lock. Next: the reporter's `[CLOCK] CPU` line on the next release,
+  and whether the crash is at the same point every time.
 
 ## Audio chugs (2026-10-03, v4)
 
@@ -112,7 +166,8 @@ we have. Add the build and date when you log one; delete it when it's fixed
   lists scroll on C-down too, while the C-stick dead zone was 12%: a worn
   right stick resting a quarter down holds C-down. v4 makes the Xbox's
   C-stick dead zone 30% (raised once for older settings files,
-  `opt_version` 2). Confirm on hardware; `stick0.log` (L3) has raw reads.
+  `opt_version` 2); v8 makes both sticks 40% (`opt_version` 3). Confirm on
+  hardware; `stick0.log` (L3) has raw reads.
 
 ## NES at 720p (2026-10-03)
 
@@ -148,25 +203,6 @@ we have. Add the build and date when you log one; delete it when it's fixed
 - Also fixed on the way: `famicom.cpp` (C++) never got the path routing, so
   the NES save file was never read or written on the Xbox.
 
-## Saves under any other name are never found (2026-09-29)
-
-- A user report: a GameCube save exported with Dolphin's memory card manager
-  as `01-GAFE-DobutsunomoriP_MURA.gci` in `save/card_a` didn't load. Only
-  the exact names `DobutsunomoriP_MURA.gci` and
-  `8P-GAFE-DobutsunomoriP_MURA.gci` work (`pc_save_scan_gci_dir`). The
-  "any `.gci` in the folder" fallback, `pc_card_scan_for_gci` in
-  `pc_card.c`, takes its `_WIN32` branch (nxdk defines `_WIN32`) and calls
-  `FindFirstFileA("save/card_a\*.gci")` with a relative path, which never
-  resolves on the Xbox. The same scan finds a visiting town in
-  `save/card_b`, so that is broken too.
-- Fix: build `pc_card.c` with `-U_WIN32` so it takes the `opendir` branch
-  (`xbox_posix.c` resolves `save/...` to `E:\UDATA\4f430001\`); check its
-  `mkdir`/`strcasecmp` fall back cleanly. Workaround until then: rename the
-  file to `DobutsunomoriP_MURA.gci` (an existing file of that name wins).
-- Even once fixed, `DobutsunomoriP_MURA.gci` is loaded first when it exists,
-  so an imported save under another name loses to a town started on the
-  Xbox. Worth a line in the README's save instructions.
-
 ## Clock: 2083, and hours off after a reboot (fixed in v6, 2026-10-03)
 
 - v5 report: the time was set right in the game and saved; after a reboot
@@ -195,19 +231,6 @@ we have. Add the build and date when you log one; delete it when it's fixed
   733 MHz, and `(now - start) * 40.5 MHz` passed 2^64 10.4 minutes after
   boot, so the game clock jumped back every 10.4 minutes. Check on hardware
   that the clock keeps time over 20+ minutes; the 2083 start is separate.
-
-## NES games run a little choppy
-
-- Hardware, 2026-09-29 (`[NES]` lines in perf.log): fixNES alone takes
-  13-14 ms per NES frame and the whole frame 17-18 ms, so most frames miss
-  the 16.7 ms vblank by 1-2 ms. Better than before vblank pacing ("improved,
-  not 100%"). The ~4 ms outside the emulator is the lead: the per-frame
-  RGB565 to swizzled A8R8G8B8 conversion of a padded 256x256 texture into
-  a fresh pool block (`tex_image_2d` in `xbox_nv2a.c`), then the draw and
-  present. Options: upload in place when the size doesn't change, or keep
-  RGB565 (build fixNES without `COL_TEX_BSWAP` so red is in the high bits).
-  The emulator itself steps CPU, PPU, APU and mapper through separate calls
-  every cycle (`pc_fixnes_frame`).
 
 ## Not ported
 

@@ -19,6 +19,8 @@ XBOX_TARGET=objs xbox/build.sh  # compile every TU, no link (triage)
   `XBOX_NO_ICON=1` skips it.
 - Extra compile flags: `XBOX_CMAKE_ARGS="'-DCMAKE_C_FLAGS=-DA -DB'"` (quoted
   for the inner shell). Debug knobs are listed in `renderer.md`.
+- `XBOX_BUILD_DIR=build-xbox-foo` builds in another directory, so a test
+  build doesn't overwrite the release one (or two builds run at once).
 - macOS with colima: Docker only sees your home directory, so keep the
   checkout under `~`. No BuildKit on colima: `DOCKER_BUILDKIT=0`.
 
