@@ -41,6 +41,7 @@ the one the table points at, never the whole tree.
 | `docs/renderer.md` | GX → NV2A: GL shim, vertex program, combiners, debug knobs |
 | `docs/memory.md` | 64 MB budget and measurements |
 | `docs/perf.md` | optimization method and measurements |
+| `docs/backport.md` | Melee-X backport plan and status |
 | `docs/upstream.md` | remotes, base SHAs, sync policy |
 | `docs/ref/README.md` | imported reference kb (DC + Anbernic): what applies |
 | `docs/decomp/` | upstream decomp onboarding (Ghidra, m2c, decomp.me) |
