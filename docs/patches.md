@@ -52,6 +52,14 @@ Under `#if defined(TARGET_XBOX)`:
 | `src/famicom_emu.c` | `famicom_emu_init`: the NES emulator's heap falls back to 3.5, 3 or 2.75 MB when the PC branch's 4 MB `malloc` fails | at 720p only ~3.8 MB is free, the 4 MB heap failed and the room showed "memory card in slot A could not be read"; `famicom_init`'s buffers take ~2.6 MB |
 | `src/static/Famicom/famicom.cpp` | `famicom_emu` frame: `famicom_draw()` skipped | fixNES (`pc_fixnes_render_frame`) already draws the frame, 4:3 or stretched per `nes_aspect`. The GameCube quad samples `result_bufp`, which fixNES never fills, but pc_gx's texture bind cache didn't know fixNES had rebound unit 0, so it drew the NES picture a second time, full screen, over the 4:3 one (hardware shot, v6) |
 
+## `src/`: symbol renames by compile flag
+
+No source edit; `xbox/CMakeLists.txt` compiles the TU with a `-D`:
+
+| file | definition | why |
+|---|---|---|
+| `src/lb_rtc.c` | `lbRTC_Sub_DD=lbRTC_Sub_DD_game`, only with `-DXBOX_RTC_SHIM=ON` (implied by `-DXBOX_DIAG_ISSUE3=ON`) | GitHub #3 (`known-issues.md`): `xbox/src/xbox_diag.c` defines `lbRTC_Sub_DD` for every other TU and runs either the game's function or a plain -O0 copy of the same C (`settings.ini` `rtc_shim = 1`), to test whether that console's CPU faults on the -O2 code's byte sequence. Off in normal builds: the symbol and code are the upstream ones |
+
 ## `src/`: NES diagnostics (Xbox only)
 
 `[NES]` log lines under `#if defined(TARGET_XBOX)`; no behaviour change:

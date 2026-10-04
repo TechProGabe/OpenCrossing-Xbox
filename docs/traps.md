@@ -262,7 +262,25 @@ find them.
   `xhw_reboot_self`).
 - **xemu detection:** CPUID leaf 1 EDX bit 1 (VME) is clear in xemu
   (0383f9fd) and set on the Xbox (0383f9ff); both report signature 0x68a.
-  Never probe the AC97 codec to find out.
+  Never probe the AC97 codec to find out. xemu also answers microcode
+  revision 1 (MSR 8Bh) and kernel 1.0.4627.1 (`xbox_diag.c`).
+- **Catching a fault and carrying on.** An SEH handler on fs:[0]
+  (`xbox_crash.c` style) may `longjmp` straight out of the kernel's
+  dispatcher: that is what an `__except` block does after `RtlUnwind`, and
+  with nothing between the two frames there is nothing to unwind. Put
+  fs:[0] back by hand afterwards: the dispatcher pushed a registration of
+  its own before calling the handler, and it is still there. Verified in
+  xemu and on red (kernel 5101, 2026-10-04; `xbox_diag.c` `diag_try`, the
+  `[DIAG] guard self-test` line); the handler must return
+  `ExceptionContinueSearch` (1) for `EXCEPTION_UNWIND` calls. Ring 0 lets
+  game code `rdmsr`/`wrmsr`/`wbinvd`/read `cr0`; an unknown MSR is a #GP
+  on hardware, which the kernel hands over as `c0000005`, a read of 0
+  (MSR 1A0h on the stock cD0), and silence in xemu. Guard it.
+- **The kernel patches the XBE in RAM.** The import thunk table (here in
+  `.rdata`, `PointerToKernelThunkTable` XOR `0x5B6D40B6` for a retail
+  header) is overwritten with kernel addresses at load, so a RAM-vs-disk
+  compare of the sections has to skip it. `.text` is otherwise identical to
+  the file (xemu, Cerbios-free BIOS): any other difference is a patcher.
 
 ## Logs, screenshots and testing
 
