@@ -1046,7 +1046,18 @@ int mCD_CheckStation_bg(s32* chan) {
         }
     }
 
+#ifdef TARGET_XBOX
+    /* No other town: the GameCube offers a passport trip here, which saves
+     * the traveller to the card in slot B and ends at the title, for taking
+     * the card to a friend's GameCube. Here the passport only lives in
+     * memory, so the train went nowhere and dropped the player on the title
+     * screen. The station's "no town data" answer instead. */
+    OSReport("[PC] CheckStation: no other town in save/card_b: no trip\n");
+    if (chan) *chan = mCD_SLOT_B;
+    return mCD_TRANS_ERR_NO_TOWN_DATA;
+#else
     return mCD_TRANS_ERR_NONE;
+#endif
 }
 
 /* Persist current town and load the "other" town into l_keepSave.
@@ -1054,6 +1065,8 @@ int mCD_CheckStation_bg(s32* chan) {
  *  - Foreigner: save visited town (Card B) + load Card A → l_keepSave. */
 int mCD_SaveStation_NextLand_bg(s32* chan) {
     int is_foreigner = mLd_PlayerManKindCheck();
+    int marked_away = FALSE, saved_exists = TRUE;
+    u32 saved_reset_code = 0;
 
     if (is_foreigner) {
         /* Record departure info (visited town) for Rover. */
@@ -1095,6 +1108,7 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
         }
 
         if (!pc_save_read_gci_to_keep(PC_GCI_PATH)) {
+            l_keepSave_set = FALSE;
             OSReport("[PC] SaveStation_NextLand(return): failed to load home town\n");
             if (chan) *chan = mCD_SLOT_A;
             return mCD_TRANS_ERR_CORRUPT;
@@ -1112,6 +1126,18 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
     if (l_card_b_gci_path[0] == '\0') {
         OSReport("[PC] SaveStation_NextLand: no Card B path\n");
         return mCD_TRANS_ERR_NO_TOWN_DATA;
+    }
+
+    /* Load the other town first, so a Card B that can't be read (or memory
+     * that runs out) fails the trip before home is touched: the save below
+     * marks the player as away, and a failed trip after it left them away
+     * (the gyroid punishment on the next load), with l_keepSave armed for
+     * the next scene change. The home writer doesn't use the l_keep*
+     * buffers this fills. */
+    if (!pc_save_read_gci_to_keep(l_card_b_gci_path)) {
+        OSReport("[PC] SaveStation_NextLand: failed to load Card B town: trip cancelled\n");
+        l_keepSave_set = FALSE;
+        return mCD_TRANS_ERR_CORRUPT;
     }
 
     /* 0. Record home town info for Rover's dialogue (departure town name) */
@@ -1146,6 +1172,9 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
      * If the player quits during the visit, next load sees exists==FALSE
      * → gyroid face + inventory cleared as punishment (m_start_data_init.c:426) */
     if (Now_Private != NULL && mLd_PlayerManKindCheckNo(Common_Get(player_no)) == FALSE) {
+        saved_exists = Now_Private->exists;
+        saved_reset_code = Now_Private->reset_code;
+        marked_away = TRUE;
         Now_Private->exists = FALSE;
         Now_Private->reset_code = 0;
         OSReport("[PC] SaveStation_NextLand: marked player as away (exists=FALSE)\n");
@@ -1153,16 +1182,14 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
 
     /* 3. Save home town to Card A (with player marked as away) */
     if (!pc_save_write_gci()) {
-        /* Restore player state on failure */
-        if (Now_Private != NULL) Now_Private->exists = TRUE;
-        OSReport("[PC] SaveStation_NextLand: failed to save home town\n");
+        /* Restore player state on failure, and disarm the trip */
+        if (Now_Private != NULL && marked_away) {
+            Now_Private->exists = saved_exists;
+            Now_Private->reset_code = saved_reset_code;
+        }
+        l_keepSave_set = FALSE;
+        OSReport("[PC] SaveStation_NextLand: failed to save home town: trip cancelled\n");
         return mCD_TRANS_ERR_IOERROR;
-    }
-
-    /* 3. Load other town from Card B into l_keepSave + l_keep* ARAM blocks */
-    if (!pc_save_read_gci_to_keep(l_card_b_gci_path)) {
-        OSReport("[PC] SaveStation_NextLand: failed to load Card B town\n");
-        return mCD_TRANS_ERR_CORRUPT;
     }
 
     l_mcd_keep_startCond = mCD_START_COND_INCOMING_FOREIGNER;

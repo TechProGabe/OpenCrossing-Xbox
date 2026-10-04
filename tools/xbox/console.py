@@ -9,7 +9,8 @@
 
 hw/ is ~/xemu/ochw unless OCX_HW is set. The console's FTP server (the
 dashboard's) is at OCX_FTP_HOST, login xbox/xbox unless OCX_FTP_USER /
-OCX_FTP_PASS say otherwise. Deploy puts default.xbe and default.tbn in
+OCX_FTP_PASS say otherwise; OCX_APP is the game's folder (default
+/F/Applications/OpenCrossing). Deploy puts default.xbe and default.tbn in
 /F/Applications/OpenCrossing/ next to the disc image and keeps the XBE it
 replaces there as default.xbe.prev (rollback swaps it back). Before it
 uploads, it pulls the console's logs into hw/logs-before-vNN and deletes
@@ -33,7 +34,7 @@ HW = Path(os.environ.get("OCX_HW", Path.home() / "xemu" / "ochw"))
 HOST = os.environ.get("OCX_FTP_HOST", "")
 USER = os.environ.get("OCX_FTP_USER", "xbox")
 PASS = os.environ.get("OCX_FTP_PASS", "xbox")
-APP = "/F/Applications/OpenCrossing"
+APP = os.environ.get("OCX_APP", "/F/Applications/OpenCrossing")   # the XBE's folder on the console
 UDATA = "/E/UDATA/4f430001"
 LOGS = re.compile(r"^((boot\d?|last|perf|crash|hang)(_prev)?\.log|input\.log|stick\d\.log|nes_shot\.bmp)$")
 KEEP = ("settings.ini",)   # pulled, never deleted

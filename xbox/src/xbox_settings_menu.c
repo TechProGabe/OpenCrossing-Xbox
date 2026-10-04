@@ -204,31 +204,34 @@ static void capture_finish(int changed) {
 
 /* ---- pending state ---- */
 
-/* Output: 480i, then 480p and 720p where the dashboard allows them. 480p
- * is progressive = 1 without 720p; 720p keeps progressive as it was, for
- * when it can't start; 480i changes progressive only where 480p exists. */
-enum { OUT_480I, OUT_480P, OUT_720P, OUT_N };
+/* Output: Auto (video_720p = 1, progressive = 1: the best mode the
+ * dashboard allows, Melee-X's default, shown with the mode it gives), then
+ * 480i and, where the dashboard allows it, 480p, both pinned at 480 whatever
+ * the dashboard says later. Auto already gives 720p wherever an explicit
+ * 720p could run, so 720p is not a row value of its own. OUT_720P is only
+ * the hand-edited video_720p = 1, progressive = 0 (720p, else 480i), shown
+ * as the mode it gives and left by the first press. */
+enum { OUT_AUTO, OUT_480I, OUT_480P, OUT_720P, OUT_N };
 static int out_get(const XboxSettings* s) {
-    if (s->video_720p) return OUT_720P;
+    if (s->video_720p) return s->progressive ? OUT_AUTO : OUT_720P;
     return s->progressive && xbox_video_480p_allowed() ? OUT_480P : OUT_480I;
 }
 static int out_allowed(int o) {
-    return o == OUT_480I || (o == OUT_480P && xbox_video_480p_allowed()) ||
-           (o == OUT_720P && xbox_video_720p_allowed());
+    return o == OUT_AUTO || o == OUT_480I || (o == OUT_480P && xbox_video_480p_allowed());
 }
 static void out_set(XboxSettings* s, int o) {
-    s->video_720p = o == OUT_720P;
-    if (o == OUT_480P) s->progressive = 1;
-    else if (o == OUT_480I && xbox_video_480p_allowed()) s->progressive = 0;
+    s->video_720p = o == OUT_AUTO;
+    s->progressive = o != OUT_480I;
 }
 
+/* the mode itself changes, not only the setting (Auto giving 480p -> 480p) */
 static int restart_pending(void) {
-    return out_get(&s_xpending) != out_get(&g_xbox_settings);
+    return xbox_video_output(&s_xpending) != xbox_video_output(&g_xbox_settings);
 }
 
 /* the running output differs from the saved choice: shown until a restart */
 static int restart_outstanding(void) {
-    return out_get(&g_xbox_settings) != out_get(&g_xbox_settings_boot);
+    return xbox_video_output(&g_xbox_settings) != xbox_video_output(&g_xbox_settings_boot);
 }
 
 static void recompute_dirty(void) {
@@ -297,8 +300,11 @@ static void item_cycle(int id, int dir) {
 static void item_format(int id, char* buf, size_t n) {
     switch (id) {
         case ITEM_OUTPUT: {
-            static const char* const names[OUT_N] = { "480i", "480p", "720p" };
-            snprintf(buf, n, "%s", names[out_get(&s_xpending)]);
+            static const char* const names[] = { "480i", "480p", "720p" };   /* XBOX_OUT_* */
+            int o = out_get(&s_xpending);
+            if (o == OUT_AUTO) snprintf(buf, n, "Auto, %s", names[xbox_video_output(&s_xpending)]);
+            else if (o == OUT_720P) snprintf(buf, n, "%s", names[xbox_video_output(&s_xpending)]);
+            else snprintf(buf, n, "%s", o == OUT_480P ? "480p" : "480i");
             break;
         }
         case ITEM_FPS_COUNTER:
@@ -308,8 +314,10 @@ static void item_format(int id, char* buf, size_t n) {
             snprintf(buf, n, "%s", s_xpending.screenshots ? "On" : "Off");
             break;
         case ITEM_WIDESCREEN:
-            if (s_xpending.widescreen == XBOX_WS_AUTO)
-                snprintf(buf, n, "Auto, %s", xbox_widescreen_wanted(&s_xpending) ? "16:9" : "4:3");
+            if (s_xpending.widescreen == XBOX_WS_AUTO)   /* what the next boot shows: 720p is 16:9 */
+                snprintf(buf, n, "Auto, %s",
+                         XBOX_WIDESCREEN && (xbox_widescreen_wanted(&s_xpending) ||
+                                             xbox_video_output(&s_xpending) == XBOX_OUT_720P) ? "16:9" : "4:3");
             else
                 snprintf(buf, n, "%s", s_xpending.widescreen ? "16:9" : "4:3");
             break;
@@ -910,7 +918,9 @@ _Static_assert(FITS(tab_video_items) && FITS(tab_audio_items) && FITS(tab_contro
 /* what the selected row does, for the help line */
 static const char* item_help(int id) {
     switch (id) {
-        case ITEM_OUTPUT:            return "The video mode: used after a restart";
+        case ITEM_OUTPUT:
+            if (out_get(&s_xpending) == OUT_AUTO) return "Auto picks the best mode the dashboard allows";
+            return "The video mode: used after a restart";
         case ITEM_WIDESCREEN:
             if (s_xpending.widescreen == XBOX_WS_AUTO) return "Auto follows the dashboard's setting";
             return "16:9 shows more of the town, but slower";
@@ -980,7 +990,7 @@ static void draw_stick_meter(f32 y) {
 
 static void draw_settings_page(struct game_s* game) {
     const Tab* tab = &s_tabs[s_tab];
-    int i, sel_btn;
+    int i, sel_btn, sel_id = s_sel >= 0 && s_sel < tab->count ? tab->items[s_sel].id : -1;
     const char* help = "";
     const char* status = NULL;
     Col status_col = k_warn;
@@ -1030,15 +1040,18 @@ static void draw_settings_page(struct game_s* game) {
         snprintf(buf, sizeof buf, "Left stick now %d%% (%s)", pct, moves ? "moves" : "ignored");
         status = buf;
         status_col = moves ? k_go : k_ink_faint;
-    } else if (s_tab == 0 && s_xpending.video_720p && !xbox_video_720p_allowed())
-        status = "720p is off in the dashboard";
-    else if (s_tab == 0 && s_xpending.video_720p && g_xbox_settings_boot.video_720p && !g_xbox_video_720p)
+    } else if (s_tab == 0 && s_xpending.video_720p && xbox_video_output(&g_xbox_settings_boot) == XBOX_OUT_720P &&
+               !g_xbox_video_720p)
         status = "720p failed to start: see boot.log";
-    else if (s_tab == 0 && g_xbox_video_720p && s_xpending.widescreen != XBOX_WS_ON)
+    else if (s_tab == 0 && xbox_video_output(&s_xpending) == XBOX_OUT_720P && s_xpending.widescreen == XBOX_WS_OFF)
         status = "720p is always 16:9";
     else if (restart_outstanding())
         status = "Restart to change the output";
-    else if (s_sel >= 0 && s_sel < tab->count && tab->items[s_sel].id == ITEM_SCREENSHOTS) {
+    else if (sel_id == ITEM_OUTPUT && s_xpending.video_720p && xbox_video_output(&s_xpending) != XBOX_OUT_720P) {
+        /* Auto below 720p: say why, quietly */
+        status = "No 720p: off in the dashboard, or no HD cable";
+        status_col = k_ink_faint;
+    } else if (sel_id == ITEM_SCREENSHOTS) {
         status = "Saved as shotNN.bmp in UDATA";
         status_col = k_ink_faint;
     }

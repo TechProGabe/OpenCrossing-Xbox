@@ -319,6 +319,7 @@ static int main_body(void* arg) {
     xbox_logf("[XBOX] stage: nv2a init\n");
     pc_platform_init();
     xbox_settings_apply();   /* 720p is decided at GPU init: always 16:9 */
+    xbox_video_log();
     xbox_mem_log("after nv2a init");
     xbox_splash_progress(1.0f);
 

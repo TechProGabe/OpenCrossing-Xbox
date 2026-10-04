@@ -6,11 +6,10 @@
  * doesn't know, and its writer rewrites the whole file, so the section is
  * appended after every PC save.
  *
- * Migration: before settings.ini owned it, the left stick dead zone lived in
- * controller.ini. The first boot without an [Xbox] dead zone takes that file's
- * value (the playtest console keeps its tuned 43%), then settings.ini wins.
- * controller.ini is left on disk, unread. The same first boot turns the shop
- * upgrade's visitor requirement off (pc_settings_load). */
+ * The first boot without an [Xbox] section turns the shop upgrade's visitor
+ * requirement off (pc_settings_load). An old controller.ini (the first
+ * playtest builds kept the dead zone there) is no longer read: a fresh
+ * settings.ini took its 43% over the 40% default. */
 #include <hal/video.h>
 #include <hal/xbox.h>
 #include <windows.h>
@@ -33,20 +32,32 @@
 
 void pc_settings_load_pc(void);
 void pc_settings_save_pc(void);
-int xbox_controller_ini_deadzone(void);   /* xbox_pad_axis.c, -1 if none */
 void xbox_watchdog_disable(void);
 
-/* 4:3 by default: 16:9 draws more of the town (hor+), which costs frame time.
+/* Video by default as Melee-X picks it (xhw_video.c, its settings.c
+ * defaults): 720p where the dashboard allows it on this AV pack, else 480p
+ * where it allows that, else 480i; 16:9 when the dashboard is set to
+ * widescreen (720p always is). video_720p = 1 with progressive = 1 is that
+ * Auto; video_720p = 0 pins 480, progressive = 0 pins 480i, widescreen 0/1
+ * pin 4:3 / 16:9. -DXBOX_VIDEO_AUTO=0 is the kill switch: the old defaults
+ * (480, 4:3) and no version-4 move. Explicit settings win either way.
  * GPU overlap on since the Melee-X backport (Melee-X runs it by default since
  * its v33); the backport's switches default to the new behaviour, and 0 in
  * settings.ini puts each one back (docs/backport.md). */
+#ifndef XBOX_VIDEO_AUTO
+#define XBOX_VIDEO_AUTO 1
+#endif
 /* one-time moves in pc_settings_load: 2 raised the C-stick dead zone,
- * 3 moved both sticks' old defaults (43% left, 30% C-stick) to 40% */
-#define XBOX_OPT_VERSION 3
+ * 3 moved both sticks' old defaults (43% left, 30% C-stick) to 40%,
+ * 4 moved the old video defaults (video_720p = 0, widescreen = 0) to Auto */
+#define XBOX_OPT_VERSION 4
 #ifndef XBOX_FPS_DEFAULT
 #define XBOX_FPS_DEFAULT 0   /* the FPS counter's default; 1 for test builds */
 #endif
-#define XBOX_SETTINGS_DEFAULTS { XBOX_STICK_DZ, 100, 0, XBOX_WS_OFF, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION, XBOX_FPS_DEFAULT, 1, 1, 0 }
+#define XBOX_WS_DEFAULT (XBOX_VIDEO_AUTO ? XBOX_WS_AUTO : XBOX_WS_OFF)
+#define XBOX_SETTINGS_DEFAULTS                                                                       \
+    { XBOX_STICK_DZ, 100, XBOX_VIDEO_AUTO, XBOX_WS_DEFAULT, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION, \
+      XBOX_FPS_DEFAULT, 1, 1, 0 }
 XboxSettings g_xbox_settings = XBOX_SETTINGS_DEFAULTS;
 XboxSettings g_xbox_settings_boot = XBOX_SETTINGS_DEFAULTS;
 
@@ -150,8 +161,9 @@ static void append_xbox_section(void) {
     fprintf(f, "xbox_stick_deadzone = %d\n", g_xbox_settings.stick_deadzone);
     fprintf(f, "\n# Rumble strength in percent (0 = off)\n");
     fprintf(f, "rumble = %d\n", g_xbox_settings.rumble);
-    fprintf(f, "\n# Video output: 0 = standard (480i, or 480p when the dashboard allows it),\n");
-    fprintf(f, "# 1 = 720p (component cable + 720p enabled in the dashboard). Needs a restart.\n");
+    fprintf(f, "\n# Video output. video_720p = 1 with progressive = 1 is Auto, the best mode the\n");
+    fprintf(f, "# dashboard allows: 720p (component cable + 720p enabled in the dashboard),\n");
+    fprintf(f, "# else 480p, else 480i. 0 = stay at 480. Needs a restart.\n");
     fprintf(f, "video_720p = %d\n", g_xbox_settings.video_720p);
     fprintf(f, "\n# 480 output: 1 = 480p where the dashboard allows it, 0 = always 480i.\n");
     fprintf(f, "# Hold BACK while OpenCrossing starts for 480i (sets video_720p and this to 0).\n");
@@ -161,7 +173,8 @@ static void append_xbox_section(void) {
     fprintf(f, "\n# Screenshots: 1 = clicking the right stick saves shot00.bmp, shot01.bmp...\n");
     fprintf(f, "# next to this file (handy for bug reports). Options > Video\n");
     fprintf(f, "screenshots = %d\n", g_xbox_settings.screenshots);
-    fprintf(f, "\n# Widescreen: 0 = 4:3, 1 = 16:9, 2 = follow the dashboard setting\n");
+    fprintf(f, "\n# Widescreen: 0 = 4:3, 1 = 16:9, 2 = Auto (the dashboard's setting).\n");
+    fprintf(f, "# 720p is always 16:9.\n");
     fprintf(f, "widescreen = %d\n", g_xbox_settings.widescreen);
     fprintf(f, "\n# Testing: 1 = the next frame's game logic runs while the GPU draws,\n");
     fprintf(f, "# 0 = wait for the GPU at the end of every frame (the old way). Needs a restart.\n");
@@ -198,6 +211,22 @@ void pc_settings_load(void) {
          * second town into save/card_b over FTP. */
         g_pc_settings.disable_shop_visitor_req = 1;
     }
+    /* Until version 4 the video defaults were video_720p = 0 and widescreen
+     * = 0 (4:3), and the writer puts every key in the file: left as they
+     * were, they were nobody's choice, so they move to Auto once (Melee-X's
+     * defaults). progressive = 0 was a choice (480i in the menu, or safe
+     * video), so that file keeps video_720p = 0. A 480p or 4:3 picked in an
+     * older build can't be told from the default and moves too. */
+    if (XBOX_VIDEO_AUTO && s_file_version < 4) {
+        if ((have & HAVE_720P) && !g_xbox_settings.video_720p && g_xbox_settings.progressive) {
+            xbox_logf("[Settings] video_720p 0 -> 1 (Auto: 720p where the dashboard allows it)\n");
+            g_xbox_settings.video_720p = 1;
+        }
+        if ((have & HAVE_WS) && g_xbox_settings.widescreen == XBOX_WS_OFF) {
+            xbox_logf("[Settings] widescreen 0 -> 2 (Auto: the dashboard's setting)\n");
+            g_xbox_settings.widescreen = XBOX_WS_AUTO;
+        }
+    }
     /* AC turns the C-stick into the N64 C buttons past ~23% (29 of 127,
      * contreaddata.c), and the choice lists scroll on C-down: a worn right
      * stick resting a quarter off centre scrolled every list down by itself
@@ -216,13 +245,6 @@ void pc_settings_load(void) {
     if ((have & HAVE_DZ) && s_file_version < 3 && g_xbox_settings.stick_deadzone == 43) {
         xbox_logf("[Settings] left stick dead zone 43%% -> %d%%\n", XBOX_STICK_DZ);
         g_xbox_settings.stick_deadzone = XBOX_STICK_DZ;
-    }
-    if (!(have & HAVE_DZ)) {
-        int dz = xbox_controller_ini_deadzone();
-        if (dz >= 0) {
-            g_xbox_settings.stick_deadzone = dz;
-            xbox_logf("[Settings] stick dead zone %d%% taken over from controller.ini\n", dz);
-        }
     }
     if (have != HAVE_ALL) pc_settings_save();   /* write the missing keys once */
     g_xbox_settings_boot = g_xbox_settings;
@@ -269,8 +291,9 @@ int g_xbox_safe_video_held;
 
 /* Safe video (from Melee-X): BACK held on any controller as the splash ends
  * means the TV may not show the saved mode. This boot and the next run at
- * 480i: video_720p and progressive are saved as 0, and Options > Video >
- * Output turns them back on. */
+ * 480i: video_720p and progressive are saved as 0 (Output 480i, an explicit
+ * choice that no default or migration undoes), and Options > Video > Output
+ * goes back to Auto. */
 void xbox_settings_safe_video(void) {
     if (!g_xbox_safe_video_held) return;
     g_xbox_settings.video_720p = 0;
@@ -321,6 +344,35 @@ int xbox_widescreen_wanted(const XboxSettings* s) {
     return s->widescreen == XBOX_WS_ON;
 }
 
+/* The output a boot with s runs, unless 720p fails to start (memory, GPU
+ * init): the settings only allow a mode, the dashboard has to allow it too
+ * (Melee-X's video_used, menu.c). 720p needs the 16:9 logical screen. */
+int xbox_video_output(const XboxSettings* s) {
+    if (XBOX_WIDESCREEN && s->video_720p && xbox_video_720p_allowed()) return XBOX_OUT_720P;
+    return s->progressive && xbox_video_480p_allowed() ? XBOX_OUT_480P : XBOX_OUT_480I;
+}
+
+/* After GPU init: the mode this boot runs, what chose it, and the
+ * dashboard's video flags (the EEPROM's, as the encoder reports them). */
+void xbox_video_log(void) {
+    static const char* const names[] = { "480i", "480p", "720p" };
+    DWORD enc = encoder_settings();
+    const XboxSettings* b = &g_xbox_settings_boot;
+    int out = g_xbox_video_720p ? XBOX_OUT_720P : b->progressive && xbox_video_480p_allowed() ? XBOX_OUT_480P :
+                                                                                                XBOX_OUT_480I;
+    xbox_logf("[VIDEO] %s %s: output %s, widescreen %s (video_720p %d, progressive %d, widescreen %d)\n",
+              names[out], g_pc_window_w > PC_SCREEN_WIDTH ? "16:9" : "4:3",
+              b->video_720p && b->progressive ? "Auto" : names[xbox_video_output(b)],
+              b->widescreen == XBOX_WS_AUTO ? "Auto" : b->widescreen == XBOX_WS_ON ? "16:9" : "4:3", b->video_720p,
+              b->progressive, b->widescreen);
+    xbox_logf("[VIDEO] dashboard: 480p %d, 720p %d, 1080i %d, widescreen %d, letterbox %d, AV pack %u, %s "
+              "(encoder %08x; 480p usable %d, 720p usable %d)\n",
+              (enc & VIDEO_MODE_480P) != 0, (enc & VIDEO_MODE_720P) != 0, (enc & VIDEO_MODE_1080I) != 0,
+              (enc & VIDEO_WIDESCREEN) != 0, (enc & VIDEO_LETTERBOX) != 0, (unsigned)(enc & VIDEO_ADAPTER_MASK),
+              (enc & VIDEO_STANDARD_MASK) == 0x00000300 ? "PAL" : "NTSC", (unsigned)enc, xbox_video_480p_allowed(),
+              xbox_video_720p_allowed());
+}
+
 /* The game draws into a logical screen of g_pc_window_w x g_pc_window_h;
  * pc_gx.c (built with PC_ENHANCEMENTS) widens the 3D view (hor+) and
  * pillarboxes 2D art when it is wider than 4:3. xbox_nv2a.c scales the
@@ -368,15 +420,16 @@ void xbox_quit_to_dashboard(void) {
     launch_failed();
 }
 
-/* D: is the XBE's own folder (nxdk automount); relaunch the same file name */
+/* Relaunch this XBE by the kernel's own path for it
+ * (\Device\Harddisk0\Partition6\...\default.xbe, \Device\CdRom0\...), as
+ * Melee-X does (xhw_reboot_self): XLaunchXBE takes \Device\ paths as they
+ * are, while the DOS path D:\default.xbe became \??\D:;default.xbe in the
+ * launch data, the launch failed and the restart fell through to the
+ * dashboard. */
 void xbox_restart(void) {
     char path[300];
     const ANSI_STRING* img = &XeImageFileName[0];
-    const char* base = img->Buffer;
-    int i;
-    for (i = 0; i < img->Length; i++)
-        if (img->Buffer[i] == '\\') base = img->Buffer + i + 1;
-    snprintf(path, sizeof path, "D:\\%.*s", (int)(img->Length - (base - img->Buffer)), base);
+    snprintf(path, sizeof path, "%.*s", (int)img->Length, img->Buffer);
     xbox_logf("[XBOX] restart: %s\n", path);
     leave_game();
     XLaunchXBE(path);

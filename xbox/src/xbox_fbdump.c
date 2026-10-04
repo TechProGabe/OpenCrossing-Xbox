@@ -89,15 +89,20 @@ void xbox_fbdump(const void* fb, int w, int h, int bpp, int pitch) {
  * written. */
 int xbox_fbdump_bmp(const char* path, const void* fb, int w, int h, int bpp, int pitch) {
     enum { ROWS = 8 };
-    static unsigned char buf[ROWS * (1280 * 3 + 4)];
+    unsigned char* buf;   /* 30 KB, only while a shot is written */
     unsigned char hdr[54];
     unsigned stride = ((unsigned)w * 3 + 3) & ~3u, size = 54 + stride * (unsigned)h;
     DWORD done;
     HANDLE f;
     int x, y, n = 0;
     if (w > 1280 || w <= 0 || h <= 0) return 0;
+    buf = (unsigned char*)calloc(ROWS, stride);
+    if (!buf) return 0;
     f = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (f == INVALID_HANDLE_VALUE) return 0;
+    if (f == INVALID_HANDLE_VALUE) {
+        free(buf);
+        return 0;
+    }
     memset(hdr, 0, sizeof hdr);
     hdr[0] = 'B';
     hdr[1] = 'M';
@@ -109,7 +114,6 @@ int xbox_fbdump_bmp(const char* path, const void* fb, int w, int h, int bpp, int
     hdr[26] = 1;
     hdr[28] = 24;
     WriteFile(f, hdr, sizeof hdr, &done, NULL);
-    memset(buf, 0, sizeof buf);
     for (y = h - 1; y >= 0; y--) {
         const unsigned char* src = (const unsigned char*)fb + (size_t)y * (size_t)pitch;
         unsigned char* row = buf + n * stride;
@@ -133,5 +137,6 @@ int xbox_fbdump_bmp(const char* path, const void* fb, int w, int h, int bpp, int
         }
     }
     CloseHandle(f);
+    free(buf);
     return 1;
 }

@@ -125,7 +125,10 @@ size_t xbox_log_tail(char* out, size_t cap) {
 #endif
 #define BOOTLOG_FIRST_MAX (4u << 20)
 #define BOOTLOG_NEXT_MAX (2u << 20)
-#define PEND_BYTES (128 * 1024)
+/* 64 KB a side: the watchdog drains it every second (urgent lines sooner),
+ * and no hardware log has shown a dropped line; the busiest second (NES
+ * start, [HITCH] runs) queues a few KB. Was 128 KB: 128 KB of the 64 MB. */
+#define PEND_BYTES (64 * 1024)
 static HANDLE s_bootlog = INVALID_HANDLE_VALUE;
 static volatile int s_bootlog_async;
 static char s_pend[2][PEND_BYTES];

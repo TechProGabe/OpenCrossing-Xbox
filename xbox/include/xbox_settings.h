@@ -17,12 +17,15 @@ extern "C" {
 #endif
 
 enum { XBOX_WS_OFF = 0, XBOX_WS_ON = 1, XBOX_WS_AUTO = 2 };
+enum { XBOX_OUT_480I, XBOX_OUT_480P, XBOX_OUT_720P };
 
 typedef struct {
     int stick_deadzone; /* left stick radial dead zone, percent 0-60 */
     int rumble;         /* motor strength, percent 0-100 (0 = off) */
-    int video_720p;     /* 1 = 1280x720 output; needs a restart */
-    int widescreen;     /* XBOX_WS_*: 16:9 picture (anamorphic at 480) */
+    int video_720p;     /* 1 = 1280x720 where the dashboard allows it (default;
+                         * with progressive = 1 that is Output Auto), 0 = stay
+                         * at 480; needs a restart */
+    int widescreen;     /* XBOX_WS_*: 16:9 picture (anamorphic at 480); Auto by default */
     int gpu_overlap;    /* hidden (settings.ini only): 0 = drain the GPU at present,
                          * for A/B tests on hardware; read once at GPU init */
     /* Hidden switches for the Melee-X backport (docs/backport.md), each read
@@ -64,6 +67,11 @@ void xbox_settings_early(void);
 extern int g_xbox_video_720p;
 /* 1 when s asks for a 16:9 picture (Auto follows the dashboard) */
 int xbox_widescreen_wanted(const XboxSettings* s);
+/* XBOX_OUT_*: the output a boot with s runs, as the dashboard allows it
+ * (720p can still fall back to 480 at GPU init) */
+int xbox_video_output(const XboxSettings* s);
+/* the [VIDEO] lines after GPU init: mode, aspect, settings, dashboard flags */
+void xbox_video_log(void);
 /* sets the game's logical screen (g_pc_window_w/h) for the widescreen setting */
 void xbox_settings_apply(void);
 
