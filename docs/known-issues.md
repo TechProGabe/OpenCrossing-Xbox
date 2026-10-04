@@ -66,7 +66,7 @@ was checked in xemu (it relaunches into the game at the new output).
   (address, segment, DL level) instead of faulting: that line names the
   culprit if it comes back.
 
-## Crash after Rover's train on an upgraded console (GitHub #2)
+## Crash in `lbRTC_Sub_DD` on an upgraded console (GitHub #2, #3)
 
 - Beta-3 release, 128 MB, 1 GHz CPU swap, HDMI modchip, 480i: a new game
   starts, then crashes right after the train dialog. `crash.log`: access
@@ -78,11 +78,66 @@ was checked in xemu (it relaunches into the game at the new output).
 - Not the memory layout: the log says 131072 KB total but 38644 KB free
   (Cerbios honours the XBE's 64 MB flag), and beta-3 at 128 MB under
   Cerbios in xemu goes through the train into town; another player's
-  128 MB console runs fine. Suspect the CPU swap. Since then: the CPU clock
-  check and the 64 MB lock. Next: the reporter's `[CLOCK] CPU` line on the
-  next release, and whether it crashes at the same point every time.
+  128 MB console runs fine. Suspect the CPU swap.
+- v1, same console (GitHub #3, 720p now): the same fault twice in a row,
+  this time on START at the title (`mTM_time` -> `Kabu_manager` on the day
+  change, frames 511 and 624). `[CLOCK] CPU 1000.0 MHz (nxdk says 999.9)`,
+  cpuid `00000686` (Coppermine cC0; the stock CPU is `068a`), the 64 MB
+  lock held (`free 38412 KB`). So not the clock, not the memory, and not a
+  flaky part: it is the same instruction and the same address every time,
+  in two builds that put the function at different addresses.
+- The fault address is the code itself: the bytes at the eip are
+  `31 f6 | 83 f8 01 | 83 d6 0b` (`xor esi, esi; cmp eax, 1; adc esi, 11`),
+  and `d68301f8` is bytes 3-6 of that. Skip the `31` and the rest decodes
+  as `f6 83 f8 01 83 d6 0b` = `test byte [ebx + 0xd68301f8], 0x0b`, with
+  ebx = 0: exactly the read that faulted. The registers are those of a
+  correct run up to the eip (the zero date takes the month-0 path, which
+  every new town takes on every console). Either that CPU decodes this
+  sequence one byte off, or the byte at the eip isn't `31` in that
+  console's RAM (a BIOS or modchip patcher matching a signature; a bad RAM
+  cell is ruled out, no prefix is one bit from `31` and the address moved
+  between builds).
+- Verified against the release XBEs (2026-10-04): beta-3 puts
+  `lbRTC_Sub_DD` at `0032c830` and #2's eip `0032c90c` is the same offset
+  `+dc` as v1's `0033413c` (`00334060`); both files hold the identical
+  `31 f6 83 f8 01 83 d6 0b` there, and both logs show the same registers
+  (`eax ffffffff ebx 0 esi d ebp 1`, only `ecx` differs: the garbage
+  `lbRTC_GetDaysByMonth(year 0, month 255)` returns, 57 vs 9). The
+  `xor esi, esi` sits at offset `c` of a 16-byte fetch window in both
+  builds (the function is 16-aligned), so `cmp eax, 1` straddles the
+  window in both; the 32-byte line alignment differs (`00` vs `10` mod
+  32). It is reached by fallthrough from a not-taken `jne`; the January
+  path reaches it by `jmp`. The 8-byte sequence is unique in the binary;
+  the other `xor esi,esi; cmp eax,1` sites are followed by a `jcc` and
+  none sits at offset `c`. Stepping 0686 is cC0, older than the stock
+  cD0 (068a); an Xbox BIOS carries no microcode for it, if it carries any.
+  No Intel erratum was matched (the spec update PDF didn't extract).
+- Troubleshooting build for the reporter (`-DXBOX_DIAG_ISSUE3=ON`,
+  `toolchain.md`; `xbox/src/xbox_diag.c`): `boot.log` gets `[DIAG]` lines
+  (cpuid, microcode revision from MSR 8Bh, P6 MSRs, CR0/CR4, kernel
+  version; `.text`/`.rdata` in RAM compared with `D:\default.xbe`;
+  `lbRTC_Sub_DD` on a zero date under an exception guard, from its real
+  address with `wbinvd` and 1000 plain runs, the January `jmp` path, and
+  copies at all 64 alignments), and `crash.log` gets the code bytes at the
+  eip from RAM and from the disk (`[CRASH] ram eip+0:` / `disk eip+0:` /
+  `ram vs disk:`). `settings.ini` `rtc_shim = 1` routes `lbRTC_Sub_DD`
+  through a plain -O0 copy of its C (`XBOX_RTC_SHIM`, `patches.md`).
+  Checked in xemu (2026-10-04): `.text`/`.rdata` match the disk, the guard
+  catches a deliberate read of `d68301f8` and boot goes on (`[DIAG] guard
+  self-test`), every rtc run passes, and a forced crash (`XBOX_DBG_CRASH_FRAME`)
+  logs the ram/disk code lines with `ram vs disk: identical`. On red
+  (stock cD0, kernel 5101, microcode revision 1): the same, all 64 copies
+  ok, then title, START and town as usual.
+  Reading the result: `ram vs disk: identical` + a `[DIAG] rtc ... FAULT`
+  at boot = the CPU (and the copies say whether alignment matters; if the
+  shim then runs through, ship it as a `cpuid 0686` workaround); `RAM !=
+  disk` or `differ at eip+0` = something patches the image in RAM (BIOS,
+  modchip, kernel patcher: ask for the BIOS name/version); all boot tests
+  ok but the title crash stays = the fault needs the game's context
+  (cache/timing state), still the CPU side. Still wanted from the reporter:
+  BIOS name and version, the same build on their 1.4 GHz console.
 - An earlier report (early beta, crash on START at the title, `last.log`
-  only) wasn't reproduced either.
+  only) wasn't reproduced either; likely the same fault.
 
 ## Title text at 720p looks odd (2026-10-03, v4)
 

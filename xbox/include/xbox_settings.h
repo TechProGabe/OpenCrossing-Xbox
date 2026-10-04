@@ -44,6 +44,8 @@ typedef struct {
                          * held at boot sets it and video_720p to 0 (safe video) */
     int audio_priority; /* hidden: the audio producer thread above the game's */
     int screenshots;    /* 1: clicking the right stick saves shotNN.bmp to UDATA (live) */
+    int rtc_shim;       /* XBOX_RTC_SHIM builds (GitHub #3, xbox_diag.c): 1 = lbRTC_Sub_DD
+                         * runs a plain -O0 copy of its C instead of the game's code */
 } XboxSettings;
 
 extern XboxSettings g_xbox_settings;

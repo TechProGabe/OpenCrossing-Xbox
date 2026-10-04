@@ -25,6 +25,7 @@
 #include "dirent.h"
 #include "xbox_nv2a.h"
 #include "xbox_settings.h"
+#include "xbox_diag.h"
 
 SDL_Window*   g_pc_window = NULL;
 SDL_GLContext g_pc_gl_context = NULL;
@@ -285,6 +286,7 @@ static int main_body(void* arg) {
     xbox_clock_check();   /* before anything reads a timer frequency */
     read_image_range();
     xbox_logf("[XBOX] image %08x-%08x\n", pc_image_base, pc_image_end);
+    xbox_diag_boot();    /* -DXBOX_DIAG_ISSUE3=ON builds only (xbox_diag.c) */
     xbox_prof_start();   /* -DXBOX_PROF=1 builds only; this thread runs the game */
 
     /* controllers before the splash: BACK held as it ends is safe video

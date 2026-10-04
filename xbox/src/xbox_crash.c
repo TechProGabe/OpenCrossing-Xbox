@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include "xbox_io.h"
+#include "xbox_diag.h"
 
 #ifndef XBOX_CRASH_GUARD
 #define XBOX_CRASH_GUARD 1
@@ -37,7 +38,7 @@ typedef struct Reg {
 enum { DISP_CONTINUE_SEARCH = 1 };
 
 static volatile LONG s_in_crash;
-static char s_rep[6144];
+static char s_rep[8192];
 static int s_len;
 
 static void rep(const char* fmt, ...) {
@@ -97,7 +98,15 @@ static void build_report(const EXCEPTION_RECORD* er, const CONTEXT* cx) {
     rep("\n[CRASH] raw:");
     sp = (ULONG*)cx->Esp;
     for (i = 0; i < 16 && sp && top && sp + i < top; i++) rep(" %08lx", sp[i]);
-    rep("\n[CRASH] end\n");
+    rep("\n");
+    /* the code bytes at the eip, from RAM (XBOX_CRASH_CODE_DUMP, xbox_diag.c);
+     * the disk copy follows in on_exception, where file I/O is allowed */
+    s_len += xbox_diag_crash_code((unsigned)cx->Eip, s_rep + s_len, (int)sizeof s_rep - s_len);
+}
+
+static void end_report(const CONTEXT* cx) {
+    s_len += xbox_diag_crash_disk((unsigned)cx->Eip, s_rep + s_len, (int)sizeof s_rep - s_len);
+    rep("[CRASH] end\n");
 }
 
 static void write_crash_log(void) {
@@ -152,6 +161,7 @@ __attribute__((cdecl)) static int on_exception(EXCEPTION_RECORD* er, void* frame
         /* no waits or file I/O at raised IRQL: the screen is all we get */
         for (;;) {}
     }
+    end_report(cx);
     xbox_log_write(s_rep, (size_t)s_len);
     write_crash_log();
     for (;;) Sleep(1000);
