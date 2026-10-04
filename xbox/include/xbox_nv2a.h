@@ -54,6 +54,8 @@ void xbox_tev_compile(const XTevCfg* cfg, XRcProg* out);
 /* backend entry points used by xbox_main.c */
 int  xbox_nv2a_init(void);
 void xbox_nv2a_present(void);
+/* save the next presented frame as UDATA shotNN.bmp (screenshots setting) */
+void xbox_nv2a_shot(void);
 int  xbox_gl_nv2a_load(void);
 extern int g_xbox_fbdump_every;   /* 0 = off; N = dump every Nth frame to COM1 */
 

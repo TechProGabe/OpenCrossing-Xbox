@@ -238,6 +238,11 @@ static void pc_ensure_save_dirs(void) {
 
 static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path);
 
+/* pc_save_write_gci_ex flags */
+#define PC_SAVE_FORCE      1   /* write even before pc_save_ready (player select) */
+#define PC_SAVE_ERASE_LAND 2   /* write the town with its save check cleared */
+static int pc_save_write_gci_ex(const char* gci_path, const char* tmp_path, int flags);
+
 /* mCD_get_land_copyProtect */
 static u16 pc_get_land_copy_protect(void) {
     u16 code = (u16)RANDOM(0xFFF0);
@@ -296,6 +301,10 @@ static int pc_save_write_gci(void) {
 }
 
 static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path) {
+    return pc_save_write_gci_ex(gci_path, tmp_path, 0);
+}
+
+static int pc_save_write_gci_ex(const char* gci_path, const char* tmp_path, int flags) {
     FILE* fp;
     u8* file_data;
     CARDDir dir_hdr;
@@ -303,13 +312,15 @@ static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path) {
     u16 checksum;
     u8* others_ptr;
 
-    if (!pc_save_ready) return TRUE;
+    if (!pc_save_ready && !(flags & PC_SAVE_FORCE)) return TRUE;
 
     pc_ensure_save_dirs();
 
-    Save_Get(save_exist) = TRUE;
-    Save_Get(save_check).version = mFRm_VERSION;
-    mFRm_SetSaveCheckData(Save_GetPointer(save_check));
+    if (!(flags & PC_SAVE_ERASE_LAND)) {
+        Save_Get(save_exist) = TRUE;
+        Save_Get(save_check).version = mFRm_VERSION;
+        mFRm_SetSaveCheckData(Save_GetPointer(save_check));
+    }
 
     file_data = (u8*)calloc(1, GCI_FILE_DATA_SIZE);
     if (!file_data) return FALSE;
@@ -373,6 +384,9 @@ static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path) {
     /* Main Save_t (offset 0x26000) */
     save_copy = (Save_t*)(file_data + GCI_SAVE_MAIN_OFFSET);
     memcpy(save_copy, &common_data.save.save, sizeof(Save_t));
+    /* mCD_EraseLand_bg_set_data: the written copy's check is cleared, so the
+     * next load finds no town; the town in memory is left as it is */
+    if (flags & PC_SAVE_ERASE_LAND) mFRm_ClearSaveCheckData(&save_copy->save_check);
 
     pc_save_bswap(save_copy, PC_BSWAP_TO_BE);
     {
@@ -445,6 +459,27 @@ static int pc_save_write_gci_to(const char* gci_path, const char* tmp_path) {
 }
 
 /* Read a GCI file into common_data (for home town / Card A) */
+#ifdef TARGET_XBOX
+/* The game clock is the console clock plus time_delta, set when the
+ * player adjusts the time. Until 2026-10-03 the Xbox's console clock
+ * read ~56 years ahead (pc_os.c: nxdk's mktime failed), so a delta set
+ * then is about -56 years and puts the fixed clock back in ~1970.
+ * Real deltas stay within the game's years (2000-2030ish): anything
+ * past 40 years can only be that, and goes to 0 (the console's local
+ * time). The player can set the clock again in the game. Card A's town
+ * and a visited town (Card B) alike. */
+static void pc_xbox_fix_time_delta(Save_t* save) {
+    s64 d = save->time_delta;
+    const s64 tps = 40500000;   /* GameCube timer ticks a second (bus clock / 4) */
+    s64 lim = (s64)40 * 365 * 24 * 3600 * tps;
+    if (d > lim || d < -lim) {
+        OSReport("[CLOCK] save's time offset %lld s is from the old clock bug: reset to 0 (console time)\n",
+                 (long long)(d / tps));
+        save->time_delta = 0;
+    }
+}
+#endif
+
 static int pc_save_read_gci(const char* path) {
     FILE* fp;
     CARDDir dir_hdr;
@@ -506,6 +541,9 @@ static int pc_save_read_gci(const char* path) {
 
     memcpy(&common_data.save.save, save_src, sizeof(Save_t));
     pc_save_bswap(&common_data.save.save, PC_BSWAP_FROM_BE);
+#ifdef TARGET_XBOX
+    pc_xbox_fix_time_delta(&common_data.save.save);
+#endif
 
     /* --- Load ARAM blocks from Others section ---
      * Current saves (PC + Dolphin/GC) use order: mail, original, diary.
@@ -601,6 +639,9 @@ static int pc_save_read_gci_to_keep(const char* path) {
             return FALSE;
         }
     }
+#ifdef TARGET_XBOX
+    pc_xbox_fix_time_delta(&l_keepSave.save);
+#endif
 
     /* Load ARAM blocks — detect GC vs legacy PC order (same landid check as main load) */
     {
@@ -1005,7 +1046,18 @@ int mCD_CheckStation_bg(s32* chan) {
         }
     }
 
+#ifdef TARGET_XBOX
+    /* No other town: the GameCube offers a passport trip here, which saves
+     * the traveller to the card in slot B and ends at the title, for taking
+     * the card to a friend's GameCube. Here the passport only lives in
+     * memory, so the train went nowhere and dropped the player on the title
+     * screen. The station's "no town data" answer instead. */
+    OSReport("[PC] CheckStation: no other town in save/card_b: no trip\n");
+    if (chan) *chan = mCD_SLOT_B;
+    return mCD_TRANS_ERR_NO_TOWN_DATA;
+#else
     return mCD_TRANS_ERR_NONE;
+#endif
 }
 
 /* Persist current town and load the "other" town into l_keepSave.
@@ -1013,6 +1065,8 @@ int mCD_CheckStation_bg(s32* chan) {
  *  - Foreigner: save visited town (Card B) + load Card A → l_keepSave. */
 int mCD_SaveStation_NextLand_bg(s32* chan) {
     int is_foreigner = mLd_PlayerManKindCheck();
+    int marked_away = FALSE, saved_exists = TRUE;
+    u32 saved_reset_code = 0;
 
     if (is_foreigner) {
         /* Record departure info (visited town) for Rover. */
@@ -1054,6 +1108,7 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
         }
 
         if (!pc_save_read_gci_to_keep(PC_GCI_PATH)) {
+            l_keepSave_set = FALSE;
             OSReport("[PC] SaveStation_NextLand(return): failed to load home town\n");
             if (chan) *chan = mCD_SLOT_A;
             return mCD_TRANS_ERR_CORRUPT;
@@ -1071,6 +1126,18 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
     if (l_card_b_gci_path[0] == '\0') {
         OSReport("[PC] SaveStation_NextLand: no Card B path\n");
         return mCD_TRANS_ERR_NO_TOWN_DATA;
+    }
+
+    /* Load the other town first, so a Card B that can't be read (or memory
+     * that runs out) fails the trip before home is touched: the save below
+     * marks the player as away, and a failed trip after it left them away
+     * (the gyroid punishment on the next load), with l_keepSave armed for
+     * the next scene change. The home writer doesn't use the l_keep*
+     * buffers this fills. */
+    if (!pc_save_read_gci_to_keep(l_card_b_gci_path)) {
+        OSReport("[PC] SaveStation_NextLand: failed to load Card B town: trip cancelled\n");
+        l_keepSave_set = FALSE;
+        return mCD_TRANS_ERR_CORRUPT;
     }
 
     /* 0. Record home town info for Rover's dialogue (departure town name) */
@@ -1105,6 +1172,9 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
      * If the player quits during the visit, next load sees exists==FALSE
      * → gyroid face + inventory cleared as punishment (m_start_data_init.c:426) */
     if (Now_Private != NULL && mLd_PlayerManKindCheckNo(Common_Get(player_no)) == FALSE) {
+        saved_exists = Now_Private->exists;
+        saved_reset_code = Now_Private->reset_code;
+        marked_away = TRUE;
         Now_Private->exists = FALSE;
         Now_Private->reset_code = 0;
         OSReport("[PC] SaveStation_NextLand: marked player as away (exists=FALSE)\n");
@@ -1112,16 +1182,14 @@ int mCD_SaveStation_NextLand_bg(s32* chan) {
 
     /* 3. Save home town to Card A (with player marked as away) */
     if (!pc_save_write_gci()) {
-        /* Restore player state on failure */
-        if (Now_Private != NULL) Now_Private->exists = TRUE;
-        OSReport("[PC] SaveStation_NextLand: failed to save home town\n");
+        /* Restore player state on failure, and disarm the trip */
+        if (Now_Private != NULL && marked_away) {
+            Now_Private->exists = saved_exists;
+            Now_Private->reset_code = saved_reset_code;
+        }
+        l_keepSave_set = FALSE;
+        OSReport("[PC] SaveStation_NextLand: failed to save home town: trip cancelled\n");
         return mCD_TRANS_ERR_IOERROR;
-    }
-
-    /* 3. Load other town from Card B into l_keepSave + l_keep* ARAM blocks */
-    if (!pc_save_read_gci_to_keep(l_card_b_gci_path)) {
-        OSReport("[PC] SaveStation_NextLand: failed to load Card B town\n");
-        return mCD_TRANS_ERR_CORRUPT;
     }
 
     l_mcd_keep_startCond = mCD_START_COND_INCOMING_FOREIGNER;
@@ -1320,8 +1388,19 @@ int mCD_EraseBrokenLand_bg(int* slot) {
     return mCD_TRANS_ERR_NONE;
 }
 
+/* Player select erases run before any game has started, while pc_save_ready
+ * is still 0; the save in memory is the one just read from disk, so they
+ * write with PC_SAVE_FORCE. GC rewrites the town file with its save check
+ * cleared; the old file is kept as .bak1 like any save (only read if the new
+ * one can't be). */
 int mCD_EraseLand_bg(int* slot) {
     if (slot) *slot = mCD_SLOT_A;
+    if (!Save_Get(save_exist)) return mCD_TRANS_ERR_IOERROR;
+    if (!pc_save_write_gci_ex(PC_GCI_PATH, PC_GCI_TMP_PATH, PC_SAVE_FORCE | PC_SAVE_ERASE_LAND)) {
+        OSReport("[PC] mCD_EraseLand_bg: write failed\n");
+        return mCD_TRANS_ERR_IOERROR;
+    }
+    OSReport("[PC] mCD_EraseLand_bg: town erased\n");
     return mCD_TRANS_ERR_NONE;
 }
 
@@ -1332,8 +1411,14 @@ int mCD_ErasePassportFile_bg(int slot) {
     return mCD_TRANS_ERR_NONE;
 }
 
+/* aNPS2_clr_pl_data_init already cleared the player in memory; persist it */
 int mCD_SaveErasePlayer_bg(int* slot) {
     if (slot) *slot = mCD_SLOT_A;
+    if (!Save_Get(save_exist)) return mCD_TRANS_ERR_IOERROR;
+    if (!pc_save_write_gci_ex(PC_GCI_PATH, PC_GCI_TMP_PATH, PC_SAVE_FORCE)) {
+        OSReport("[PC] mCD_SaveErasePlayer_bg: write failed\n");
+        return mCD_TRANS_ERR_IOERROR;
+    }
     return mCD_TRANS_ERR_NONE;
 }
 

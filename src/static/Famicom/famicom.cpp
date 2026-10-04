@@ -7,6 +7,9 @@
 #include <strings.h>
 #include <dirent.h>
 extern "C" {
+#if defined(TARGET_XBOX)
+    void OSReport(const char* fmt, ...);   /* the [NES] lines below come before dolphin/os.h */
+#endif
     void pc_fixnes_init(unsigned char* ines_data, int ines_size);
     void pc_fixnes_set_input(unsigned char buttons);
     unsigned short* pc_fixnes_frame(void);
@@ -52,6 +55,9 @@ static int pc_nes_rom_cmp(const void* a, const void* b) {
 static int pc_nes_rom_scan(char*** out_names) {
     *out_names = nullptr;
     DIR* d = opendir(PC_NES_ROMS_DIR);
+#if defined(TARGET_XBOX)
+    if (d == nullptr) OSReport("[NES] no %s folder next to default.xbe: no memory-card games\n", PC_NES_ROMS_DIR);
+#endif
     if (d == nullptr) return 0;
     char** names = nullptr;
     int count = 0;
@@ -1289,6 +1295,9 @@ static s32 memcard_game_load(
     char** names;
     int count = pc_nes_rom_scan(&names);
     if (rom_idx < 0 || rom_idx >= count) {
+#if defined(TARGET_XBOX)
+        OSReport("[NES] memory-card game %d of %d not found: card error\n", rom_idx, count);
+#endif
         pc_nes_rom_free(names, count);
         return CARD_RESULT_FATAL_ERROR;
     }
@@ -2810,7 +2819,15 @@ extern void famicom_1frame() {
 
     JW_SetFamicomMode(TRUE);
 
+#if defined(TARGET_XBOX)
+    /* fixNES (pc_fixnes_render_frame) already drew the frame, 4:3 or
+     * stretched per nes_aspect. This GameCube quad samples result_bufp,
+     * which fixNES never fills; with the NES texture still bound (pc_gx's
+     * bind cache doesn't know fixNES rebound unit 0) it drew the NES
+     * picture again, full screen, over the 4:3 one (docs/patches.md). */
+#else
     famicom_draw();
+#endif
 
     /* If filer mode is enabled, controller 4 L press toggles process profiling bar */
     if (filer_mode_enable && (((JUTGamePad*)gamePad)[3].mButtons.mTrigger & JUTGamePad::L)) {
@@ -2926,6 +2943,9 @@ extern int famicom_internal_data_load() {
         char nes_path[300];
         snprintf(nes_path, sizeof(nes_path), "%s/DobutsunomoriP_F_SAVE.sav", pc_nes_save_dir());
         FILE* f = fopen(nes_path, "rb");
+#if defined(TARGET_XBOX)
+        OSReport("[NES] internal save load %s: %s\n", nes_path, f ? "read" : "none yet");
+#endif
         if (f) {
             fread(famicomCommonSave, 1, sizeof(famicomCommonSave), f);
             fclose(f);
@@ -2979,6 +2999,9 @@ extern int famicom_internal_data_save() {
         char nes_path[300];
         snprintf(nes_path, sizeof(nes_path), "%s/DobutsunomoriP_F_SAVE.sav", pc_nes_save_dir());
         FILE* f = fopen(nes_path, "wb");
+#if defined(TARGET_XBOX)
+        OSReport("[NES] internal save write %s: %s\n", nes_path, f ? "ok" : "FAILED");
+#endif
         if (f) {
             fwrite(famicomCommonSave, 1, sizeof(famicomCommonSave), f);
             fclose(f);

@@ -1,5 +1,7 @@
 # Builds default.xbe on every push and pull request. A push to main also
-# publishes it as a numbered beta pre-release (docs/toolchain.md).
+# publishes it: as a full release vX when the pushed commit's message says
+# "[release vX]" (notes from docs/releases/vX.md), else as a numbered beta
+# pre-release (docs/toolchain.md).
 name: build
 
 on:
@@ -42,15 +44,22 @@ jobs:
       - name: Build
         run: xbox/build.sh
 
-      # betas are numbered 1, 2, 3... by count of existing beta releases;
-      # other builds are named after the run
+      # "[release vX]" in the pushed commit's message makes a full release
+      # vX; otherwise betas are numbered 1, 2, 3... by count of existing beta
+      # releases; other builds are named after the run
       - name: Package
         id: pkg
         env:
           GH_TOKEN: ${{ github.token }}
+          HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+          version=$(printf '%s' "${HEAD_MSG:-}" | grep -oE '\[release v[0-9]+(\.[0-9]+)*\]' | head -1 | tr -d '[]' | sed 's/^release //' || true)
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ] && [ -n "$version" ]; then
+            n="$version"
+            name="OpenCrossing-Xbox-${version}"
+            test -f "docs/releases/${version}.md" || { echo "docs/releases/${version}.md is missing"; exit 1; }
+          elif [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
             n=$(( $(gh release list --limit 1000 --json tagName -q '[.[] | select(.tagName | startswith("beta-"))] | length') + 1 ))
             name="OpenCrossing-Xbox-beta-${n}"
           else
@@ -66,6 +75,7 @@ jobs:
           cp build-xbox/ac_xbox.map "$RUNNER_TEMP/ac_xbox.map"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "n=$n" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -74,8 +84,23 @@ jobs:
             ${{ runner.temp }}/${{ steps.pkg.outputs.name }}.zip
             ${{ runner.temp }}/ac_xbox.map
 
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.pkg.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${{ steps.pkg.outputs.version }}"
+          gh release create "$v" \
+            --target "$GITHUB_SHA" \
+            --title "OpenCrossing-Xbox $v" \
+            --notes-file "docs/releases/$v.md" \
+            --latest \
+            "$RUNNER_TEMP/${{ steps.pkg.outputs.name }}.zip" \
+            "$RUNNER_TEMP/ac_xbox.map"
+
       - name: Publish beta
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.pkg.outputs.version == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

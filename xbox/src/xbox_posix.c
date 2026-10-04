@@ -20,7 +20,17 @@ DIR* opendir(const char* path_in) {
     char pat[MAX_PATH], rp[MAX_PATH];
     /* the save tree lives in UDATA; any other scan is of the XBE's folder */
     const char* path = xbox_resolve(path_in, strncmp(path_in, "save", 4) == 0 ? XBOX_PATH_WRITE : XBOX_PATH_DISC, rp, sizeof rp);
-    size_t n = strlen(path);
+    size_t n;
+#ifdef XBOX_DBG_SAVE_FROM_D
+    /* test runs: a save folder packed on the disc is scanned instead, as
+     * xbox_resolve reads saves from it (harness OCX_STAGE_EXTRA) */
+    if (strncmp(path_in, "save", 4) == 0) {
+        DWORD a = GetFileAttributesA(xbox_resolve(path_in, XBOX_PATH_DISC, pat, sizeof pat));
+        if (a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY))
+            path = xbox_resolve(path_in, XBOX_PATH_DISC, rp, sizeof rp);
+    }
+#endif
+    n = strlen(path);
     DIR* d;
     if (n + 5 > sizeof pat) return NULL;
     memcpy(pat, path, n);

@@ -31,14 +31,16 @@
 /* last.log: every XBOX_LASTLOG_SECS in which something was logged (and every
  * 30 s regardless) the watchdog rewrites E:\UDATA\4f430001\last.log with the
  * log tail and a [STATE] line, flushed, so a hard freeze or power-off still
- * leaves the seconds before it on disk (boot.log stops at frame 120). Quiet
- * stretches don't touch the disk. 0 disables. */
+ * leaves the seconds before it on disk (boot.log is up to a second behind).
+ * Quiet stretches don't touch the disk: heartbeat lines ([BEAT], [FRAME],
+ * [PROF]) don't count as something logged. 0 disables. */
 #ifndef XBOX_LASTLOG_SECS
 #define XBOX_LASTLOG_SECS 3
 #endif
 
 extern unsigned int pc_image_base, pc_image_end;
 unsigned int xbox_frame_count(void);
+unsigned xbox_audio_starved_ms(unsigned* gaps);
 void xbox_flush_file(HANDLE h);
 
 #define WD_MAX_THREADS 16
@@ -143,7 +145,8 @@ static void dump_all(const char* why) {
     pb_show_debug_screen();
     debugClearScreen();
     debugPrint("OpenCrossing-Xbox: %s at frame %u\n", why, xbox_frame_count());
-    debugPrint("Log: E:\\UDATA\\4f430001\\hang.log + boot.log\n\n");
+    debugPrint("Log: E:\\UDATA\\4f430001\\hang.log + boot.log\n");
+    debugPrint("(hang_prev.log + boot_prev.log once the game is restarted)\n\n");
     screen_tail(14, 76);
     debugPrint("\n");
     for (i = 0; i < n; i++) {
@@ -166,6 +169,7 @@ static void dump_all(const char* why) {
         xbox_flush_file(h);
         CloseHandle(h);
     }
+    xbox_bootlog_pump();
 
 }
 
@@ -194,18 +198,46 @@ static void write_last_log(void) {
 /* the fatal error card owns the screen for good */
 void xbox_watchdog_disable(void) { s_disabled = 1; }
 
+/* [BEAT] every XBOX_HEARTBEAT_SECS (from Melee-X): if the log ends with
+ * [BEAT] lines whose vblank count climbs while `presented` stands still, the
+ * game loops without drawing; if [BEAT] stops too, the whole machine
+ * stopped. Free memory in each one shows a leak over a long session. 0 = off. */
+#ifndef XBOX_HEARTBEAT_SECS
+#define XBOX_HEARTBEAT_SECS 5
+#endif
+
 static int watchdog_body(void* arg) {
     unsigned last = 0, still = 0, secs = 0, fired = 0;
     (void)arg;
+    DWORD tick = GetTickCount();
     for (;;) {
         unsigned f;
-        Sleep(1000);
+        HANDLE ev = (HANDLE)xbox_bootlog_event();
+        /* an urgent line wakes us early: write it, the second goes on */
+        if (ev) {
+            /* one read: two could straddle a tick and wrap to INFINITE */
+            DWORD el = GetTickCount() - tick;
+            WaitForSingleObject(ev, el < 1000 ? 1000 - el : 0);
+        } else
+            Sleep(1000);
+        xbox_bootlog_pump();   /* the queued log lines (xbox_io.c) */
+        if (GetTickCount() - tick < 1000) continue;
+        tick = GetTickCount();
         secs++;
         if (s_disabled) continue;
         f = xbox_frame_count();
+        if (XBOX_HEARTBEAT_SECS && f && secs % XBOX_HEARTBEAT_SECS == 0) {
+            /* audio starved: silence the AC97 played because the producer
+             * thread was behind (an audible chug), xbox_audio.c */
+            unsigned gaps, starved = xbox_audio_starved_ms(&gaps);
+            char au[48] = "";
+            if (starved) snprintf(au, sizeof au, ", audio starved %u ms in %u gaps", starved, gaps);
+            xbox_logf_quiet("[BEAT] %us: vblank %u, presented %u, free %u KB%s\n", secs, (unsigned)pb_get_vbl_counter(), f,
+                      xbox_mem_free_kb(), au);
+        }
         if (XBOX_LASTLOG_SECS && f && secs % XBOX_LASTLOG_SECS == 0) {
             static unsigned logged_at;
-            unsigned pos = xbox_log_pos();
+            unsigned pos = xbox_log_pos_loud();
             if (pos != logged_at || secs % 30 == 0) {
                 logged_at = pos;
                 write_last_log();

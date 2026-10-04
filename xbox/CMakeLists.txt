@@ -162,6 +162,34 @@ set_property(SOURCE "${PC_DIR}/src/pc_pad.c" APPEND PROPERTY COMPILE_DEFINITIONS
     # rumble is scaled by the Options rumble setting (xbox_pad_axis.c)
     "SDL_GameControllerRumble=xbox_controller_rumble")
 
+# pc_vi.c's frame limiter is fed by the vblank pacer in xbox/src/xbox_nv2a.c,
+# which owns the real g_frame_limiter (settings.ini max_fps) and NES flag.
+set_property(SOURCE "${PC_DIR}/src/pc_vi.c" APPEND PROPERTY COMPILE_DEFINITIONS
+    "g_frame_limiter=g_xbox_vi_frame_limit"
+    "g_pc_nes_active=g_xbox_vi_nes_pace")
+# Verbose logging stays on for the Xbox (boot.log / last.log are the only
+# logs on hardware), except where upstream logs every second or every slow
+# frame: that kept the watchdog rewriting last.log and pushed everything else
+# out of its 4 KB tail. pc_vi.c's [STUTTER] also prints %f, which pdclib
+# can't (xbox_nv2a.c's [HITCH] / [PACE] replace it). g_xbox_verbose_noisy is 0;
+# this also drops ac_animal_logo.c's one-shot title menu transition lines.
+set_property(SOURCE "${PC_DIR}/src/pc_vi.c" "${DECOMP_ROOT}/src/actor/ac_animal_logo.c"
+    APPEND PROPERTY COMPILE_DEFINITIONS "g_pc_verbose=g_xbox_verbose_noisy")
+
+# NES play: the emulator's per-frame time is measured by xbox_nes_frame
+# (xbox/src/xbox_nv2a.c), which calls the real pc_fixnes_frame.
+set_property(SOURCE "${DECOMP_ROOT}/src/static/Famicom/famicom.cpp" APPEND PROPERTY COMPILE_DEFINITIONS
+    "pc_fixnes_frame=xbox_nes_frame"
+    # C++ files don't get the prelude's fopen routing (libc++ spells
+    # std::fopen); famicom.cpp's NES save file (save/card_a/...F_SAVE.sav)
+    # opened a relative path, which never resolves on the Xbox, so NES game
+    # saves were neither read nor written. Its own calls only:
+    "fopen=xbox_fopen" "fclose=xbox_fclose")
+
+# pc_disc.c's fread/fseek on the disc image go around pdclib (xbox_io.c,
+# xbox_prelude.h): pdclib reads 1 KB per kernel call.
+set_property(SOURCE "${PC_DIR}/src/pc_disc.c" APPEND PROPERTY COMPILE_DEFINITIONS XBOX_DISC_TU)
+
 # pc_settings_menu.c is replaced by xbox/src/xbox_settings_menu.c (same API,
 # Xbox rows). pc_settings.c's load/save are wrapped by xbox/src/xbox_settings.c,
 # which adds the [Xbox] section of settings.ini.
@@ -238,6 +266,15 @@ set_source_files_properties(${CXX_FROM_C} PROPERTIES
     COMPILE_OPTIONS "-xc++;-Wno-register;${DECOMP_FLAGS}")
 set_source_files_properties(${PC_REUSED} ${XBOX_SOURCES} PROPERTIES
     COMPILE_OPTIONS "-Wno-unused-parameter;-Wno-sign-compare;-Wno-comment;-Wno-unused-function;-Wno-error=implicit-function-declaration;-Wno-error=incompatible-pointer-types;-Wno-error=int-conversion")
+# pc_card.c's "any .gci in the folder" scan: its _WIN32 branch calls
+# FindFirstFileA on a relative "save/card_a\*.gci", which never resolves on
+# the Xbox; the opendir branch goes through xbox_posix.c (save/ -> UDATA).
+# After the line above, which sets (not appends) these files' options.
+set_property(SOURCE "${PC_DIR}/src/pc_card.c" APPEND PROPERTY COMPILE_OPTIONS -U_WIN32)
+# The CPU clock for these: nxdk's guess is replaced when it's more than 3%
+# off (CPU upgrades, xbox_clock_check in xbox_io.c).
+set_property(SOURCE "${PC_DIR}/src/pc_os.c" "${PC_DIR}/src/pc_vi.c" "${PC_DIR}/src/pc_profiler.c"
+    APPEND PROPERTY COMPILE_DEFINITIONS "SDL_GetPerformanceFrequency=xbox_perf_frequency")
 
 # Object-only target for triage (XBOX_OBJS_ONLY=ON builds without linking).
 option(XBOX_OBJS_ONLY "Compile every TU, skip the link" OFF)

@@ -15,6 +15,7 @@
  *   <call> SDL <button>      push an SDL controller button press+release (the
  *                            pause menu and the rebinding page read those):
  *                            A B X Y BACK START WHITE BLACK UP DOWN LEFT RIGHT
+ *                            RS (right stick click: screenshots)
  *   <call> STICK <x> <y> [hold]  hold the main stick at x,y (-100..100, up is
  *                            +y) for [hold] calls (default 4)
  *   <call> SHOT              one [FBDUMP] screenshot at the next present
@@ -37,7 +38,7 @@ extern int g_xbox_video_720p;    /* xbox_nv2a.c */
 
 typedef struct { u32 call; int kind; u32 arg, hold; int x, y; char text[48]; } Step;
 enum { K_PAD, K_SDL, K_SHOT, K_LOG, K_STICK };
-#define MAX_STEPS 256
+#define MAX_STEPS 1024   /* a 30-minute burn-in script is ~900 steps */
 static Step s_steps[MAX_STEPS];
 static int s_nsteps, s_next, s_loaded;
 static u16 s_held;
@@ -63,7 +64,7 @@ static int sdl_button(const char* n, u32* out) {
         { "A", SDL_CONTROLLER_BUTTON_A }, { "B", SDL_CONTROLLER_BUTTON_B }, { "X", SDL_CONTROLLER_BUTTON_X },
         { "Y", SDL_CONTROLLER_BUTTON_Y }, { "BACK", SDL_CONTROLLER_BUTTON_BACK },
         { "START", SDL_CONTROLLER_BUTTON_START }, { "WHITE", SDL_CONTROLLER_BUTTON_LEFTSHOULDER },
-        { "BLACK", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER }, { "UP", SDL_CONTROLLER_BUTTON_DPAD_UP },
+        { "BLACK", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER }, { "RS", SDL_CONTROLLER_BUTTON_RIGHTSTICK }, { "UP", SDL_CONTROLLER_BUTTON_DPAD_UP },
         { "DOWN", SDL_CONTROLLER_BUTTON_DPAD_DOWN }, { "LEFT", SDL_CONTROLLER_BUTTON_DPAD_LEFT },
         { "RIGHT", SDL_CONTROLLER_BUTTON_DPAD_RIGHT },
     };
@@ -120,6 +121,8 @@ static void load_script(void) {
         }
         s_nsteps++;
     }
+    if (s_nsteps == MAX_STEPS && fgets(line, sizeof line, f))
+        printf("[AUTOPAD] script longer than %d steps: the rest is ignored\n", MAX_STEPS);
     fclose(f);
     printf("[AUTOPAD] script: %d steps\n", s_nsteps);
 }

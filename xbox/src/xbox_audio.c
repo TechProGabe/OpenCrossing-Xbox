@@ -23,6 +23,7 @@
 #include "pc_platform.h"
 #include "pc_settings.h"
 #include "jaudio_NES/audiothread.h"
+#include "xbox_settings.h"
 
 #define PC_AUDIO_SAMPLE_RATE 32000
 
@@ -55,8 +56,21 @@ static u32 ai_dsp_sample_rate = PC_AUDIO_SAMPLE_RATE;
 static SDL_Thread* audio_producer_thread = NULL;
 static int audio_thread_running;
 
+/* The producer runs above the game thread: a game frame that misses the
+ * vblank never sleeps, and at equal priority the producer then waited for
+ * the game's time slice to end while the ring (~70 ms ahead) ran dry: the
+ * audio chugged with the frame rate (hardware, 720p town and NES at 51 fps).
+ * It sleeps whenever the ring is full, so it takes only the synthesis time.
+ * Below the AC97 pump (highest). Its locks (the jaudio message queue) are
+ * kernel-blocking SDL mutexes, not spinlocks (docs/traps.md). Kill switch:
+ * -DXBOX_AUDIO_PRIORITY=0, or audio_priority = 0 in settings.ini. */
+#ifndef XBOX_AUDIO_PRIORITY
+#define XBOX_AUDIO_PRIORITY 1
+#endif
 static int pc_audio_producer_func(void* data) {
     (void)data;
+    if (XBOX_AUDIO_PRIORITY && g_xbox_settings_boot.audio_priority)
+        KeSetBasePriorityThread(KeGetCurrentThread(), 1);   /* THREAD_PRIORITY_ABOVE_NORMAL */
     while (AGET(audio_thread_running)) {
         int fill = pc_audio_get_buffer_fill();
         if (fill < AUDIO_PRODUCE_THRESHOLD) {
@@ -93,6 +107,16 @@ static SDL_Thread* s_pump_thread;
 static int s_pump_run, s_playing;
 static unsigned s_queued;             /* descriptors queued since start */
 static u32 s_frac;                    /* resampler phase, 16.16 in input frames */
+static u32 s_starved, s_gaps;         /* 48 kHz frames played as silence, and runs of them */
+static int s_was_starved;
+
+/* for the [BEAT] line (xbox_watchdog.c): ms of output the producer didn't
+ * keep up with since the last call, and in how many gaps */
+unsigned xbox_audio_starved_ms(unsigned* gaps) {
+    unsigned f = __atomic_exchange_n(&s_starved, 0, __ATOMIC_ACQ_REL);
+    *gaps = __atomic_exchange_n(&s_gaps, 0, __ATOMIC_ACQ_REL);
+    return f / 48;
+}
 
 static void fill_48k(s16* out) {
     /* step = 32000/48000 = 2/3 of an input frame, in 16.16 */
@@ -104,8 +128,14 @@ static void fill_48k(s16* out) {
         u32 need = rp + 4;   /* current and next stereo frame */
         if (!AGET(s_playing) || (s32)(wp - need) < 0) {
             out[2 * i] = out[2 * i + 1] = 0;
+            if (AGET(s_playing)) {
+                __atomic_add_fetch(&s_starved, 1, __ATOMIC_RELAXED);
+                if (!s_was_starved) __atomic_add_fetch(&s_gaps, 1, __ATOMIC_RELAXED);
+                s_was_starved = 1;
+            }
             continue;
         }
+        s_was_starved = 0;
         {
             s32 t = (s32)(s_frac & 0xFFFF);
             s32 l0 = ring_buffer[rp & RING_BUF_MASK], r0 = ring_buffer[(rp + 1) & RING_BUF_MASK];
@@ -159,6 +189,17 @@ static int aci_wait(volatile u32* reg, u32 mask, u32 want, const char* what) {
     return 0;
 }
 
+/* The AC97 fixes from Melee-X (its v31 and v47 console rounds), together:
+ * the engine starts from the pump only once buffers are queued (aci_start),
+ * a halted or stuck engine is restarted and, if the codec stops taking
+ * frames, the AC-link cold-reset (aci_check), and quitting or restarting
+ * leaves both bus masters reset (pc_audio_shutdown). Kill switch:
+ * -DXBOX_AUDIO_FIX=0, or audio_fix = 0 in settings.ini (as before). */
+#ifndef XBOX_AUDIO_FIX
+#define XBOX_AUDIO_FIX 1
+#endif
+static int s_audio_fix, s_aci_on;
+
 static int aci_init(void) {
     volatile u32* m = (volatile u32*)ACI;
     LARGE_INTEGER d;
@@ -208,6 +249,94 @@ static void aci_queue(const s16* buf, unsigned bytes) {
 static void aci_run(int on) {
     ACI[0x11B] = on ? 1 : 0;   /* RPBM only: interrupt enables stay off */
     ACI[0x17B] = on ? 1 : 0;
+}
+
+/* Stops both bus masters, resets them (CIV and LVI back to 0) and points
+ * them at empty descriptor lists. The engine stays stopped: aci_start
+ * queues buffers before it sets the run bit. */
+static void aci_bm_reset(void) {
+    volatile u32* m = (volatile u32*)ACI;
+    ACI[0x11B] = 0;   /* DMA and interrupt enables off first */
+    ACI[0x17B] = 0;
+    ACI[0x11B] = 1u << 1;   /* reset both bus masters */
+    ACI[0x17B] = 1u << 1;
+    { int i; for (i = 0; i < 1000000 && ((ACI[0x11B] | ACI[0x17B]) & 2); i++) {} }
+    memset(s_desc_pcm, 0, 2 * 32 * sizeof(AciDesc));
+    ACI[0x116] = 0xFF;
+    ACI[0x176] = 0xFF;
+    m[0x100 >> 2] = 0;
+    m[0x110 >> 2] = MmGetPhysicalAddress(s_desc_pcm);
+    m[0x170 >> 2] = MmGetPhysicalAddress(s_desc_spdif);
+    s_next_desc = 0;
+}
+
+/* cold-resets the AC-link, then the bus masters */
+static void aci_reset(void) {
+    volatile u32* m = (volatile u32*)ACI;
+    LARGE_INTEGER d;
+    ACI[0x11B] = 0;
+    ACI[0x17B] = 0;
+    m[0x12C >> 2] &= ~2u;
+    d.QuadPart = -10 * 1000;
+    KeDelayExecutionThread(KernelMode, FALSE, &d);
+    m[0x12C >> 2] |= 2u;
+    aci_wait(&m[0x130 >> 2], 0x100, 0x100, "codec ready");   /* logged; carry on as before */
+    aci_bm_reset();
+}
+
+/* (Re)starts playback from a clean engine: bus masters reset, NBUF - 1
+ * buffers queued from index 0, LVI on the last of them, and only then the
+ * run bit. Melee-X v31: with the run bit set on an empty descriptor 0 (the
+ * pump thread raced the init's aci_run, as AIInit did here), CIV stayed at
+ * 0 with the engine running, silent for the whole boot. */
+static void aci_start(void) {
+    aci_bm_reset();
+    s_queued = 0;
+    while (s_queued < XBOX_AUDIO_NBUF - 1) {
+        s16* b = s_outbuf[s_queued % XBOX_AUDIO_NBUF];
+        fill_48k(b);
+        aci_queue(b, XBOX_AUDIO_FRAMES * 4);
+        s_queued++;
+    }
+    aci_run(1);
+}
+
+/* Polled, nobody clears the status bits or notices a halt. If the pump
+ * misses its deadline (NBUF - 1 buffers, ~150 ms) the bus master plays up
+ * to the last valid index and halts; moving LVI on doesn't restart it on
+ * the MCPX (Melee-X v13: silent for the whole boot). Clear the sticky
+ * status, and restart a halted or stuck engine; after three restarts
+ * without a finished buffer, cold-reset the AC-link too (Melee-X v27). */
+static unsigned s_aci_restarts, s_aci_stuck, s_aci_last_civ = 99, s_aci_dead, s_aci_resets;
+
+static void aci_check(unsigned civ) {
+    u8 sr = ACI[0x116], sr2 = ACI[0x176];
+    if (sr & 0x1C) ACI[0x116] = (u8)(sr & 0x1C);   /* LVBCI BCIS FIFOE: write 1 to clear */
+    if (sr2 & 0x1C) ACI[0x176] = (u8)(sr2 & 0x1C);
+    if (civ != s_aci_last_civ) s_aci_dead = 0;   /* a buffer finished: the engine runs */
+    s_aci_stuck = civ == s_aci_last_civ ? s_aci_stuck + 1 : 0;
+    s_aci_last_civ = civ;
+    /* halted, or no buffer finished for ~100 ms (a buffer is ~21 ms) */
+    if ((sr & 1) || s_aci_stuck > 50) {
+        if (s_aci_restarts++ < 8)
+            printf("[AUDIO] AC97 %s: civ %u lvi %u sr %02x/%02x, restarting (%u)\n", sr & 1 ? "halted" : "stuck", civ,
+                   ACI[0x115] & 31u, sr, sr2, s_aci_restarts);
+        aci_run(0);
+        if (++s_aci_dead >= 3 && s_aci_resets < 32) {
+            volatile u32* m = (volatile u32*)ACI;
+            LARGE_INTEGER d;
+            s_aci_resets++;
+            d.QuadPart = -10 * 1000 * (LONGLONG)(s_aci_resets < 10 ? s_aci_resets * 10 : 100);
+            KeDelayExecutionThread(KernelMode, FALSE, &d);
+            printf("[AUDIO] AC97 cold reset (%u): global control %08x status %08x\n", s_aci_resets,
+                   (unsigned)m[0x12C >> 2], (unsigned)m[0x130 >> 2]);
+            aci_reset();
+            s_aci_dead = 0;
+        }
+        aci_start();
+        s_aci_last_civ = ACI[0x114] & 31;
+        s_aci_stuck = 0;
+    }
 }
 
 /* --- MCPX APU output (xemu) ---
@@ -331,8 +460,18 @@ static int pump_func(void* data) {
         if (s_apu) {
             apu_pump();
         } else {
-            unsigned civ = ACI[0x114] & 31;
-            unsigned played = s_queued & 31;
+            unsigned civ, played;
+            if (s_audio_fix) {
+                if (!s_aci_on) {   /* first start here, once the queue is filled */
+                    aci_start();
+                    s_aci_last_civ = ACI[0x114] & 31;
+                    s_aci_on = 1;   /* checked from the next round: DCH may not have cleared yet */
+                } else {
+                    aci_check(ACI[0x114] & 31);
+                }
+            }
+            civ = ACI[0x114] & 31;
+            played = s_queued & 31;
             unsigned ahead = (played - civ) & 31;
             while (ahead < XBOX_AUDIO_NBUF - 1) {
                 s16* b = s_outbuf[s_queued % XBOX_AUDIO_NBUF];
@@ -388,10 +527,12 @@ void AIInit(u8* stack) {
     s_queued = 0;
     printf("[AUDIO] init: output\n");
     s_apu = XBOX_AUDIO_APU && xemu && apu_init();
+    s_audio_fix = XBOX_AUDIO_FIX && g_xbox_settings_boot.audio_fix;
+    s_aci_on = 0;
     ASET(s_pump_run, 1);
     s_pump_thread = SDL_CreateThread(pump_entry, "AudioPump", NULL);
-    printf("[AUDIO] init: start\n");
-    if (!s_apu) aci_run(1);
+    printf("[AUDIO] init: start (audio fix %d)\n", s_audio_fix);
+    if (!s_apu && !s_audio_fix) aci_run(1);   /* with the fix the pump starts it, buffers queued */
     audio_device = 1;
     if (s_apu)
         printf("[AUDIO] xemu: output via APU voice %d, 48 kHz ring %d frames\n", APU_VOICE, APU_RING_FRAMES);
@@ -487,6 +628,9 @@ void pc_audio_shutdown(void) {
         s_pump_thread = NULL;
     }
     aci_run(0);
+    /* the next XBE takes over an idle engine (Melee-X v47: after a restart
+     * the engine stayed stuck on descriptor 0, silent and hitching) */
+    if (s_audio_fix && !s_apu && s_desc_pcm) aci_bm_reset();
     if (s_apu) APU_PIO(0x128, APU_VOICE);   /* VOICE_OFF */
     audio_device = 0;
 }

@@ -32,6 +32,7 @@ int           g_pc_running = 1;
 int           g_pc_frame_limit_override = -1;
 int           g_pc_speedhack_enabled = 0;
 int           g_pc_verbose = 1;
+int           g_xbox_verbose_noisy = 0;   /* g_pc_verbose for the files that log every second / slow frame (CMakeLists.txt); 1 = back on */
 int           g_pc_time_override = -1;
 int           g_pc_min_override = -1;
 int           g_pc_sec_override = -1;
@@ -69,7 +70,10 @@ GLuint pc_texture_pack_lookup(const void* data, int data_size, int w, int h, uns
 }
 
 void pc_platform_init(void) {
-    if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
+    /* the controllers are up already (main_body, for safe video): init them
+     * once, so leave_game's SDL_QuitSubSystem still shuts them down */
+    Uint32 pads = SDL_WasInit(SDL_INIT_GAMECONTROLLER) ? 0 : SDL_INIT_GAMECONTROLLER;
+    if (SDL_Init(pads | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
         xbox_logf("[XBOX] SDL_Init failed: %s\n", SDL_GetError());
     }
     if (!xbox_nv2a_init()) {
@@ -127,14 +131,15 @@ void pc_platform_swap_buffers(void) {
     /* test the exception reporter (xbox_crash.c) */
     if (s_frames == XBOX_DBG_CRASH_FRAME) *(volatile int*)4 = 1;
 #endif
-    /* a heartbeat for the logs: once a second while boot.log is open, then
-     * every 10 s (each line makes the watchdog rewrite last.log) */
-    if ((s_frames % (s_frames <= 120 ? 60u : 600u)) == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
-    /* boot.log is for hangs before the game runs (later ones: hang.log); its
-     * per-line HDD flushes cost ~45 ms each on hardware, so stop early */
+    /* a heartbeat for the boot: once a second until frame 120; after that
+     * the watchdog's [BEAT] carries the frame count */
+    if (s_frames <= 120 && s_frames % 60u == 0) xbox_logf("[XBOX] frame %u\n", s_frames);
+    /* boot.log's per-line HDD flushes cost ~45 ms each on hardware: from
+     * here on lines are queued and the watchdog writes them once a second
+     * (xbox_io.c; -DXBOX_LOG_SESSION=0 closes boot.log here instead) */
     if (s_frames == 120) {
-        xbox_logf("[XBOX] 120 frames up, closing boot.log\n");
-        xbox_bootlog_close();
+        xbox_logf("[XBOX] 120 frames up, boot.log continues buffered\n");
+        xbox_bootlog_async();
     }
 }
 
@@ -145,6 +150,10 @@ int pc_platform_poll_events(void) {
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
             case SDL_CONTROLLERBUTTONDOWN:
+                /* BACK is the pause menu here, so screenshots are on the right stick click */
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK && g_xbox_settings.screenshots &&
+                    !pc_settings_menu_capture_active())
+                    xbox_nv2a_shot();
                 if (pc_settings_menu_capture_active()) {
                     pc_settings_menu_handle_capture_event(&event);
                     break;
@@ -259,6 +268,9 @@ static int main_body(void* arg) {
     char disc_name[260];
     (void)arg;
 
+    /* 128 MB consoles run as 64 MB: the RAM above it is held before
+     * anything else allocates (xbox_ramlock.c) */
+    xbox_mem_lock64();
     xbox_logf("\n[XBOX] OpenCrossing-Xbox boot\n");
 
     if (!nxIsDriveMounted('E') && !nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\"))
@@ -269,9 +281,17 @@ static int main_body(void* arg) {
     xbox_watchdog_start();
 
     xbox_mem_log("boot");
+    xbox_mem_lock64_log();
+    xbox_clock_check();   /* before anything reads a timer frequency */
     read_image_range();
     xbox_logf("[XBOX] image %08x-%08x\n", pc_image_base, pc_image_end);
+    xbox_prof_start();   /* -DXBOX_PROF=1 builds only; this thread runs the game */
 
+    /* controllers before the splash: BACK held as it ends is safe video
+     * (480i, xbox_settings_safe_video); USB enumerates during the splash */
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
+        xbox_logf("[XBOX] SDL gamecontroller init failed: %s\n", SDL_GetError());
+    xbox_settings_early();
     xbox_splash_show();
 
     if (!disc_image_present(disc_name, sizeof disc_name)) fatal_no_disc();
@@ -279,6 +299,7 @@ static int main_body(void* arg) {
     xbox_splash_progress(0.1f);
 
     pc_settings_load();
+    xbox_settings_safe_video();
     pc_keybindings_load();
 #ifdef XBOX_DBG_WEATHER
     /* test runs: force the weather (1 rain, 2 snow...; mEnv_WEATHER_*) */
@@ -298,6 +319,7 @@ static int main_body(void* arg) {
     xbox_logf("[XBOX] stage: nv2a init\n");
     pc_platform_init();
     xbox_settings_apply();   /* 720p is decided at GPU init: always 16:9 */
+    xbox_video_log();
     xbox_mem_log("after nv2a init");
     xbox_splash_progress(1.0f);
 
