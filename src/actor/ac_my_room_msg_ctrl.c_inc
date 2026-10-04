@@ -104,6 +104,12 @@ static void aMR_SetEmulatorStartMessage(ACTOR* actorx, int internal_rom) {
     }
 
     aMR_SetSlotString();
+#if defined(TARGET_XBOX)
+    {
+        extern void OSReport(const char* fmt, ...); /* [NES] diagnostics (docs/patches.md) */
+        OSReport("[NES] start message: internal %d, player %d, result %d\n", internal_rom, Common_Get(player_no), res);
+    }
+#endif
 
     switch (res) {
         case FAMICOM_RESULT_OK:

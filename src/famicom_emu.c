@@ -12,6 +12,9 @@
 #include "libjsys/jsyswrapper.h"
 #include "m_common_data.h"
 #include "m_debug.h"
+#if defined(TARGET_XBOX)
+extern void OSReport(const char* fmt, ...); /* [NES] diagnostics (docs/patches.md) */
+#endif
 #include "m_malloc.h"
 #include "m_scene.h"
 
@@ -88,10 +91,24 @@ extern void famicom_emu_main(GAME* famicom) {
 
     if (!famicom_done) {
         if (famicom_rom_load_check() < 0) {
+#if defined(TARGET_XBOX)
+            OSReport("[NES] ROM load check failed: back to the room\n");
+#endif
             Common_Set(my_room_message_control_flags, Common_Get(my_room_message_control_flags) | 1);
             famicom_done = TRUE;
             famicom_done_countdown = 0;
         } else {
+#if defined(TARGET_XBOX)
+            /* fixNES couldn't start this game (pc_nes_fixnes.c: Clu Clu Land
+             * D is a disk image; or out of memory): back to the room, not a
+             * black screen or a crash (docs/patches.md) */
+            extern int pc_fixnes_failed(void);
+            if (pc_fixnes_failed()) {
+                OSReport("[NES] this game can't run here: back to the room\n");
+                famicom_done = TRUE;
+                famicom_done_countdown = 0;
+            }
+#endif
             for (padid = 0; padid < 4; padid++) {
                 current_pad = &gamePT->pads[padid];
                 combo = current_pad->now.button | current_pad->on.button;
@@ -175,6 +192,23 @@ extern void famicom_emu_init(GAME* game) {
     /* On PC there are no XFBs to repurpose — allocate a heap for the NES emulator */
     freeXfbSize = 0x400000; /* 4MB — enough for NES state + ROM + buffers */
     freeXfbBase = malloc(freeXfbSize);
+#if defined(TARGET_XBOX)
+    /* At 720p only ~3.8 MB is free and the 4 MB heap failed, which the room
+     * reports as "memory card in slot A could not be read". famicom_init's
+     * buffers take ~2.6 MB (CHR 1 MB, ROM 768 KB, noise 508 KB, ...): take
+     * less when 4 MB isn't there. */
+    {
+        extern unsigned xbox_mem_free_kb(void);
+        static const size_t k_sizes[] = { 0x380000, 0x300000, 0x2C0000 };
+        int i;
+        for (i = 0; !freeXfbBase && i < (int)(sizeof k_sizes / sizeof k_sizes[0]); i++) {
+            freeXfbSize = k_sizes[i];
+            freeXfbBase = malloc(freeXfbSize);
+        }
+        OSReport("[NES] emulator heap %u KB%s (free %u KB)\n", (unsigned)(freeXfbSize / 1024),
+                 freeXfbBase ? "" : " FAILED", xbox_mem_free_kb());
+    }
+#endif
     my_alloc_init(game, freeXfbBase, freeXfbSize);
 #else
     manager = JC_JFWDisplay_getManager();
@@ -185,7 +219,13 @@ extern void famicom_emu_init(GAME* game) {
     my_alloc_init(game, freeXfbBase, freeXfbSize);
 #endif
 
+#if defined(TARGET_XBOX)
+    OSReport("[NES] famicom_init: rom %d\n", rom_id);
+#endif
     if (famicom_init(rom_id, &my_malloc_func, player) != 0) {
+#if defined(TARGET_XBOX)
+        OSReport("[NES] famicom_init(rom %d) failed: back to the room\n", rom_id);
+#endif
         Common_Set(my_room_message_control_flags, Common_Get(my_room_message_control_flags) | 1);
         return_emu_game(game);
     }

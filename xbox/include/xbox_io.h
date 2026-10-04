@@ -12,7 +12,11 @@ extern "C" {
  * DVD for disc launches (verified in xemu 2026-09-27: D:\default.xbe opens). */
 #define XBOX_DISC_DIR  "D:\\"
 /* Saves + settings. Always on the HDD, so a burned-DVD boot can still save. */
+#ifdef XBOX_DBG_FRESH_UDATA   /* test runs: a first boot, no save or settings */
+#define XBOX_UDATA_ROOT "E:\\UDATA\\4f43ff01"
+#else
 #define XBOX_UDATA_ROOT "E:\\UDATA\\4f430001"
+#endif
 #define XBOX_UDATA_DIR  XBOX_UDATA_ROOT "\\"
 
 #ifndef XBOX_LOG_DEFAULT
@@ -29,11 +33,25 @@ void xbox_log_exclusive(int on);
 size_t xbox_log_tail(char* out, size_t cap);
 /* bytes logged so far (changes whenever anything is logged) */
 unsigned xbox_log_pos(void);
+/* the same, not counting heartbeat lines logged with xbox_logf_quiet */
+unsigned xbox_log_pos_loud(void);
+int  xbox_logf_quiet(const char* fmt, ...);
+void xbox_log_write_quiet(const char* s, size_t n);
 /* mirror the log to XBOX_UDATA_DIR "boot.log" (hardware has no COM1) */
 void xbox_bootlog_open(void);
 void xbox_bootlog_close(void);
+/* after boot: queue log lines; the watchdog writes them (xbox_bootlog_pump) */
+void xbox_bootlog_async(void);
+void xbox_bootlog_pump(void);
+/* signalled when an urgent line is queued (the watchdog waits on it) */
+void* xbox_bootlog_event(void);
 void xbox_mem_log(const char* where);
 unsigned xbox_mem_free_kb(void);
+/* xbox_ramlock.c: on a 128 MB console, hold every free page above 64 MB
+ * (first thing at boot), so the game runs as on a stock console; the log
+ * line comes once boot.log is open. -DXBOX_RAM_LOCK64=0 turns it off. */
+void xbox_mem_lock64(void);
+void xbox_mem_lock64_log(void);
 /* xbox_crash.c: CPU exceptions -> crash.log + on-screen report. Call
  * xbox_crash_guard(fn, arg) as a thread body wrapper; main() uses it too. */
 int  xbox_crash_guard(int (*fn)(void*), void* arg);
@@ -42,6 +60,8 @@ int  xbox_nv2a_state(char* buf, int cap);
 /* xbox_watchdog.c: dump every thread's stack to COM1 if frames stop */
 void xbox_watchdog_start(void);
 void xbox_watchdog_disable(void);
+/* xbox_prof.c: sampling profiler of the calling (game) thread, -DXBOX_PROF=1 */
+void xbox_prof_start(void);
 int  xbox_logf(const char* fmt, ...);
 int  xbox_vlogf(const char* fmt, va_list ap);
 
@@ -54,7 +74,12 @@ typedef struct {
 extern XboxFrameStats g_xfs;
 unsigned long long xbox_ticks(void);
 unsigned long long xbox_ticks_per_sec(void);
+/* time the CPU clock against the ACPI timer once at boot (CPU upgrades) */
+void xbox_clock_check(void);
 size_t xbox_fread(void* buf, size_t size, size_t n, FILE* f);
+/* the disc image, from pc_disc.c only (XBOX_DISC_TU) */
+size_t xbox_disc_fread(void* buf, size_t size, size_t n, FILE* f);
+int xbox_disc_fseek(FILE* f, long off, int whence);
 
 FILE* xbox_fopen(const char* path, const char* mode);
 int   xbox_remove(const char* path);

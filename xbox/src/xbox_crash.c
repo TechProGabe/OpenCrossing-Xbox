@@ -119,7 +119,8 @@ static void show_screen(void) {
     pb_show_debug_screen();
     debugClearScreen();
     debugPrint("OpenCrossing-Xbox crashed. Please report it with\n");
-    debugPrint("E:\\UDATA\\4f430001\\crash.log (and last.log).\n\n");
+    debugPrint("E:\\UDATA\\4f430001\\crash.log (and last.log;\n");
+    debugPrint("crash_prev.log / last_prev.log once the game is restarted).\n\n");
     while (*line) {
         char* nl = strchr(line, '\n');
         char buf[112];

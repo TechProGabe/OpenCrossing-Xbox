@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Symbolize Xbox addresses against the lld-link map.
   tools/xbox/sym.py [build-xbox/ac_xbox.map] < addrs   (hex, one or more per line)
-Prints: addr  symbol+off  object"""
-import bisect, re, sys
+Prints: addr  symbol+off  object. Static functions come from <map>.statics
+(static_syms.py), so a static isn't credited to the public function before it."""
+import bisect, pathlib, re, sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import static_syms  # noqa: E402
 
 mp = sys.argv[1] if len(sys.argv) > 1 else "build-xbox/ac_xbox.map"
-syms = []
-for line in open(mp, errors="replace"):
-    m = re.match(r"\s*[0-9a-f]{4}:[0-9a-f]{8}\s+(\S+)\s+([0-9a-f]{16})\s+(.*)", line)
-    if m:
-        syms.append((int(m.group(2), 16), m.group(1), m.group(3).strip()))
-syms.sort()
+syms = static_syms.load_syms(mp)
 keys = [s[0] for s in syms]
 for line in sys.stdin:
     for tok in re.findall(r"(?:0x)?([0-9a-fA-F]{6,8})", line):

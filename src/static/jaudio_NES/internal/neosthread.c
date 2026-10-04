@@ -44,6 +44,7 @@ extern u32 Neos_Update(s16* dst) {
     }
 
     /* Diagnostic: check NEOS output amplitude every 60 frames */
+#if !defined(TARGET_XBOX) /* a line a second keeps the Xbox rewriting last.log on the HDD */
     {
         static u32 neos_diag_ctr = 0;
         if ((neos_diag_ctr++ % 60) == 0) {
@@ -56,6 +57,7 @@ extern u32 Neos_Update(s16* dst) {
             printf("[NEOS_OUT] frame=%u tasks=%u peak=%d\n", neos_diag_ctr, pc_tasks[cur], peak);
         }
     }
+#endif
 
     NeosSync();
     pc_neos_cur = prev;
