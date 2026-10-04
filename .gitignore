@@ -63,3 +63,6 @@ rom/
 
 # Xbox build dirs
 build-xbox*/
+
+# Claude Code agent worktrees
+.claude/worktrees/

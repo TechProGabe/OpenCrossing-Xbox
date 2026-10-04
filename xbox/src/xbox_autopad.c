@@ -38,7 +38,7 @@ extern int g_xbox_video_720p;    /* xbox_nv2a.c */
 
 typedef struct { u32 call; int kind; u32 arg, hold; int x, y; char text[48]; } Step;
 enum { K_PAD, K_SDL, K_SHOT, K_LOG, K_STICK };
-#define MAX_STEPS 256
+#define MAX_STEPS 1024   /* a 30-minute burn-in script is ~900 steps */
 static Step s_steps[MAX_STEPS];
 static int s_nsteps, s_next, s_loaded;
 static u16 s_held;
@@ -121,6 +121,8 @@ static void load_script(void) {
         }
         s_nsteps++;
     }
+    if (s_nsteps == MAX_STEPS && fgets(line, sizeof line, f))
+        printf("[AUTOPAD] script longer than %d steps: the rest is ignored\n", MAX_STEPS);
     fclose(f);
     printf("[AUTOPAD] script: %d steps\n", s_nsteps);
 }

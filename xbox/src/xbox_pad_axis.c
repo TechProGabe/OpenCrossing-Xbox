@@ -147,32 +147,7 @@ static unsigned s_hold_frame;
  * (18-41% on the playtest pad) and a steady gentle tilt looks the same as a
  * rest, so any learned value can undershoot and walk the character on its own
  * (replayed on the hardware traces).
- *
- * It used to live in E:\UDATA\4f430001\controller.ini; xbox_settings.c takes
- * that value over once, on the first boot whose settings.ini lacks it. */
-int xbox_controller_ini_deadzone(void) {
-    char buf[512];
-    DWORD n = 0;
-    HANDLE h;
-    const char* p;
-    h = CreateFileA(XBOX_UDATA_DIR "controller.ini", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                    FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return -1;
-    if (!ReadFile(h, buf, sizeof buf - 1, &n, NULL)) n = 0;
-    CloseHandle(h);
-    buf[n] = '\0';
-    for (p = buf; (p = strstr(p, "stick_deadzone")) != NULL; p++) {
-        const char* q = p + 14;
-        int v;
-        if (p != buf && p[-1] != '\n') continue;   /* a comment mentioning it */
-        while (*q == ' ' || *q == '\t' || *q == '=') q++;
-        if (*q < '0' || *q > '9') continue;
-        v = atoi(q);
-        if (v >= 0 && v <= 60) return v;
-        break;
-    }
-    return -1;
-}
+ */
 
 /* The open controller, looked up in SDL's own list each time: pc_pad.c
  * closes its handle when a pad is unplugged, so a cached pointer could

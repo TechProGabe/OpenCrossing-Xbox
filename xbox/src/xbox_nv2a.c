@@ -1842,9 +1842,23 @@ static void setup_attributes(void) {
     PB_END();
 }
 
+/* Depth is a z-buffer: the vertex program writes screen z (the projection's
+ * z/w with the depth range folded in, mat4_rows_mul), which needs CONTROL0's
+ * Z_PERSPECTIVE_ENABLE (w-buffering) off. pbkit's pb_target_back_buffer sets
+ * CONTROL0 to 0x00110001, w-buffer on ("We use W"), and frame_open calls it
+ * every frame, so every frame but the first stored the interpolated w, the
+ * eye distance, as an integer: one depth step per world unit at Z24 and Z16
+ * alike: the shirt hem z-fought with the trousers and the menu glove with
+ * itself (renderer.md "Depth"). frame_open sets CONTROL0 again after it. Kill switch:
+ * -DXBOX_ZBUFFER=0 (leave pbkit's w-buffer on). */
+#ifndef XBOX_ZBUFFER
+#define XBOX_ZBUFFER 1
+#endif
+#define CONTROL0_ZBUF NV097_SET_CONTROL0_TEXTURE_PERSPECTIVE_ENABLE
+
 static void setup_state(void) {
     PB_BEGIN();
-    put1(NV097_SET_CONTROL0, NV097_SET_CONTROL0_TEXTURE_PERSPECTIVE_ENABLE);
+    put1(NV097_SET_CONTROL0, CONTROL0_ZBUF);
     put1(NV097_SET_LIGHTING_ENABLE, 0);
     /* oSpecular.w carries the fog factor to the final combiner (V1.a). With
      * SPECULAR_ENABLE off the NV2A replaces oD1 with (0,0,0,1), and without
@@ -1896,11 +1910,18 @@ static void frame_open(void) {
     pb_reset();
     s_pb_base = pb_begin();
     pb_target_back_buffer();
+#if XBOX_ZBUFFER
+    {   /* pb_target_back_buffer turned the w-buffer on (setup_state) */
+        uint32_t* p = pb_begin();
+        p = pb_push1(p, NV097_SET_CONTROL0, CONTROL0_ZBUF);
+        pb_end(p);
+    }
+#endif
     s_ring_pos = 0;
     s_frame_open = 1;
 }
 
-/* 720p (Options > Video > Output): 1280x720 at 16-bit colour (R5G6B5, the
+/* 720p (Options > Video > Output Auto, the default): 1280x720 at 16-bit colour (R5G6B5, the
  * NV2A dithers) with a Z16 depth buffer, so it fits: 3 x 1.8 MB colour +
  * 1.8 MB depth is ~2.5 MB over 640x480x32 + Z24S8, plus 0.6 MB for the
  * bigger XVideo (splash / debug screen) buffer, paid back by a 5 MB texture
@@ -1914,14 +1935,15 @@ static void frame_open(void) {
 #endif
 int g_xbox_video_720p;
 
-/* 720p when asked for, allowed and affordable; 0 leaves the 640x480 mode */
+/* 720p when the setting allows it (video_720p, on by default), the
+ * dashboard too, and it is affordable; 0 leaves the 640x480 mode */
 static int video_720p(void) {
     unsigned free_kb;
     /* 720p is drawn through the 16:9 logical screen (pc_gx.c with
      * PC_ENHANCEMENTS); without it the picture would be stretched */
     if (!XBOX_WIDESCREEN || !g_xbox_settings_boot.video_720p) return 0;
     if (!xbox_video_720p_allowed()) {
-        xbox_logf("[NV2A] 720p asked for but not allowed (dashboard or AV cable): staying at 480\n");
+        xbox_logf("[NV2A] 720p not allowed (dashboard or AV cable): 480\n");
         return 0;
     }
     free_kb = xbox_mem_free_kb();
@@ -2005,7 +2027,7 @@ int xbox_nv2a_init(void) {
         pb_kill();
         video_standard();
     }
-    if (g_xbox_video_720p == 0 && g_xbox_settings_boot.video_720p)
+    if (g_xbox_video_720p == 0 && g_xbox_settings_boot.video_720p && xbox_video_720p_allowed())
         xbox_logf("[NV2A] running at 480\n");
     pb_show_front_screen();
     s_fbw = (int)pb_back_buffer_width();
@@ -2026,8 +2048,9 @@ int xbox_nv2a_init(void) {
               "(replaces the VI timer at max_fps 60)\n",
               s_fbw, s_fbh, s_fb_bpp, s_pool_bytes / 1024, s_ring_cap, s_overlap, XBOX_VBL_PACE);
     xbox_logf("[NV2A] native textures %d, texture reuse %d, draw skip %d, vertex cache break %d, strict gpu wait %d, "
-              "kick %u KB, clip inclusive %d\n",
-              s_native_tex, s_tex_reuse, s_draw_skip, s_vb_break, s_strict_idle, s_pb_kick / 256, XBOX_CLIP_INCLUSIVE);
+              "kick %u KB, clip inclusive %d, z-buffer %d\n",
+              s_native_tex, s_tex_reuse, s_draw_skip, s_vb_break, s_strict_idle, s_pb_kick / 256, XBOX_CLIP_INCLUSIVE,
+              XBOX_ZBUFFER);
     return 1;
 }
 
