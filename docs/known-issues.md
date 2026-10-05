@@ -37,7 +37,9 @@ was checked in xemu (it relaunches into the game at the new output).
   `free` in `[MEM] boot` should be ~38 MB, as on a 64 MB console.
 - A CPU upgrade (`xbox_clock_check`): the `[CLOCK] CPU ... MHz` line; one
   nxdk's table doesn't know (some Celerons and Tualatins) should say
-  "timers use the measured clock".
+  "timers use the measured clock". Users' 1 GHz and 1.4 GHz consoles
+  measured right (GitHub #3); the 1.4 GHz one plays with v1.1's code
+  repair (`traps.md`, the rdtsc patcher).
 - The z-fighting fix (shirt hem over the trousers, the pockets glove):
   `frame_open` turns pbkit's w-buffer back off every frame (`renderer.md`
   "Depth", `XBOX_ZBUFFER`). Fixed in xemu at 720p and 480 against the v11
@@ -65,43 +67,6 @@ was checked in xemu (it relaunches into the game at the new output).
   it). Since v9 an unmapped display list is skipped with an `[EMU64]` line
   (address, segment, DL level) instead of faulting: that line names the
   culprit if it comes back.
-
-## Crash in `lbRTC_Sub_DD` on an upgraded console (GitHub #2, #3): fix waiting for confirmation
-
-- Symptom: CPU-upgraded consoles crash on a new town (after the train
-  dialog) or on START at the title on a day change (`mTM_time` ->
-  `Kabu_manager` -> `lbRTC_Sub_DD`): access violation, read of `d68301f8`,
-  eip on `xor esi, esi` at `lbRTC_Sub_DD+dc`, which can't read memory.
-  Seen on a 1 GHz Coppermine cC0 (`0686`, #2/#3) and a 1.4 GHz Tualatin tA1
-  (`06b1`, Stellar modchip, #3); both report kernel 1.0.5838.1.
-- Cause (troubleshooting build, 1.4 GHz console, 2026-10-05): `.text` in
-  RAM differs from `default.xbe` in exactly 2 bytes, `0f 31` -> `cd 2e`
-  at `lbRTC_Sub_DD+db`. Something loaded before us (BIOS or modchip
-  firmware, presumably for games that time themselves with the TSC)
-  rewrites `rdtsc` (`0f 31`) as `int 2Eh` (`cd 2e`) by signature. Here the
-  pair isn't an rdtsc: `75 0f | 31 f6` (`jne +0f; xor esi, esi`) became
-  `75 cd | 2e f6`, so the code ran `2e f6 83 f8 01 83 d6 0b` = `cs: test
-  byte [ebx + d68301f8], 0b` with ebx = 0. Our real rdtsc and 50 other
-  `0f 31` pairs in `.text` were left alone, so the signature is longer than
-  the pair (unknown). The `rtc_shim = 1` run (a plain -O0 copy) got past
-  the train. The CPU decodes correctly; the theory of a stepping bug is
-  dropped.
-- Fix (dev, after v1): `xbox/src/xbox_code_repair.c` compares `.text` with
-  `D:\default.xbe` at boot and puts back any byte that differs (up to 64;
-  more is logged and left alone). `boot.log`: `[XBOX] code check: .text
-  matches` or `N bytes of .text were changed in memory after load ...
-  put back`, with the addresses. ~75 ms in xemu. Kill switches:
-  `settings.ini` `code_repair = 0` (check and log only),
-  `-DXBOX_CODE_REPAIR=0`. Checked in xemu with
-  `-DXBOX_CODE_REPAIR_TEST` (makes the same 2-byte patch first: logged and
-  put back, boot goes on), and the same test build on gold (stock CPU,
-  2026-10-05): put back, 433 ms (the HDD read), then the Area 51 town for
-  ~105 s with two saves. Still wanted: a reporter's `boot.log` from the
-  next build (new town past the train), and the BIOS name/version.
-- Troubleshooting build (`-DXBOX_DIAG_ISSUE3=ON`, `toolchain.md`,
-  `xbox/src/xbox_diag.c`): CPU, code-integrity and `lbRTC_Sub_DD`
-  self-tests in `boot.log`, code bytes at the eip in `crash.log`,
-  `rtc_shim`. Keep it until the fix is confirmed.
 
 ## Title text at 720p looks odd (2026-10-03, v4)
 

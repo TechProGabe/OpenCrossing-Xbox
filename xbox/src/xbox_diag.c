@@ -1,6 +1,6 @@
 /* xbox_diag.c — CPU and code-integrity diagnostics for GitHub #2/#3.
  *
- * The report (docs/known-issues.md): on a 128 MB console with a 1 GHz
+ * The report (docs/traps.md, "Something patches rdtsc"): on a 128 MB console with a 1 GHz
  * Coppermine cC0 (cpuid 0686; stock is a cD0, 068a), two builds that put
  * lbRTC_Sub_DD at different addresses faulted at the same function offset
  * (+dc), with the registers of a correct run up to there, reading d68301f8.

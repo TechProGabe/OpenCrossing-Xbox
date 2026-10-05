@@ -58,7 +58,7 @@ No source edit; `xbox/CMakeLists.txt` compiles the TU with a `-D`:
 
 | file | definition | why |
 |---|---|---|
-| `src/lb_rtc.c` | `lbRTC_Sub_DD=lbRTC_Sub_DD_game`, only with `-DXBOX_RTC_SHIM=ON` (implied by `-DXBOX_DIAG_ISSUE3=ON`) | GitHub #3 (`known-issues.md`): `xbox/src/xbox_diag.c` defines `lbRTC_Sub_DD` for every other TU and runs either the game's function or a plain -O0 copy of the same C (`settings.ini` `rtc_shim = 1`), to test whether that console's CPU faults on the -O2 code's byte sequence. Off in normal builds: the symbol and code are the upstream ones |
+| `src/lb_rtc.c` | `lbRTC_Sub_DD=lbRTC_Sub_DD_game`, only with `-DXBOX_RTC_SHIM=ON` (implied by `-DXBOX_DIAG_ISSUE3=ON`) | GitHub #3 (`traps.md` "Something patches rdtsc"): `xbox/src/xbox_diag.c` defines `lbRTC_Sub_DD` for every other TU and runs either the game's function or a plain -O0 copy of the same C (`settings.ini` `rtc_shim = 1`), to test whether that console's CPU faults on the -O2 code's byte sequence. Off in normal builds: the symbol and code are the upstream ones |
 
 ## `src/`: NES diagnostics (Xbox only)
 

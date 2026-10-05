@@ -276,7 +276,7 @@ set_property(SOURCE "${PC_DIR}/src/pc_card.c" APPEND PROPERTY COMPILE_OPTIONS -U
 set_property(SOURCE "${PC_DIR}/src/pc_os.c" "${PC_DIR}/src/pc_vi.c" "${PC_DIR}/src/pc_profiler.c"
     APPEND PROPERTY COMPILE_DEFINITIONS "SDL_GetPerformanceFrequency=xbox_perf_frequency")
 
-# GitHub #3 troubleshooting build (docs/known-issues.md, xbox/src/xbox_diag.c):
+# GitHub #3 troubleshooting build (docs/traps.md, xbox/src/xbox_diag.c):
 # boot-time CPU / code-integrity / lbRTC_Sub_DD self-tests, code bytes in
 # crash.log, and the lbRTC_Sub_DD shim (settings.ini rtc_shim). Off in every
 # normal build; each piece also has its own define (xbox/include/xbox_diag.h).

@@ -1,7 +1,7 @@
 /* xbox_diag.h — CPU and code-integrity diagnostics (xbox/src/xbox_diag.c).
  *
- * Written for GitHub #2/#3 (docs/known-issues.md, "Crash in lbRTC_Sub_DD on
- * an upgraded console"): a 1 GHz Coppermine cC0 swap faults on a read of
+ * Written for GitHub #2/#3 (docs/traps.md, "Something patches rdtsc"; the
+ * cause turned out to be a BIOS patcher, fixed by xbox_code_repair.c): a 1 GHz Coppermine cC0 swap faults on a read of
  * d68301f8 at `xor esi, esi` in lbRTC_Sub_DD, which is what the bytes after
  * that instruction decode to if the CPU starts one byte late. The pieces
  * here tell "the CPU decodes it wrong" from "the bytes in RAM aren't the

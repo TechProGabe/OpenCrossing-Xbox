@@ -1,6 +1,6 @@
 /* xbox_code_repair.c — puts the game's code back the way default.xbe has it.
  *
- * GitHub #2/#3 (docs/known-issues.md): on CPU-upgraded consoles (a 1 GHz
+ * GitHub #2/#3 (docs/traps.md, "Something patches rdtsc"): on CPU-upgraded consoles (a 1 GHz
  * Coppermine and a 1.4 GHz Tualatin, two BIOS setups) something loaded
  * before us rewrites `0f 31` (rdtsc) as `cd 2e` (int 2Eh) in a title's
  * code, by signature, presumably to slow down games that time themselves

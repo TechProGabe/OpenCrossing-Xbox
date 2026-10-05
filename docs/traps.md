@@ -284,9 +284,17 @@ find them.
 - **Something patches rdtsc on CPU-upgraded consoles.** BIOS or modchip
   firmware rewrites `0f 31` (rdtsc) as `cd 2e` (int 2Eh) in a title's
   `.text` by signature, and the signature can match bytes that straddle two
-  instructions: GitHub #3 crashed on `jne +0f; xor esi, esi`
-  (`known-issues.md`). `xbox_code_repair.c` puts `.text` back from the
-  file at boot. Don't trust `.text` before that point on such consoles.
+  instructions. GitHub #2/#3 (1 GHz Coppermine `0686`, 1.4 GHz Tualatin
+  `06b1` with a Stellar modchip, both kernel 1.0.5838.1): in
+  `lbRTC_Sub_DD`, `75 0f | 31 f6` (`jne +0f; xor esi, esi`) became
+  `75 cd | 2e f6`, which runs as `cs: test byte [ebx + d68301f8], 0b`: a
+  read of `d68301f8` faulting at an eip that can't touch memory, on every
+  new town and day change. Exactly those 2 bytes differed from the file;
+  51 other `0f 31` pairs (our real rdtsc too) were left alone, so the
+  signature is longer than the pair. `xbox_code_repair.c` puts `.text`
+  back from the file at boot (fixed in v1.1, confirmed by the 1.4 GHz
+  reporter). Don't trust `.text` before that point on such consoles. The
+  troubleshooting build that found it: `toolchain.md`, `xbox_diag.c`.
 - **`.text` is read-only, in ring 0 too.** The kernel maps it read-only and
   CR0.WP is set, so a store into code faults; `MmSetAddressProtect` on the
   page did not make it writable (xemu, 2026-10-05). Clear CR0.WP around the
