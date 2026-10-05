@@ -21,6 +21,15 @@ XBOX_TARGET=objs xbox/build.sh  # compile every TU, no link (triage)
   for the inner shell). Debug knobs are listed in `renderer.md`.
 - `XBOX_BUILD_DIR=build-xbox-foo` builds in another directory, so a test
   build doesn't overwrite the release one (or two builds run at once).
+  Keep `build-xbox/` as the build of the current release: its `ac_xbox.exe`
+  and `ac_xbox.map` are what a user's `crash.log` addresses are read against.
+- GitHub #3 troubleshooting build (`traps.md` "Something patches rdtsc", `xbox/src/xbox_diag.c`):
+  `XBOX_BUILD_DIR=build-xbox-diag3 XBOX_CMAKE_ARGS="-DXBOX_DIAG_ISSUE3=ON" xbox/build.sh`.
+  It adds `[DIAG]` self-tests to `boot.log`, code bytes to `crash.log` and
+  the `rtc_shim` key to `settings.ini`; `build.sh` resets the option to OFF
+  for every other build. One piece alone:
+  `XBOX_CMAKE_ARGS="'-DCMAKE_C_FLAGS=-DXBOX_CRASH_CODE_DUMP=1'"` (the
+  defines are listed in `xbox/include/xbox_diag.h`).
 - macOS with colima: Docker only sees your home directory, so keep the
   checkout under `~`. No BuildKit on colima: `DOCKER_BUILDKIT=0`.
 

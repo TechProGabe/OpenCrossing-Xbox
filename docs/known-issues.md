@@ -37,7 +37,9 @@ was checked in xemu (it relaunches into the game at the new output).
   `free` in `[MEM] boot` should be ~38 MB, as on a 64 MB console.
 - A CPU upgrade (`xbox_clock_check`): the `[CLOCK] CPU ... MHz` line; one
   nxdk's table doesn't know (some Celerons and Tualatins) should say
-  "timers use the measured clock".
+  "timers use the measured clock". Users' 1 GHz and 1.4 GHz consoles
+  measured right (GitHub #3); the 1.4 GHz one plays with v1.1's code
+  repair (`traps.md`, the rdtsc patcher).
 - The z-fighting fix (shirt hem over the trousers, the pockets glove):
   `frame_open` turns pbkit's w-buffer back off every frame (`renderer.md`
   "Depth", `XBOX_ZBUFFER`). Fixed in xemu at 720p and 480 against the v11
@@ -65,24 +67,6 @@ was checked in xemu (it relaunches into the game at the new output).
   it). Since v9 an unmapped display list is skipped with an `[EMU64]` line
   (address, segment, DL level) instead of faulting: that line names the
   culprit if it comes back.
-
-## Crash after Rover's train on an upgraded console (GitHub #2)
-
-- Beta-3 release, 128 MB, 1 GHz CPU swap, HDMI modchip, 480i: a new game
-  starts, then crashes right after the train dialog. `crash.log`: access
-  violation (read of `d68301f8`) with eip in `lbRTC_Sub_DD` (from
-  `Kabu_manager` <- `mSDI_StartInitAfter`), on a stack copy of the new
-  save's Stalk Market date, which is all zero in a new town on the
-  GameCube too. The eip is `xor esi, esi`, which can't read memory, and the
-  release map matches the log's image range.
-- Not the memory layout: the log says 131072 KB total but 38644 KB free
-  (Cerbios honours the XBE's 64 MB flag), and beta-3 at 128 MB under
-  Cerbios in xemu goes through the train into town; another player's
-  128 MB console runs fine. Suspect the CPU swap. Since then: the CPU clock
-  check and the 64 MB lock. Next: the reporter's `[CLOCK] CPU` line on the
-  next release, and whether it crashes at the same point every time.
-- An earlier report (early beta, crash on START at the title, `last.log`
-  only) wasn't reproduced either.
 
 ## Title text at 720p looks odd (2026-10-03, v4)
 

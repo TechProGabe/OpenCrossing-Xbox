@@ -262,7 +262,43 @@ find them.
   `xhw_reboot_self`).
 - **xemu detection:** CPUID leaf 1 EDX bit 1 (VME) is clear in xemu
   (0383f9fd) and set on the Xbox (0383f9ff); both report signature 0x68a.
-  Never probe the AC97 codec to find out.
+  Never probe the AC97 codec to find out. xemu also answers microcode
+  revision 1 (MSR 8Bh) and kernel 1.0.4627.1 (`xbox_diag.c`).
+- **Catching a fault and carrying on.** An SEH handler on fs:[0]
+  (`xbox_crash.c` style) may `longjmp` straight out of the kernel's
+  dispatcher: that is what an `__except` block does after `RtlUnwind`, and
+  with nothing between the two frames there is nothing to unwind. Put
+  fs:[0] back by hand afterwards: the dispatcher pushed a registration of
+  its own before calling the handler, and it is still there. Verified in
+  xemu and on red (kernel 5101, 2026-10-04; `xbox_diag.c` `diag_try`, the
+  `[DIAG] guard self-test` line); the handler must return
+  `ExceptionContinueSearch` (1) for `EXCEPTION_UNWIND` calls. Ring 0 lets
+  game code `rdmsr`/`wrmsr`/`wbinvd`/read `cr0`; an unknown MSR is a #GP
+  on hardware, which the kernel hands over as `c0000005`, a read of 0
+  (MSR 1A0h on the stock cD0), and silence in xemu. Guard it.
+- **The kernel patches the XBE in RAM.** The import thunk table (here in
+  `.rdata`, `PointerToKernelThunkTable` XOR `0x5B6D40B6` for a retail
+  header) is overwritten with kernel addresses at load, so a RAM-vs-disk
+  compare of the sections has to skip it. `.text` is otherwise identical to
+  the file (xemu, Cerbios-free BIOS): any other difference is a patcher.
+- **Something patches rdtsc on CPU-upgraded consoles.** BIOS or modchip
+  firmware rewrites `0f 31` (rdtsc) as `cd 2e` (int 2Eh) in a title's
+  `.text` by signature, and the signature can match bytes that straddle two
+  instructions. GitHub #2/#3 (1 GHz Coppermine `0686`, 1.4 GHz Tualatin
+  `06b1` with a Stellar modchip, both kernel 1.0.5838.1): in
+  `lbRTC_Sub_DD`, `75 0f | 31 f6` (`jne +0f; xor esi, esi`) became
+  `75 cd | 2e f6`, which runs as `cs: test byte [ebx + d68301f8], 0b`: a
+  read of `d68301f8` faulting at an eip that can't touch memory, on every
+  new town and day change. Exactly those 2 bytes differed from the file;
+  51 other `0f 31` pairs (our real rdtsc too) were left alone, so the
+  signature is longer than the pair. `xbox_code_repair.c` puts `.text`
+  back from the file at boot (fixed in v1.1, confirmed by the 1.4 GHz
+  reporter). Don't trust `.text` before that point on such consoles. The
+  troubleshooting build that found it: `toolchain.md`, `xbox_diag.c`.
+- **`.text` is read-only, in ring 0 too.** The kernel maps it read-only and
+  CR0.WP is set, so a store into code faults; `MmSetAddressProtect` on the
+  page did not make it writable (xemu, 2026-10-05). Clear CR0.WP around the
+  store with interrupts off (`xbox_code_repair.c` `put_byte`).
 
 ## Logs, screenshots and testing
 
