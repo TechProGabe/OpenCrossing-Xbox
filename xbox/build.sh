@@ -14,7 +14,7 @@ objs=OFF; [ "${XBOX_TARGET:-}" = objs ] && objs=ON
 docker run --rm -v "$root":/src -w /src opencrossing-xbox:sdk bash -c "
   set -e
   eval \$(/usr/src/nxdk/bin/activate -s)
-  cmake -S xbox -B $bdir -G Ninja -DCMAKE_TOOLCHAIN_FILE=/usr/src/nxdk/share/toolchain-nxdk.cmake -DXBOX_OBJS_ONLY=$objs -DCMAKE_C_FLAGS= -DCMAKE_CXX_FLAGS= -DXBOX_AUTOPAD= -DXBOX_WIDESCREEN=ON -DXBOX_TITLE_MENU=ON ${XBOX_CMAKE_ARGS:-} >/dev/null
+  cmake -S xbox -B $bdir -G Ninja -DCMAKE_TOOLCHAIN_FILE=/usr/src/nxdk/share/toolchain-nxdk.cmake -DXBOX_OBJS_ONLY=$objs -DCMAKE_C_FLAGS= -DCMAKE_CXX_FLAGS= -DXBOX_AUTOPAD= -DXBOX_WIDESCREEN=ON -DXBOX_TITLE_MENU=ON -DXBOX_DIAG_ISSUE3=OFF -DXBOX_RTC_SHIM=OFF ${XBOX_CMAKE_ARGS:-} >/dev/null
   ninja -C $bdir -k 0 ${XBOX_NINJA_ARGS:-}
   # the container runs as root; on a Linux host the output would stay root-owned
   chown -R $(id -u):$(id -g) $bdir 2>/dev/null || true"

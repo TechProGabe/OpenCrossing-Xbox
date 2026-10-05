@@ -276,6 +276,24 @@ set_property(SOURCE "${PC_DIR}/src/pc_card.c" APPEND PROPERTY COMPILE_OPTIONS -U
 set_property(SOURCE "${PC_DIR}/src/pc_os.c" "${PC_DIR}/src/pc_vi.c" "${PC_DIR}/src/pc_profiler.c"
     APPEND PROPERTY COMPILE_DEFINITIONS "SDL_GetPerformanceFrequency=xbox_perf_frequency")
 
+# GitHub #3 troubleshooting build (docs/traps.md, xbox/src/xbox_diag.c):
+# boot-time CPU / code-integrity / lbRTC_Sub_DD self-tests, code bytes in
+# crash.log, and the lbRTC_Sub_DD shim (settings.ini rtc_shim). Off in every
+# normal build; each piece also has its own define (xbox/include/xbox_diag.h).
+#   XBOX_BUILD_DIR=build-xbox-diag3 XBOX_CMAKE_ARGS="-DXBOX_DIAG_ISSUE3=ON" xbox/build.sh
+option(XBOX_DIAG_ISSUE3 "GitHub #3 diagnostics: self-tests at boot, code bytes in crash.log, rtc shim" OFF)
+option(XBOX_RTC_SHIM "lbRTC_Sub_DD goes through xbox_diag.c (settings.ini rtc_shim)" OFF)
+if(XBOX_DIAG_ISSUE3)
+    add_compile_definitions(XBOX_DIAG_ISSUE3=1)
+    set(XBOX_RTC_SHIM ON)
+endif()
+if(XBOX_RTC_SHIM)
+    # src/lb_rtc.c keeps its code; only the symbol moves (docs/patches.md)
+    add_compile_definitions(XBOX_RTC_SHIM=1)
+    set_property(SOURCE "${DECOMP_ROOT}/src/lb_rtc.c" APPEND PROPERTY COMPILE_DEFINITIONS
+        "lbRTC_Sub_DD=lbRTC_Sub_DD_game")
+endif()
+
 # Object-only target for triage (XBOX_OBJS_ONLY=ON builds without linking).
 option(XBOX_OBJS_ONLY "Compile every TU, skip the link" OFF)
 set(ALL_SOURCES ${XBOX_SOURCES} ${PC_REUSED} ${FIXNES_SOURCES} ${GAME_C_SOURCES} ${GAME_CXX_SOURCES})
