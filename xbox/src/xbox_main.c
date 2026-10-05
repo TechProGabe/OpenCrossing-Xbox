@@ -26,6 +26,7 @@
 #include "xbox_nv2a.h"
 #include "xbox_settings.h"
 #include "xbox_diag.h"
+#include "xbox_code_repair.h"
 
 SDL_Window*   g_pc_window = NULL;
 SDL_GLContext g_pc_gl_context = NULL;
@@ -303,6 +304,7 @@ static int main_body(void* arg) {
     pc_settings_load();
     xbox_settings_safe_video();
     pc_keybindings_load();
+    xbox_code_repair();   /* before any game code runs (GitHub #3) */
 #ifdef XBOX_DBG_WEATHER
     /* test runs: force the weather (1 rain, 2 snow...; mEnv_WEATHER_*) */
     g_pc_weather_override = XBOX_DBG_WEATHER;

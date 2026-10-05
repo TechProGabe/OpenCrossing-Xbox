@@ -108,6 +108,7 @@ after every save. Its keys:
 | `fps_counter` | 0 | FPS counter |
 | `screenshots` | 0 | right stick click saves `shotNN.bmp` |
 | `gpu_overlap`, `native_textures`, `texture_reuse`, `draw_skip`, `vertex_cache_break`, `strict_gpu_wait`, `pushbuffer_kick_kb`, `audio_fix`, `audio_priority` | 1 (32 KB) | menu-less test switches for the Melee-X backport: 1 = new behaviour, 0 = the old one, read at boot (`renderer.md`, Kill switches) |
+| `code_repair` | 1 | 1 = put back `.text` bytes patched in RAM after load (GitHub #3, `xbox_code_repair.c`), 0 = only log them |
 | `opt_version` | 4 | one-time moves for files written by older builds: 2 raised the C-stick dead zone to 30%, 3 moved both sticks' old defaults (43% and 30%) to 40%, 4 moved the old video defaults (480, 4:3) to Auto |
 
 The first playtest builds kept the left stick dead zone in

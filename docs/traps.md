@@ -281,6 +281,16 @@ find them.
   header) is overwritten with kernel addresses at load, so a RAM-vs-disk
   compare of the sections has to skip it. `.text` is otherwise identical to
   the file (xemu, Cerbios-free BIOS): any other difference is a patcher.
+- **Something patches rdtsc on CPU-upgraded consoles.** BIOS or modchip
+  firmware rewrites `0f 31` (rdtsc) as `cd 2e` (int 2Eh) in a title's
+  `.text` by signature, and the signature can match bytes that straddle two
+  instructions: GitHub #3 crashed on `jne +0f; xor esi, esi`
+  (`known-issues.md`). `xbox_code_repair.c` puts `.text` back from the
+  file at boot. Don't trust `.text` before that point on such consoles.
+- **`.text` is read-only, in ring 0 too.** The kernel maps it read-only and
+  CR0.WP is set, so a store into code faults; `MmSetAddressProtect` on the
+  page did not make it writable (xemu, 2026-10-05). Clear CR0.WP around the
+  store with interrupts off (`xbox_code_repair.c` `put_byte`).
 
 ## Logs, screenshots and testing
 
