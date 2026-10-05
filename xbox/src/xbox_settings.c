@@ -58,7 +58,7 @@ void xbox_watchdog_disable(void);
 #define XBOX_WS_DEFAULT (XBOX_VIDEO_AUTO ? XBOX_WS_AUTO : XBOX_WS_OFF)
 #define XBOX_SETTINGS_DEFAULTS                                                                       \
     { XBOX_STICK_DZ, 100, XBOX_VIDEO_AUTO, XBOX_WS_DEFAULT, 1, 1, 1, 1, 1, 1, 32, 1, XBOX_OPT_VERSION, \
-      XBOX_FPS_DEFAULT, 1, 1, 0, 0 }
+      XBOX_FPS_DEFAULT, 1, 1, 0, 0, 1 }
 XboxSettings g_xbox_settings = XBOX_SETTINGS_DEFAULTS;
 XboxSettings g_xbox_settings_boot = XBOX_SETTINGS_DEFAULTS;
 
@@ -80,6 +80,7 @@ static const struct { const char* key; int* v; int lo, hi; } k_opt_keys[] = {
     { "progressive", &g_xbox_settings.progressive, 0, 1 },
     { "audio_priority", &g_xbox_settings.audio_priority, 0, 1 },
     { "screenshots", &g_xbox_settings.screenshots, 0, 1 },
+    { "code_repair", &g_xbox_settings.code_repair, 0, 1 },   /* GitHub #3 (xbox_code_repair.c) */
 #if XBOX_RTC_SHIM
     { "rtc_shim", &g_xbox_settings.rtc_shim, 0, 1 },   /* GitHub #3 (xbox_diag.c) */
 #endif
@@ -194,6 +195,9 @@ static void append_xbox_section(void) {
     fprintf(f, "pushbuffer_kick_kb = %d\n", g_xbox_settings.pb_kick_kb);
     fprintf(f, "audio_fix = %d\n", g_xbox_settings.audio_fix);
     fprintf(f, "audio_priority = %d\n", g_xbox_settings.audio_priority);
+    fprintf(f, "# 1 = undo changes made to the game's code in memory before it starts (some\n");
+    fprintf(f, "# BIOSes patch it on CPU-upgraded consoles, which crashed on a new town)\n");
+    fprintf(f, "code_repair = %d\n", g_xbox_settings.code_repair);
 #if XBOX_RTC_SHIM
     fprintf(f, "\n# Troubleshooting build for GitHub #3: 1 = the Stalk Market date code\n");
     fprintf(f, "# (lbRTC_Sub_DD) runs a plain copy instead of the game's own. Needs a restart.\n");

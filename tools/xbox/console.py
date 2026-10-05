@@ -10,7 +10,8 @@
 hw/ is ~/xemu/ochw unless OCX_HW is set. The console's FTP server (the
 dashboard's) is at OCX_FTP_HOST, login xbox/xbox unless OCX_FTP_USER /
 OCX_FTP_PASS say otherwise; OCX_APP is the game's folder (default
-/F/Applications/OpenCrossing). Deploy puts default.xbe and default.tbn in
+/F/Applications/OpenCrossing); OCX_BUILD is the build directory stage
+copies from (default build-xbox). Deploy puts default.xbe and default.tbn in
 /F/Applications/OpenCrossing/ next to the disc image and keeps the XBE it
 replaces there as default.xbe.prev (rollback swaps it back). Before it
 uploads, it pulls the console's logs into hw/logs-before-vNN and deletes
@@ -35,6 +36,7 @@ HOST = os.environ.get("OCX_FTP_HOST", "")
 USER = os.environ.get("OCX_FTP_USER", "xbox")
 PASS = os.environ.get("OCX_FTP_PASS", "xbox")
 APP = os.environ.get("OCX_APP", "/F/Applications/OpenCrossing")   # the XBE's folder on the console
+BUILD = ROOT / os.environ.get("OCX_BUILD", "build-xbox")   # what stage copies (XBOX_BUILD_DIR of a test build)
 UDATA = "/E/UDATA/4f430001"
 LOGS = re.compile(r"^((boot\d?|last|perf|crash|hang)(_prev)?\.log|input\.log|stick\d\.log|nes_shot\.bmp)$")
 KEEP = ("settings.ini",)   # pulled, never deleted
@@ -76,10 +78,10 @@ def stage(v):
     out = HW / f"stage-{v}"
     out.mkdir(parents=True, exist_ok=True)
     for name in FILES:
-        shutil.copy2(ROOT / "build-xbox" / "xbe" / name, out / name)
+        shutil.copy2(BUILD / "xbe" / name, out / name)
     m = HW / f"ac_xbox.{v}.map"
-    shutil.copy2(ROOT / "build-xbox" / "ac_xbox.map", m)
-    r = static_syms.build(str(m), build_dir=ROOT / "build-xbox")
+    shutil.copy2(BUILD / "ac_xbox.map", m)
+    r = static_syms.build(str(m), build_dir=BUILD)
     print(f"staged {out} and {m.name}" + (f" ({r[1]} static functions)" if r else " (no llvm-nm: no statics)"))
 
 

@@ -46,6 +46,8 @@ typedef struct {
     int screenshots;    /* 1: clicking the right stick saves shotNN.bmp to UDATA (live) */
     int rtc_shim;       /* XBOX_RTC_SHIM builds (GitHub #3, xbox_diag.c): 1 = lbRTC_Sub_DD
                          * runs a plain -O0 copy of its C instead of the game's code */
+    int code_repair;    /* 1 = .text bytes patched after load are put back
+                         * from default.xbe at boot (xbox_code_repair.c, GitHub #3) */
 } XboxSettings;
 
 extern XboxSettings g_xbox_settings;
