@@ -55,10 +55,18 @@ for s in "${scen[@]}"; do
       { echo "100 LOG town"; presses 600 6500; walk 7000 16000; } > "$st/autopad.txt" ;;
     *) echo "unknown scenario $s"; exit 1 ;;
   esac
-  # four dumps (7200 frames) is plenty; the last complete one is used
+  # four dumps (7200 frames) is plenty; the last complete one is used.
+  # A run that didn't start (another xemu on the PC) must not hand on the
+  # last scenario's log: clear it first, and stop if the run was refused
+  rm -f "$work/run/serial.log"
   OCX_XBE="$work/default.xbe" OCX_RUN="$work/run" OCX_STAGE_EXTRA="$st" \
     harness/xbox/run.sh 900 '\[PGOC\] end 4:' > "$work/$s.out" 2>&1 || true
+  if grep -q "an xemu is running" "$work/$s.out" || [ ! -s "$work/run/serial.log" ]; then
+    echo "$s: xemu didn't run (another one is up?): stopping, the profile is unchanged"; exit 1
+  fi
   tr -d '\r' < "$work/run/serial.log" > "$work/$s.log"
+  grep -q "LOG $s\|# no input" "$st/autopad.txt" && [ "$s" != demo ] && ! grep -q "AUTOPAD.*$s" "$work/$s.log" && {
+    echo "$s: the autopad script never ran"; exit 1; }
   $py tools/xbox/pgo_raw.py --exe "$work/ac_xbox.exe" --map "$work/ac_xbox.map" "$work/$s.log" -o "$work/$s.profraw"
   ran+=("$s")
 done
