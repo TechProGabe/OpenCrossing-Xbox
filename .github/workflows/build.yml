@@ -38,8 +38,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Pillow (dashboard icon)
-        run: python3 -m pip install pillow
+      - name: Pillow (dashboard icon), ffmpeg (boot music)
+        run: |
+          python3 -m pip install pillow
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Build
         run: xbox/build.sh

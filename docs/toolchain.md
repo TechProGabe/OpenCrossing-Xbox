@@ -32,6 +32,32 @@ XBOX_TARGET=objs xbox/build.sh  # compile every TU, no link (triage)
   defines are listed in `xbox/include/xbox_diag.h`).
 - macOS with colima: Docker only sees your home directory, so keep the
   checkout under `~`. No BuildKit on colima: `DOCKER_BUILDKIT=0`.
+- After the link, `tools/xbox/xbe_payload.py` appends the boot music and
+  the boot screen's pictures (`architecture.md`, "Boot screen and disc
+  check"): host `python3` with Pillow, and `ffmpeg` for the music (CI
+  installs it). `XBOX_NO_INTRO=1` leaves the music out. The pictures are
+  committed PNGs; after changing `tools/xbox/splash/letter.html` or the
+  logo, run `tools/xbox/make_splash.py` (needs Edge or Chrome) and commit
+  them. `tools/disc_file_table.py <GAFE01 .iso>` regenerates the disc
+  check's table.
+
+### Windows, no Docker
+
+`tools/xbox/msys/build.sh` (from Git Bash) runs the same cmake + ninja
+natively, with the same knobs (`XBOX_BUILD_DIR`, `XBOX_TARGET`,
+`XBOX_CMAKE_ARGS`). It needs MSYS2 at `C:\msys64` and nxdk at the
+Dockerfile's `NXDK_SHA` in `C:\xdev\nxdk`, set up as Prime-X and Melee-X
+do (packages listed in the script's header); the same LLVM 21. The link
+goes through `tools/xbox/msys/lld`, which hands lld its ~4000 objects in a
+response file (`traps.md`). A full build is ~7 minutes on the dev PC.
+
+xemu on Windows: Prime-X's `tools/xbox/xemu_run.sh` boots any XBE with
+`PX_XBE`, `PX_ISO` (`none` for no image), `PX_XEMU=/c/xemu/xemu/xemu.exe`,
+`PX_XISO=/c/xdev/nxdk/tools/extract-xiso/build/extract-xiso.exe` and
+`PX_XEMU_ARGS="-config_path <a copy of C:\xemu\xemu.toml with mem_limit '64'>"`.
+Build with `-DXBOX_SPLASH_DUMP` for `[FBDUMP]`s of each boot screen and
+card, and `-DXBOX_DBG_FORCE_DISC_CHECK` to run the full disc check every
+boot.
 
 ## Run in xemu
 

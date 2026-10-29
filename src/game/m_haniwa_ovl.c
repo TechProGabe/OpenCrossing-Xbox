@@ -241,6 +241,14 @@ static void mHW_haniwa_ovl_move(Submenu* submenu) {
     menu_info->pre_move_func(submenu);
     (*ovl_move_proc[menu_info->proc_status])(submenu, menu_info);
 
+#if defined(TARGET_PC)
+    /* mHW_move_End closing the last menu runs every dt_proc, which sets
+       haniwa_ovl to NULL; mHW_make_message would then read through it. */
+    if (submenu->overlay->haniwa_ovl == NULL) {
+        return;
+    }
+#endif
+
     mHW_make_message(submenu, menu_info);
 
     switch (menu_info->proc_status) {

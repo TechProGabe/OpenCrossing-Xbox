@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# lld for tools/xbox/msys/build.sh: nxdk-link hands lld ~4000 object paths,
+# past Windows' 32 KB command line ("Argument list too long"). Write them to
+# a response file instead, MSYS paths (/c/...) turned into Windows ones
+# (C:/...), since a native lld reads the file and MSYS converts only argv.
+rsp="$(mktemp --suffix=.rsp)"
+trap 'rm -f "$rsp"' EXIT
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -flavor) args+=("$1" "$2"); shift 2; continue ;;
+  esac
+  a="$(printf '%s' "$1" | sed -E 's#(^|:)/([a-zA-Z])/#\1\2:/#g')"
+  printf '"%s"\n' "$a" >> "$rsp"
+  shift
+done
+exec /mingw64/bin/lld "${args[@]}" "@$(cygpath -m "$rsp")"

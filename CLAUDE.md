@@ -41,6 +41,7 @@ the one the table points at, never the whole tree.
 | `docs/renderer.md` | GX → NV2A: GL shim, vertex program, combiners, debug knobs |
 | `docs/memory.md` | 64 MB budget and measurements |
 | `docs/perf.md` | optimization method and measurements |
+| `docs/pgo.md` | ThinLTO and PGO: knobs, the profile, retraining |
 | `docs/backport.md` | what came back from Melee-X, and what's left |
 | `docs/upstream.md` | remotes, base SHAs, sync policy |
 | `docs/releases/` | release notes, one file per full release (`vX.md`, used by CI) |

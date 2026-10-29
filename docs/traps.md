@@ -6,6 +6,20 @@ find them.
 
 ## Build and toolchain
 
+- **Windows (MSYS2) link line.** The link passes ~4000 object paths; bash
+  can exec lld with them but Windows can't ("Argument list too long", ninja
+  `code=126`). `tools/xbox/msys/lld` is put first on `PATH` and writes them
+  to a response file, turning `/c/...` into `C:/...` (MSYS converts paths
+  only in argv, and lld is native). `CMAKE_NINJA_FORCE_RESPONSE_FILE`
+  doesn't work instead: it puts the compile flags in response files too,
+  and the prelude's `-include /c/...` then isn't found. CMake treats that
+  variable as on whenever it is defined, `=OFF` included; unset it with
+  `-U`. `CMAKE_*_USE_RESPONSE_FILE_FOR_OBJECTS` is ignored by Ninja.
+- **Disc image layouts differ.** A rebuilt or trimmed image has the same
+  files at other offsets (the NAS image: `audiorom.img` at `0x000FE588`;
+  a Redump-layout one at `0x55C32F40`). Compare file contents, never
+  offsets, the boot block or the FST's bytes (`xbox_disc_check.c`).
+
 - **`TARGET_PC` isn't "PC".** It means "not GameCube" and guards the
   little-endian and 32-bit fixes. Removing it drops them.
 - **UB flags.** `-fno-strict-aliasing -fwrapv` are load-bearing; plain `-O2`
