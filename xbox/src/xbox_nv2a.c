@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <xmmintrin.h>   /* SSE loads for gl_read_pixels (-march=pentium3) */
 #include <glad/gl.h>
 #include "xbox_io.h"
 #include "xbox_nv2a.h"
@@ -797,6 +798,29 @@ static inline uint32_t texel(uint32_t f, uint32_t r, uint32_t g, uint32_t b, uin
 static int s_tex_reuse = XBOX_TEX_REUSE;
 static uint32_t s_tex_reused, s_tex_reused_total;   /* this [FRAME] window, since boot */
 
+#ifndef XBOX_TEX_BLOCK
+#define XBOX_TEX_BLOCK 1   /* tex_image_2d: build Morton tiles in a cached scratch */
+#endif
+#define TEX_BLOCK 64
+static uint8_t s_tex_block[TEX_BLOCK * TEX_BLOCK * 4] __attribute__((aligned(16)));
+
+/* source texel sx of a row (NULL: white) in format nvfmt */
+static inline uint32_t up_texel(const uint8_t* row, int sx, int bpp, uint32_t nvfmt) {
+    if (row && bpp == 4) {
+        const uint8_t* p = row + sx * 4;
+        return texel(nvfmt, p[0], p[1], p[2], p[3]);
+    } else if (row && bpp == 2) {
+        uint32_t c = (uint32_t)row[sx * 2] | ((uint32_t)row[sx * 2 + 1] << 8);
+        uint32_t r = c & 31, g = (c >> 5) & 63, b = c >> 11;
+        if (nvfmt == FMT_R5G6B5) return (r << 11) | (g << 5) | b;
+        return 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
+    } else if (row) {
+        const uint8_t* p = row + sx * 3;
+        return texel(nvfmt, p[0], p[1], p[2], 255);
+    }
+    return 0xFFFFFFFFu;
+}
+
 static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLint border,
                          GLenum fmt, GLenum type, const void* data) {
     GLuint id = s_bound[s_active_unit];
@@ -866,27 +890,43 @@ static void tex_image_2d(GLenum target, GLint level, GLint ifmt, GLsizei w, GLsi
         }
         return;
     }
+    /* Block by block: a B x B tile (B a power of two up to both sides) is
+     * one contiguous run of the Morton layout, so it is built in a cached
+     * scratch and copied to the pool in order. Writing texel by texel
+     * scattered stores over the write-combined pool: an 854x480 EFB grab
+     * (1024x512) took ~70 ms of upload on the console. Kill switch:
+     * -DXBOX_TEX_BLOCK=0. */
+    {
+        int bs = pw < ph ? pw : ph;
+        if (bs > TEX_BLOCK) bs = TEX_BLOCK;
+        if (XBOX_TEX_BLOCK && bs >= 4) {
+            int bx, by;
+            for (by = 0; by < ph; by += bs)
+                for (bx = 0; bx < pw; bx += bs) {
+                    for (y = 0; y < bs; y++) {
+                        int sy = by + y < h ? by + y : h - 1;   /* pad by edge replication */
+                        uint32_t yo = swz_y[y];
+                        const uint8_t* row = src ? src + (size_t)sy * (size_t)w * (size_t)bpp : NULL;
+                        for (x = 0; x < bs; x++) {
+                            int sx = bx + x < w ? bx + x : w - 1;
+                            uint32_t v = up_texel(row, sx, bpp, nvfmt), k = yo | swz_x[x];
+                            if (tbpp == 4) ((uint32_t*)s_tex_block)[k] = v;
+                            else if (tbpp == 2) ((uint16_t*)s_tex_block)[k] = (uint16_t)v;
+                            else s_tex_block[k] = (uint8_t)v;
+                        }
+                    }
+                    memcpy(dst + (size_t)(swz_y[by] | swz_x[bx]) * tbpp, s_tex_block, (size_t)bs * bs * tbpp);
+                }
+            return;
+        }
+    }
     for (y = 0; y < ph; y++) {
         int sy = y < h ? y : h - 1;   /* pad by edge replication */
         uint32_t yo = swz_y[y];
         const uint8_t* row = src ? src + (size_t)sy * (size_t)w * (size_t)bpp : NULL;
         for (x = 0; x < pw; x++) {
             int sx = x < w ? x : w - 1;
-            uint32_t v, k = yo | swz_x[x];
-            if (row && bpp == 4) {
-                const uint8_t* p = row + sx * 4;
-                v = texel(nvfmt, p[0], p[1], p[2], p[3]);
-            } else if (row && bpp == 2) {
-                uint32_t c = (uint32_t)row[sx * 2] | ((uint32_t)row[sx * 2 + 1] << 8);
-                uint32_t r = c & 31, g = (c >> 5) & 63, b = c >> 11;
-                if (nvfmt == FMT_R5G6B5) v = (r << 11) | (g << 5) | b;
-                else v = 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
-            } else if (row) {
-                const uint8_t* p = row + sx * 3;
-                v = texel(nvfmt, p[0], p[1], p[2], 255);
-            } else {
-                v = 0xFFFFFFFFu;
-            }
+            uint32_t v = up_texel(row, sx, bpp, nvfmt), k = yo | swz_x[x];
             if (tbpp == 4) ((uint32_t*)dst)[k] = v;
             else if (tbpp == 2) ((uint16_t*)dst)[k] = (uint16_t)v;
             else dst[k] = (uint8_t)v;
@@ -1073,6 +1113,13 @@ static void wait_idle(void) {
 
 /* x, y, w, h are logical (pc_gx) pixels; each samples the framebuffer pixel
  * under its centre, so a 720p or 16:9 screen reads back at logical size */
+#ifndef XBOX_EFB_FAST
+#define XBOX_EFB_FAST 1   /* gl_read_pixels: column table, cached rows */
+#endif
+#define EFB_MAX_W 2048
+static int s_efb_col[EFB_MAX_W];
+static uint8_t s_efb_row[1280 * 4] __attribute__((aligned(16)));
+
 static void gl_read_pixels(GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, GLenum type, void* out) {
     extern int g_pc_window_w, g_pc_window_h;
     int lw = g_pc_window_w > 0 ? g_pc_window_w : 640, lh = g_pc_window_h > 0 ? g_pc_window_h : 480;
@@ -1085,6 +1132,55 @@ static void gl_read_pixels(GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, G
     wait_idle();
     fb = (const uint8_t*)pb_back_buffer();
     pitch = pb_back_buffer_pitch();
+    /* Fast path: the column map once per call (it was two 64-bit divides a
+     * pixel), each framebuffer row pulled once into a cached buffer with
+     * 16-byte loads (the framebuffer is write-combined, so every read is
+     * uncached: one per pixel before), and a row the scale repeats copied.
+     * Kill switch: -DXBOX_EFB_FAST=0. */
+    if (XBOX_EFB_FAST && w <= EFB_MAX_W && SCR_W * 4 <= (int)sizeof s_efb_row && !(pitch & 15) &&
+        !((uintptr_t)fb & 15)) {
+        int last_sy = -2, row_bytes = (SCR_W * (s_fb_bpp == 16 ? 2 : 4) + 15) & ~15;
+        for (c = 0; c < w; c++) {
+            int lx = x + c, sx = (int)(((long long)lx * 2 + 1) * SCR_W / (2 * lw));
+            s_efb_col[c] = lx < 0 || lx >= lw || sx >= SCR_W ? -1 : sx;
+        }
+        for (r = 0; r < h; r++) {
+            int ly = y + r, sy = SCR_H - 1 - (int)(((long long)ly * 2 + 1) * SCR_H / (2 * lh));
+            uint8_t* d = o + (size_t)r * w * 4;
+            if (ly < 0 || ly >= lh || sy < 0) {
+                for (c = 0; c < w; c++) { d[c * 4] = d[c * 4 + 1] = d[c * 4 + 2] = 0; d[c * 4 + 3] = 255; }
+                last_sy = -2;
+                continue;
+            }
+            if (sy == last_sy) {
+                memcpy(d, d - (size_t)w * 4, (size_t)w * 4);
+                continue;
+            }
+            {
+                const __m128* s = (const __m128*)(fb + (size_t)sy * pitch);
+                __m128* t = (__m128*)s_efb_row;
+                int i;
+                for (i = 0; i < row_bytes / 16; i++) t[i] = _mm_load_ps((const float*)(s + i));
+            }
+            last_sy = sy;
+            for (c = 0; c < w; c++) {
+                int sx = s_efb_col[c];
+                if (sx < 0) { d[c * 4] = d[c * 4 + 1] = d[c * 4 + 2] = 0; d[c * 4 + 3] = 255; continue; }
+                if (s_fb_bpp == 16) {
+                    uint32_t v = ((const uint16_t*)s_efb_row)[sx];
+                    uint32_t r5 = v >> 11, g6 = (v >> 5) & 63, b5 = v & 31;
+                    d[c * 4] = (uint8_t)((r5 << 3) | (r5 >> 2));
+                    d[c * 4 + 1] = (uint8_t)((g6 << 2) | (g6 >> 4));
+                    d[c * 4 + 2] = (uint8_t)((b5 << 3) | (b5 >> 2));
+                    d[c * 4 + 3] = 255;
+                } else {
+                    const uint8_t* p = s_efb_row + (size_t)sx * 4;
+                    d[c * 4] = p[2]; d[c * 4 + 1] = p[1]; d[c * 4 + 2] = p[0]; d[c * 4 + 3] = p[3];
+                }
+            }
+        }
+        return;
+    }
     /* GL: origin bottom-left, rows bottom-up */
     for (r = 0; r < h; r++) {
         int ly = y + r, sy = SCR_H - 1 - (int)(((long long)ly * 2 + 1) * SCR_H / (2 * lh));
