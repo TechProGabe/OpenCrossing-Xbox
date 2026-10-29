@@ -354,8 +354,11 @@ static int mMsg_LoadMsgData(mMsg_Data_c* msg_data, int index, int cut) {
             /* our text for the messages about a Game Boy Advance (xbox_msg.c) */
             {
                 extern int xbox_msg_override(int index, unsigned char* buf, int cap);
+                extern void xbox_msg_patch(unsigned char* buf, unsigned* size_p);
                 int n = xbox_msg_override(index, msg_data->text_buf.data, mMsg_MSG_BUF_MAX);
                 if (n > 0) size = n, index = -index;   /* overridden: skip the trim below */
+                /* GBA choices out of menus (xbox_choice_unmap puts the numbering back) */
+                xbox_msg_patch(msg_data->text_buf.data, (unsigned*)&size);
             }
 #endif
 #ifdef TARGET_PC
