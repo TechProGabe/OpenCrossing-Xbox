@@ -32,10 +32,9 @@ XBOX_TARGET=objs xbox/build.sh  # compile every TU, no link (triage)
   defines are listed in `xbox/include/xbox_diag.h`).
 - macOS with colima: Docker only sees your home directory, so keep the
   checkout under `~`. No BuildKit on colima: `DOCKER_BUILDKIT=0`.
-- After the link, `tools/xbox/xbe_payload.py` appends the boot music and
-  the boot screen's pictures (`architecture.md`, "Boot screen and disc
-  check"): host `python3` with Pillow, and `ffmpeg` for the music (CI
-  installs it). `XBOX_NO_INTRO=1` leaves the music out. The pictures are
+- After the link, `tools/xbox/xbe_payload.py` appends the boot screen's
+  pictures (`architecture.md`, "Boot screen and disc
+  check"): host `python3` with Pillow. The pictures are
   committed PNGs; after changing `tools/xbox/splash/letter.html` or the
   logo, run `tools/xbox/make_splash.py` (needs Edge or Chrome) and commit
   them. `tools/disc_file_table.py <GAFE01 .iso>` regenerates the disc

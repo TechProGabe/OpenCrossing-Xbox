@@ -605,33 +605,6 @@ void DSPSendMailToDSP(u32 mail) { (void)mail; }
 void DSPAssertInt(void) {}
 void* DSPAddTask(void* task) { return task; }
 
-/* --- the boot music (xbox_intro.c): same ring, same pump, before the game --- */
-
-int xbox_audio_intro_begin(void) {
-    AIInit(NULL);   /* the game's own AIInit later finds the pump running */
-    if (!audio_device) return 0;
-    ASET(s_playing, 1);
-    return 1;
-}
-
-/* free room in the ring, in stereo frames */
-unsigned xbox_audio_intro_space(void) {
-    return (unsigned)(RING_BUF_SAMPLES - (AGET(ring_write_pos) - AGET(ring_read_pos))) / 2;
-}
-
-void xbox_audio_intro_write(const s16* frames, unsigned n) {
-    u32 wp = (u32)AGET(ring_write_pos), i;
-    for (i = 0; i < n * 2; i++) ring_buffer[(wp + i) & RING_BUF_MASK] = frames[i];
-    ASET(ring_write_pos, (int)(wp + n * 2));
-}
-
-/* the ring played out: silence until the game's AIStartDMA */
-void xbox_audio_intro_end(void) {
-    int i;
-    for (i = 0; i < 100 && pc_audio_get_buffer_fill() > 0; i++) SDL_Delay(10);
-    ASET(s_playing, 0);
-}
-
 /* --- ring buffer queries for frame pacing (pc_vi.c) --- */
 
 int pc_audio_get_buffer_fill(void) {

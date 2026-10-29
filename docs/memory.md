@@ -25,10 +25,9 @@ GPU init, so the peak and the framebuffers never overlap.
 
 The boot screen takes 300 KB for its picture (600 KB while the first
 boot's letter and its stamped copy are both up), the disc check a 256 KB
-read buffer and the intro music ~41 KB. The check's buffer and the music
-are freed before the assets load; the pictures stay through the REL's
+read buffer. The check's buffer is freed before the assets load; the pictures stay through the REL's
 peak (~36 MB free then) and are freed before GPU init
-(`xbox_splash_finish`), so they never meet the framebuffers. The music and pictures appended to `default.xbe` are never
+(`xbox_splash_finish`), so they never meet the framebuffers. The pictures appended to `default.xbe` are never
 loaded by the kernel: the image size above doesn't change.
 
 The release after beta-3 started with ~385 KB less free than beta-3 (the

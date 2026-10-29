@@ -11,13 +11,11 @@ As of v14 (2026-10-03). Everything else ran on the playtest consoles:
 (64 MB, composite cable, 480i only) from v13. Restart from the Options menu
 was checked in xemu (it relaunches into the game at the new output).
 
-- The new boot screen, disc check and intro music (dev, 2026-10-29;
+- The new boot screen and disc check (dev, 2026-10-29;
   `architecture.md`, "Boot screen and disc check"): xemu only. On the
-  console, check the first boot of an image (letter, stamps, music and
-  its fade, B skip), a later boot (welcome, the bar filling before the
-  game), Y + both triggers, the music's cost to the check's time
-  (`[DISC] full check ... ms`), and that the game's sound starts normally
-  after the intro used the AC97 pump first. The table came from a
+  console, check the first boot of an image (letter, stamps, B skip), a later boot (welcome, the bar filling before the
+  game), Y + both triggers. First console run (gold, composite, LTO+PGO,
+  2026-10-29): the full check passed in ~1 s of hashing. The table came from a
   rebuilt-layout image: a Redump-layout image should pass too (a
   `DIFFERS` line in `boot.log` would mean the table needs that image).
 - The gyroid storage and catalog fixes (`patches.md`): store an item with

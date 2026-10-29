@@ -42,7 +42,7 @@ E:\Games\OpenCrossing\
   Animal Crossing.iso    (yours)
 ```
 
-The first start checks every file in your disc image against a known-good copy, with a little music. It takes a few seconds and only happens once per image (press B to skip it for that start). Hold Y and both triggers while the game starts to run it again.
+The first start checks every file in your disc image against a known-good copy. It takes a second or two and only happens once per image (press B to skip it for that start). Hold Y and both triggers while the game starts to run it again.
 
 To save space, shrink the 1.4 GB image to the ~28 MB the game reads: `python3 tools/gc_trim_ciso.py "Animal Crossing.iso" AnimalCrossing.ciso`.
 
