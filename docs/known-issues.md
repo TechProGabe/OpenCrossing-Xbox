@@ -11,6 +11,22 @@ As of v14 (2026-10-03). Everything else ran on the playtest consoles:
 (64 MB, composite cable, 480i only) from v13. Restart from the Options menu
 was checked in xemu (it relaunches into the game at the new output).
 
+- The new boot screen, disc check and intro music (dev, 2026-10-29;
+  `architecture.md`, "Boot screen and disc check"): xemu only. On the
+  console, check the first boot of an image (letter, stamps, music and
+  its fade, B skip), a later boot (welcome, the bar filling before the
+  game), Y + both triggers, the music's cost to the check's time
+  (`[DISC] full check ... ms`), and that the game's sound starts normally
+  after the intro used the AC97 pump first. The table came from a
+  rebuilt-layout image: a Redump-layout image should pass too (a
+  `DIFFERS` line in `boot.log` would mean the table needs that image).
+- The gyroid storage and catalog fixes (`patches.md`): store an item with
+  a gyroid and close the menu, at 720p and 480.
+- The island without a GBA (`ac_npc_sendo_move.c_inc`, 2026-10-29, not
+  run anywhere yet): talk to Kapp'n at the dock, ride, check his new lines
+  (`make_msg_overrides.py`) fit their boxes, the island loads, and the
+  ride home. A save that has never had an island takes the name-the-island
+  path (`aSEN_TALK_MSG_WIN_CLOSE_WAIT`); check that too if one turns up.
 - A save under another `.gci` name in `save/card_a` (Dolphin's
   `01-GAFE-DobutsunomoriP_MURA.gci`; `pc_card.c` built `-U_WIN32`,
   `patches.md`).

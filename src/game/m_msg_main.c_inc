@@ -350,6 +350,14 @@ static int mMsg_LoadMsgData(mMsg_Data_c* msg_data, int index, int cut) {
                 *dst_p++ = *src_p++;
             }
 
+#if defined(TARGET_XBOX)
+            /* our text for the messages about a Game Boy Advance (xbox_msg.c) */
+            {
+                extern int xbox_msg_override(int index, unsigned char* buf, int cap);
+                int n = xbox_msg_override(index, msg_data->text_buf.data, mMsg_MSG_BUF_MAX);
+                if (n > 0) size = n, index = -index;   /* overridden: skip the trim below */
+            }
+#endif
 #ifdef TARGET_PC
             /* Truncate Kapp'n's island-arrival msg (12410/12620) at the page
              * break — page 2 is "Now ye can turn off yer Game Boy Advance...". */
@@ -363,6 +371,9 @@ static int mMsg_LoadMsgData(mMsg_Data_c* msg_data, int index, int cut) {
                     }
                 }
             }
+#endif
+#if defined(TARGET_XBOX)
+            if (index < 0) index = -index;
 #endif
 
             msg_data->msg_no = index;

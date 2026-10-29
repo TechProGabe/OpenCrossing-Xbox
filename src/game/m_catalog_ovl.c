@@ -608,6 +608,13 @@ static void mCL_catalog_ovl_move(Submenu* submenu) {
     menu_info->pre_move_func(submenu);
     (*ovl_move_proc[menu_info->proc_status])(submenu, menu_info);
 
+#if defined(TARGET_PC)
+    /* mCL_move_End closing the last menu frees catalog_ovl (dt_proc). */
+    if (submenu->overlay->catalog_ovl == NULL) {
+        return;
+    }
+#endif
+
     catalog_ovl->counter_accum += gamePT->graph->dt_num_60fps_frames;
     while (catalog_ovl->counter_accum >= 1.0f) {
         catalog_ovl->counter = (catalog_ovl->counter + 1) % 35;
