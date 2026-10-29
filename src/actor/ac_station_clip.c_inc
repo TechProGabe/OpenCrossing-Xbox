@@ -190,6 +190,35 @@ static void aSTM_chk_leave_talk(NPC_STATION_MASTER_ACTOR* master, GAME_PLAY* pla
     if (mMsg_CHECK_MAINNORMALCONTINUE() == TRUE) {
         switch (mChoice_GET_CHOSENUM()) {
             case mChoice_CHOICE0:
+#if defined(TARGET_XBOX)
+            {
+                /* No trips on the Xbox (there's nowhere to put a GameCube
+                 * Memory Card): the Porter says so in our text (xbox_msg.c;
+                 * 0x094A), and the first time each player asks he hands over
+                 * The Legend of Zelda (0x0946; 0x0947 when the pockets are
+                 * full, to try again). Nookington's needs no visitor here
+                 * (xbox_settings.c). */
+                extern int xbox_gift_once(const char* key, unsigned land_id, unsigned player_id, int claim);
+                Private_c* priv = Common_Get(now_private);
+                unsigned land = priv->player_ID.land_id, pid = priv->player_ID.player_id;
+                int msg = 0x094A;
+
+                if (xbox_gift_once("zelda", land, pid, FALSE)) {
+                    int idx = mPr_GetPossessionItemIdx(priv, EMPTY_NO);
+
+                    if (idx >= 0) {
+                        mPr_SetPossessionItem(priv, idx, FTR_START(FTR_FAMICOM_COMMON18), mPr_ITEM_COND_NORMAL);
+                        xbox_gift_once("zelda", land, pid, TRUE);
+                        msg = 0x0946;
+                    } else {
+                        msg = 0x0947;
+                    }
+                }
+                mMsg_Set_continue_msg_num(mMsg_Get_base_window_p(), msg);
+                aSTC_clip_change_talk_proc((ACTOR*)master, aSTM_TALK_END_WAIT);
+                break;
+            }
+#endif
                 aSTC_clip_change_talk_proc((ACTOR*)master, aSTM_TALK_CHK_LEAVE_TALK2);
                 break;
             case mChoice_CHOICE1:

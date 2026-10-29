@@ -83,8 +83,8 @@ A stock 64 MB console. 128 MB consoles run it in 64 MB too, so everyone gets the
 ## Saves, settings and controls
 
 - **Saves** go to the hard drive, even when you play from a disc: `E:\UDATA\4f430001\save\card_a\`. They're standard GameCube `.gci` files. To bring a town over, export it from Dolphin (a `.gcs` from GameShark or GC Memcard Manager converts with `python3 tools/gcs_to_gci.py mysave.gcs`), start the game once, then FTP the `.gci` into that folder. Any name ending in `.gci` works; a file named exactly `DobutsunomoriP_MURA.gci` always loads first. Every save keeps the last three as `.bak1` to `.bak3`.
-- **Visiting a friend's town:** put their `.gci` in `save\card_b\` and take the train. Back up both saves first: town visits are new on the Xbox.
-- **Options** opens from the title screen, or Settings in the pause menu (Back). Changes apply when you press Apply. Video (output, widescreen, texture filter, FPS counter, screenshots), Audio (volume), Controls (dead zones, rumble, button remapping) and Gameplay (Mr. Resetti, shop upgrade without a visitor, borderless acres, NES aspect). Everything is also in `E:\UDATA\4f430001\settings.ini`.
+- **Visiting other towns** isn't supported: the Porter at the station will explain (and make it up to you). Nook's still grows into Nookington's without a visitor.
+- **Options** opens from the title screen, or Settings in the pause menu (Back). Changes apply when you press Apply. Video (output, widescreen, texture filter, FPS counter, screenshots), Audio (volume), Controls (dead zones, rumble, button remapping) and Gameplay (Mr. Resetti, borderless acres, NES aspect). Everything is also in `E:\UDATA\4f430001\settings.ini`.
 - **Screenshots:** turn them on in Options > Video, then click the right stick. They land in `E:\UDATA\4f430001\` as `shot00.bmp` and up.
 - **Quit Game** on the title screen or pause menu goes back to the dashboard.
 

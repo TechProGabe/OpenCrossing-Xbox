@@ -12,8 +12,9 @@
  *   xbox_choice_unmap  the index the game's code expects for the choice the
  *                      player picked (m_choice_main.c_inc): the SETNEXTMSGn
  *                      codes and every handler keep the original numbering
- *   xbox_ereader_gift  Super Mario Bros. once per player for asking the
- *                      e-Reader machine (ac_pterminal.c)
+ *   xbox_gift_once     a consolation gift once per player: Super Mario
+ *                      Bros. from the e-Reader machine (ac_pterminal.c),
+ *                      The Legend of Zelda from the Porter (ac_station_clip)
  * Called from src/ under TARGET_XBOX (docs/patches.md). Kill switch:
  * -DXBOX_MSG_OVERRIDES=0 (all of it). */
 #include <stdio.h>
@@ -96,17 +97,18 @@ int xbox_choice_unmap(int idx) {
     return s_drop_pos >= 0 && idx >= s_drop_pos ? idx + 1 : idx;
 }
 
-/* ---- the e-Reader machine's apology ---- */
+/* ---- the consolation gifts: once per player ---- */
 
-#define GIFT_INI XBOX_UDATA_DIR "ereader.ini"
+#define GIFT_INI XBOX_UDATA_DIR "ereader.ini"   /* the first gift's file; now all of them */
 
-/* 1 if this player (town and player ids) hasn't had the gift; claim = 1
- * records that they have */
-int xbox_ereader_gift(unsigned land_id, unsigned player_id, int claim) {
-    char want[32], line[64];
+/* 1 if this player (town and player ids) hasn't had gift `key` yet ("gift"
+ * is the e-Reader machine's Super Mario Bros., "zelda" the Porter's Legend
+ * of Zelda); claim = 1 records that they have */
+int xbox_gift_once(const char* key, unsigned land_id, unsigned player_id, int claim) {
+    char want[48], line[64];
     FILE* f;
     int seen = 0;
-    snprintf(want, sizeof want, "gift = %04x %04x", land_id & 0xFFFF, player_id & 0xFFFF);
+    snprintf(want, sizeof want, "%s = %04x %04x", key, land_id & 0xFFFF, player_id & 0xFFFF);
     if ((f = fopen(GIFT_INI, "r")) != NULL) {
         while (!seen && fgets(line, sizeof line, f)) {
             line[strcspn(line, "\r\n")] = 0;
@@ -119,6 +121,10 @@ int xbox_ereader_gift(unsigned land_id, unsigned player_id, int claim) {
         fprintf(f, "%s\n", want);
         fclose(f);
     }
-    xbox_logf("[MSG] e-Reader machine: Super Mario Bros. for %04x %04x\n", land_id & 0xFFFF, player_id & 0xFFFF);
+    xbox_logf("[MSG] gift %s for %04x %04x\n", key, land_id & 0xFFFF, player_id & 0xFFFF);
     return 1;
+}
+
+int xbox_ereader_gift(unsigned land_id, unsigned player_id, int claim) {
+    return xbox_gift_once("gift", land_id, player_id, claim);
 }

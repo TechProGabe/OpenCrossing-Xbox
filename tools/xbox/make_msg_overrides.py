@@ -73,8 +73,40 @@ pockets are full.<<PAUSE [08]>>
 Come back with some room!
 <<MSGEND>>"""
 
+# the Porter, asked for a trip (src/actor/ac_station_clip.c_inc on the
+# Xbox): 0x094A every time, 0x0946 the first time (The Legend of Zelda goes
+# in the pockets), 0x0947 when that gift doesn't fit. Card-error slots the
+# Xbox never reaches any more.
+PORTER = """<<DEMONPC0 [00 00 02]>>Eek eek! A trip?<<PAUSE [0A]>>
+I'd love to send you off,
+but for that I need a
+<<COLORCHARS [19 8C DC 14]>>GameCube Memory Card...<<BTN>>
+<<MSGCLEAR>><<DEMONPC0 [00 00 17]>>...and I've checked this
+whole Xbox, <<STR_PLAYERNAME>>!<<PAUSE [0A]>>
+There's no slot for one.
+Not even behind the jewel!<<BTN>>
+<<MSGCLEAR>><<DEMONPC0 [00 00 FF]>>So no trains out, I'm afraid.
+But don't worry: Tom Nook
+will grow his store all on
+his own. Eek eek!"""
+
+PORTER_GIFT = PORTER + """<<BTN>>
+<<MSGCLEAR>><<DEMONPC0 [00 00 02]>>Oh! And TechProGabe sends
+his most sincere apologies
+with this gift:<<PAUSE [0A]>>
+<<COLORCHARS [19 8C DC 13]>>The Legend of Zelda!
+<<MSGEND>>"""
+
+PORTER_FULL = PORTER + """<<BTN>>
+<<MSGCLEAR>>I'd give you something for
+your trouble, but your
+pockets are full! Come back
+with some room. Eek eek!
+<<MSGEND>>"""
+
 OVERRIDES = [(12407, SAIL), (12617, SAIL), (12410, ARRIVE), (12620, ARRIVE),
-             (15854, EREADER + "\n<<MSGEND>>"), (15855, EREADER_GIFT), (15836, EREADER_FULL)]
+             (15854, EREADER + "\n<<MSGEND>>"), (15855, EREADER_GIFT), (15836, EREADER_FULL),
+             (0x094A, PORTER + "\n<<MSGEND>>"), (0x0946, PORTER_GIFT), (0x0947, PORTER_FULL)]
 
 
 def check_roundtrip(data_path):

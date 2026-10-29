@@ -118,6 +118,14 @@ The first playtest builds kept the left stick dead zone in
 
 ## Visiting another town
 
+Not on the Xbox (the user, 2026-10-29): asked for a trip, the Porter says
+there's nowhere to put a GameCube Memory Card on an Xbox and, once per
+player, gives The Legend of Zelda (`ac_station_clip.c_inc`, our text in
+`tools/xbox/make_msg_overrides.py`). Nookington's never needs a visitor
+(`disable_shop_visitor_req` forced on in `xbox_settings.c`; the Options row
+is gone). What follows is the card B path the train would take, kept for
+reference: nothing reaches it now.
+
 The station's train to another town reads the other town from
 `save/card_b` (any `.gci` whose header says GAF). With no other town there,
 or a copy of the player's own, the Porter says there's no town data: the
@@ -138,7 +146,7 @@ Quit Game) in game. Both drive the Options page in `xbox_settings_menu.c`:
 | Video | Output (Auto, the default, shown with the mode it gives, e.g. "Auto, 720p"; or 480i, or 480p where the dashboard allows it, pinned; needs a restart), Widescreen (Auto, the default, shown as "Auto, 16:9" or "Auto, 4:3"; 4:3; 16:9, which draws more of the scene and costs frame time), Texture filter, FPS counter (live), Screenshots (R-Stick; live) |
 | Audio | Master volume |
 | Controls | Stick deadzone (radial, 0-60%, 40% default, live stick meter), C-stick deadzone (40% default), Rumble (0-100%), Buttons (controller rebinding) |
-| Gameplay | Resetti, Shop upgrade (Singleplayer by default on the Xbox: the visitor Nookington's wants needs a second town in `save/card_b`; switched once on the first boot without an `[Xbox]` section), Borderless acres, NES aspect |
+| Gameplay | Resetti, Borderless acres, NES aspect (the shop upgrade never needs a visitor on the Xbox: no row) |
 
 The page is drawn in the game's own style (cream notebook sheet in a wood
 frame, a green name tag, speech-bubble prompts, the selected row on a

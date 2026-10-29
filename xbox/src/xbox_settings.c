@@ -216,14 +216,11 @@ void pc_settings_load(void) {
     int have;
     pc_settings_load_pc();
     have = read_xbox_section();
-    if (have == 0) {
-        /* No [Xbox] section: settings.ini is new, or from a build without
-         * the Options menu, so its PC keys are defaults nobody picked. The
-         * shop upgrade defaults to single player here: Nookington's needs a
-         * shopper from another town, and on the Xbox that means copying a
-         * second town into save/card_b over FTP. */
-        g_pc_settings.disable_shop_visitor_req = 1;
-    }
+    /* Nookington's never waits for a shopper from another town: the Xbox
+     * doesn't visit other towns (the Porter says so, xbox_msg.c), so the
+     * shop upgrade is always the single-player one and the Options row is
+     * gone. settings.ini's disable_shop_visitor_req is ignored. */
+    g_pc_settings.disable_shop_visitor_req = 1;
     /* Until version 4 the video defaults were video_720p = 0 and widescreen
      * = 0 (4:3), and the writer puts every key in the file: left as they
      * were, they were nobody's choice, so they move to Auto once (Melee-X's
