@@ -76,19 +76,6 @@ was checked in xemu (it relaunches into the game at the new output).
   backport: set that change's key to 0 in `settings.ini` (`backport.md`),
   or `console.py rollback`.
 
-## LTO + PGO build: wrong colours (2026-10-29, hardware)
-
-- `XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata` (`pgo.md`) on the gold console
-  (composite, 480i, 32-bit): the boot screen's colours were wrong overall
-  and so were the game's (teal faces, green cedar trunks in the night
-  title demos, shots 14-19 of that round). The plain build of the same
-  commit is right on the same console and cable. xemu showed neither.
-- Both the CPU-drawn boot screen and the GPU's frames went wrong, so look
-  first at code both pass through or that sets up the output, not at one
-  draw path. Next: an `XBOX_LTO=1` build alone and an `XBOX_PGO` build
-  alone on the console, then bisect by TU (the backends take per-object
-  flags). Off by default meanwhile; CI and releases stay plain.
-
 ## Crash after an NES game: display list at a float (2026-10-03, v8)
 
 - Hardware, v8: Super Mario Bros played from the room, back in the room, a

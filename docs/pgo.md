@@ -70,8 +70,10 @@ counter section (`.lprfc`) as `[PGOC]` lines every 1800 frames
 
 ## Release builds
 
-**Not shippable yet:** on the console the LTO + PGO build drew wrong colours
-(boot screen and game; plain build right; `known-issues.md`, 2026-10-29).
+The first console run (2026-10-29) drew wrong colours: `pc_gx.c` defined
+the GX colour setters with a `u32` where the game passes a `GXColor`, which
+ThinLTO turned into garbage (`traps.md`, `patches.md`). Fixed; bisected
+with `XBOX_LTO_EXCLUDE=<regex>`, which builds matching sources without LTO.
 
 Plain until a console round compares the two (perf.log's `min` lines in
 the same busy rooms, both outputs). Then CI's `build.yml` gets

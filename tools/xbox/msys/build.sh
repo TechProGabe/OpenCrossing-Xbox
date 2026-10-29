@@ -22,7 +22,7 @@ msys="${MSYS2_ROOT:-/c/msys64}"
 [ -x "$msys/usr/bin/bash" ] || { echo "no MSYS2 at $msys"; exit 1; }
 # Git Bash's environment doesn't reach MSYS2's bash: hand the knobs over as arguments
 knobs=()
-for v in XBOX_LTO XBOX_PGO XBOX_BUILD_DIR XBOX_TARGET XBOX_CMAKE_ARGS XBOX_NINJA_ARGS XBOX_NO_ICON NXDK_DIR; do
+for v in XBOX_LTO XBOX_LTO_EXCLUDE XBOX_PGO XBOX_BUILD_DIR XBOX_TARGET XBOX_CMAKE_ARGS XBOX_NINJA_ARGS XBOX_NO_ICON NXDK_DIR; do
   [ -n "${!v:-}" ] && knobs+=("$v=${!v}")
 done
 exec "$msys/usr/bin/bash" -lc '
@@ -38,7 +38,7 @@ exec "$msys/usr/bin/bash" -lc '
   eval "$("$NXDK_DIR/bin/activate" -s)"
   eval cmake -S xbox -B "$bdir" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$NXDK_DIR/share/toolchain-nxdk.cmake" \
     -DXBOX_OBJS_ONLY=$objs -DCMAKE_C_FLAGS= -DCMAKE_CXX_FLAGS= -DXBOX_AUTOPAD= -DXBOX_WIDESCREEN=ON \
-    -DXBOX_TITLE_MENU=ON -DXBOX_DIAG_ISSUE3=OFF -DXBOX_RTC_SHIM=OFF     -DXBOX_LTO=$lto -DXBOX_PGO="${XBOX_PGO:-}" ${XBOX_CMAKE_ARGS:-} >/dev/null
+    -DXBOX_TITLE_MENU=ON -DXBOX_DIAG_ISSUE3=OFF -DXBOX_RTC_SHIM=OFF     -DXBOX_LTO=$lto \"-DXBOX_LTO_EXCLUDE=\${XBOX_LTO_EXCLUDE:-}\" -DXBOX_PGO="${XBOX_PGO:-}" ${XBOX_CMAKE_ARGS:-} >/dev/null
   ninja -C "$bdir" -k 0 ${XBOX_NINJA_ARGS:-}
   xbe="$bdir/xbe/default.xbe"
   if [ -z "${XBOX_NO_ICON:-}" ] && [ -f "$xbe" ]; then
