@@ -15,6 +15,14 @@ find them.
   and the prelude's `-include /c/...` then isn't found. CMake treats that
   variable as on whenever it is defined, `=OFF` included; unset it with
   `-U`. `CMAKE_*_USE_RESPONSE_FILE_FOR_OBJECTS` is ignored by Ninja.
+- **LTO punishes mismatched prototypes.** `pc/` replaces SDK functions, and
+  a definition whose parameters differ from the header the game calls it
+  through (a `u32` for a `GXColor` struct) is undefined behaviour that a
+  normal link hides. Under ThinLTO it made every light and TEV colour
+  wrong (`pc_gx.c`, `patches.md`). Enum vs `u32` is fine (same type at the
+  ABI); structs by value, `f32` vs `f64`, and different counts are not.
+  When an `XBOX_LTO` build misbehaves, bisect with `XBOX_LTO_EXCLUDE=<regex>`
+  (those sources build without LTO) and xemu `[FBDUMP]`s.
 - **Disc image layouts differ.** A rebuilt or trimmed image has the same
   files at other offsets (the NAS image: `audiorom.img` at `0x000FE588`;
   a Redump-layout one at `0x55C32F40`). Compare file contents, never
