@@ -11,34 +11,13 @@ As of v14 (2026-10-03). Everything else ran on the playtest consoles:
 (64 MB, composite cable, 480i only) from v13. Restart from the Options menu
 was checked in xemu (it relaunches into the game at the new output).
 
-- The new boot screen and disc check (dev, 2026-10-29;
-  `architecture.md`, "Boot screen and disc check"): xemu only. On the
-  console, check the first boot of an image (letter, stamps, B skip), a later boot (welcome, the bar filling before the
-  game), Y + both triggers. First console run (gold, composite, LTO+PGO,
-  2026-10-29): the full check passed in ~1 s of hashing. The table came from a
-  rebuilt-layout image: a Redump-layout image should pass too (a
-  `DIFFERS` line in `boot.log` would mean the table needs that image).
-- The gyroid storage and catalog fixes (`patches.md`): store an item with
-  a gyroid and close the menu, at 720p and 480.
-- Menus without GBA choices (`xbox_msg.c`, 2026-10-29, not run yet): an
-  NES game's "Would you like to play" (I'll play / No thanks), the Able
-  Sisters' main menu (no "Other things") and its "Design Advance" menus;
-  pick every remaining choice, and B, and check each goes where its label
-  says. The e-Reader machine: first talk gives Super Mario Bros. (pockets
-  full: the "come back with room" line, and the next talk gives it), later
-  talks only joke.
-- The island without a GBA (`ac_npc_sendo_move.c_inc`, 2026-10-29, not
-  run anywhere yet): talk to Kapp'n at the dock, ride, check his new lines
-  (`make_msg_overrides.py`) fit their boxes, the island loads, and the
-  ride home. A save that has never had an island takes the name-the-island
-  path (`aSEN_TALK_MSG_WIN_CLOSE_WAIT`); check that too if one turns up.
+- The gifts kept only at a save (`xbox_gift_commit`, 2026-10-29): get
+  Zelda from the Porter or Super Mario Bros. from the e-Reader machine,
+  quit without saving, and ask again; it should come back. After a save,
+  only the joke.
 - A save under another `.gci` name in `save/card_a` (Dolphin's
   `01-GAFE-DobutsunomoriP_MURA.gci`; `pc_card.c` built `-U_WIN32`,
   `patches.md`).
-- The Porter's apology (2026-10-29, not run yet): ask him for a trip; his
-  lines fit their boxes, the first time The Legend of Zelda lands in the
-  pockets (full pockets: the come-back line, then the gift next time),
-  later only the joke; Nook's upgrades to Nookington's with no visitor.
 - The splash and the no-disc screen at 480i when `progressive = 0`
   (`xbox_settings_early`).
 - Video auto-detection (`XBOX_VIDEO_AUTO`, `opt_version` 4; xemu only so
