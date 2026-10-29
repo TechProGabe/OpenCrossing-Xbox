@@ -23,6 +23,13 @@ find them.
   ABI); structs by value, `f32` vs `f64`, and different counts are not.
   When an `XBOX_LTO` build misbehaves, bisect with `XBOX_LTO_EXCLUDE=<regex>`
   (those sources build without LTO) and xemu `[FBDUMP]`s.
+- **A BIOS can leave 720p's scanout wrong.** Cerbios and HDMI boards
+  replace the kernel's `AvSetDisplayMode`; for our 16-bit 1280x720 mode the
+  gold console's left the pitch at 6656 where 2560 is right, and the
+  picture came out glitched over component (Melee-X #18, the same console).
+  `xbox_video_check_scanout` (`xbox_settings.c`) logs `[VIDEO] scanout` after
+  every mode set and puts general control, CR28 and the pitch back the way
+  the stock kernel sets them (`[VIDEO] scanout set back`).
 - **Disc image layouts differ.** A rebuilt or trimmed image has the same
   files at other offsets (the NAS image: `audiorom.img` at `0x000FE588`;
   a Redump-layout one at `0x55C32F40`). Compare file contents, never

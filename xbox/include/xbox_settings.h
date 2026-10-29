@@ -61,6 +61,8 @@ int xbox_video_720p_allowed(void);
 int xbox_video_480p_allowed(void);
 /* sets 640x480x32: 480i when progressive = 0 and the pack would give 480p */
 int xbox_video_set_480(void);
+/* after a mode set: puts back a scanout format/pitch a BIOS left wrong (720p, Cerbios / HDMI boards) */
+void xbox_video_check_scanout(int width, int bpp);
 /* BACK held when the splash ended: 480i, saved (xbox_splash.c sets it,
  * xbox_settings_safe_video applies it after the settings load) */
 extern int g_xbox_safe_video_held;

@@ -101,15 +101,24 @@ int xbox_choice_unmap(int idx) {
 
 #define GIFT_INI XBOX_UDATA_DIR "ereader.ini"   /* the first gift's file; now all of them */
 
+/* A gift lives in the pockets, which only last if the game is saved: a
+ * claim waits here until the next successful save (xbox_gift_commit, from
+ * pc_m_card.c), so quitting without saving lets it be handed out again,
+ * and asking twice in one session doesn't. */
+#define GIFT_PENDING 8
+static char s_gift_pending[GIFT_PENDING][48];
+static int s_gift_npending;
+
 /* 1 if this player (town and player ids) hasn't had gift `key` yet ("gift"
  * is the e-Reader machine's Super Mario Bros., "zelda" the Porter's Legend
- * of Zelda); claim = 1 records that they have */
+ * of Zelda); claim = 1 marks it given (kept at the next save) */
 int xbox_gift_once(const char* key, unsigned land_id, unsigned player_id, int claim) {
     char want[48], line[64];
     FILE* f;
-    int seen = 0;
+    int seen = 0, i;
     snprintf(want, sizeof want, "%s = %04x %04x", key, land_id & 0xFFFF, player_id & 0xFFFF);
-    if ((f = fopen(GIFT_INI, "r")) != NULL) {
+    for (i = 0; i < s_gift_npending && !seen; i++) seen = strcmp(s_gift_pending[i], want) == 0;
+    if (!seen && (f = fopen(GIFT_INI, "r")) != NULL) {
         while (!seen && fgets(line, sizeof line, f)) {
             line[strcspn(line, "\r\n")] = 0;
             seen = strcmp(line, want) == 0;
@@ -117,12 +126,22 @@ int xbox_gift_once(const char* key, unsigned land_id, unsigned player_id, int cl
         fclose(f);
     }
     if (seen || !claim) return !seen;
-    if ((f = fopen(GIFT_INI, "a")) != NULL) {
-        fprintf(f, "%s\n", want);
-        fclose(f);
-    }
-    xbox_logf("[MSG] gift %s for %04x %04x\n", key, land_id & 0xFFFF, player_id & 0xFFFF);
+    if (s_gift_npending < GIFT_PENDING) strcpy(s_gift_pending[s_gift_npending++], want);
+    xbox_logf("[MSG] gift %s for %04x %04x (kept at the next save)\n", key, land_id & 0xFFFF, player_id & 0xFFFF);
     return 1;
+}
+
+/* the town was saved: the gifts handed out since become permanent */
+void xbox_gift_commit(void) {
+    FILE* f;
+    int i;
+    if (!s_gift_npending) return;
+    if ((f = fopen(GIFT_INI, "a")) != NULL) {
+        for (i = 0; i < s_gift_npending; i++) fprintf(f, "%s\n", s_gift_pending[i]);
+        fclose(f);
+        xbox_logf("[MSG] %d gift(s) kept with the save\n", s_gift_npending);
+    }
+    s_gift_npending = 0;
 }
 
 int xbox_ereader_gift(unsigned land_id, unsigned player_id, int claim) {

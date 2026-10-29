@@ -100,6 +100,7 @@ Under `#ifdef TARGET_XBOX`:
 
 | file | change | why |
 |---|---|---|
+| `pc/src/pc_m_card.c` | after a GCI save succeeds, `xbox_gift_commit()` | the Porter's and the e-Reader machine's once-per-player gifts (`xbox_msg.c`) are only recorded when the town is saved: quit without saving and the gift, gone from the pockets, can be had again (user report, 2026-10-29) |
 | `pc/src/pc_os.c` | `OSInit`: the time-zone offset is the dashboard's time zone and DST (`xbox_local_offset_secs`) | the game clock reads local time, as a GameCube's does |
 | `pc/src/pc_m_card.c` | a loaded save's `time_delta` beyond ±40 years goes to 0 (`pc_xbox_fix_time_delta`; Card A's town and a visited Card B town) | deltas set under the old Xbox clock are ~-56 years and would put the fixed clock in ~1970; the game's years make anything past 40 impossible otherwise |
 | `pc/src/pc_m_card.c` | `mCD_CheckStation_bg` answers `mCD_TRANS_ERR_NO_TOWN_DATA` when `save/card_b` has no other town | it answered `mCD_TRANS_ERR_NONE`, the GameCube's passport trip (the traveller saved to slot B, then the title screen); the PC port keeps the passport in memory only, so on the Xbox (hardware, 2026-10-03) the train went nowhere and dropped the player on the title |

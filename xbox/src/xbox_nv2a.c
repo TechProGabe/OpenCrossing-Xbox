@@ -2053,6 +2053,7 @@ static int video_720p(void) {
         xbox_video_set_480();
         return 0;
     }
+    xbox_video_check_scanout(1280, 16);   /* a BIOS may leave 16-bit 720p's pitch wrong (gold) */
     pb_set_color_format(NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5, false);
     /* NV2x wants colour and depth of the same width: Z16 with R5G6B5 */
     pb_DepthFmt = NV097_SET_SURFACE_FORMAT_ZETA_Z16;

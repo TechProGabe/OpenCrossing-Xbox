@@ -121,7 +121,9 @@ has no serial port, so the game writes logs to `E:\UDATA\4f430001\`:
 | `stickN.log` | last 10 s of stick readings, written when L3 is clicked |
 
 `tools/xbox/console.py` does a round in three steps (`OCX_FTP_HOST=<ip>`,
-and `OCX_APP=<folder>` when the game isn't in `/F/Applications/OpenCrossing`):
+and `OCX_APP=<folder>` when the game isn't in `/F/Applications/OpenCrossing`;
+from Git Bash add `MSYS2_ENV_CONV_EXCL=OCX_APP`, or MSYS turns `/E/...` into
+a Windows path; the gold console keeps it in `/E/Applications/OpenCrossing`):
 `stage vNN` copies the build and its map (plus static functions) to
 `~/xemu/ochw`, `deploy vNN` pulls and deletes the console's old logs (the
 screenshots and `settings.ini` are pulled, never deleted), keeps the
