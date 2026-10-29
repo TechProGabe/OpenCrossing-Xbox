@@ -521,8 +521,32 @@ static void Pterminal_Actor_move(ACTOR* actorx, GAME* game) {
                 int player_no = Common_Get(player_no);
 
                 if (player_no < PLAYER_NUM) {
+#if defined(TARGET_XBOX)
+                    /* No e-Reader on an Xbox: the machine says so (our text for
+                     * 15854, xbox_msg.c), and the first time each player asks,
+                     * Super Mario Bros. goes in their pockets for the trouble
+                     * (15855; 15836 when the pockets are full, to try again) */
+                    extern int xbox_ereader_gift(unsigned land_id, unsigned player_id, int claim);
+                    Private_c* priv = Common_Get(now_private);
+                    unsigned land = priv->player_ID.land_id, pid = priv->player_ID.player_id;
+
+                    actor->msg_no = MSG_15854;
+                    if (xbox_ereader_gift(land, pid, FALSE)) {
+                        int idx = mPr_GetPossessionItemIdx(priv, EMPTY_NO);
+
+                        if (idx >= 0) {
+                            mPr_SetPossessionItem(priv, idx, FTR_START(FTR_FAMICOM_COMMON17), mPr_ITEM_COND_NORMAL);
+                            xbox_ereader_gift(land, pid, TRUE);
+                            actor->msg_no = MSG_15855;
+                        } else {
+                            actor->msg_no = MSG_15836;
+                        }
+                    }
+                    actor->next_proc = aPT_PROC_WAIT;
+#else
                     actor->msg_no = MSG_15854;
                     actor->next_proc = aPT_PROC_FIRST_QUESTION;
+#endif
                 } else {
                     actor->msg_no = MSG_15851;
                     actor->next_proc = aPT_PROC_WAIT;

@@ -22,6 +22,13 @@ was checked in xemu (it relaunches into the game at the new output).
   `DIFFERS` line in `boot.log` would mean the table needs that image).
 - The gyroid storage and catalog fixes (`patches.md`): store an item with
   a gyroid and close the menu, at 720p and 480.
+- Menus without GBA choices (`xbox_msg.c`, 2026-10-29, not run yet): an
+  NES game's "Would you like to play" (I'll play / No thanks), the Able
+  Sisters' main menu (no "Other things") and its "Design Advance" menus;
+  pick every remaining choice, and B, and check each goes where its label
+  says. The e-Reader machine: first talk gives Super Mario Bros. (pockets
+  full: the "come back with room" line, and the next talk gives it), later
+  talks only joke.
 - The island without a GBA (`ac_npc_sendo_move.c_inc`, 2026-10-29, not
   run anywhere yet): talk to Kapp'n at the dock, ride, check his new lines
   (`make_msg_overrides.py`) fit their boxes, the island loads, and the

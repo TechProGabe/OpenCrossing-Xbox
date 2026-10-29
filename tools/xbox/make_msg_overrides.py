@@ -48,7 +48,33 @@ here it's one long swim
 back to the dashboard!
 <<MSGEND>>"""
 
-OVERRIDES = [(12407, SAIL), (12617, SAIL), (12410, ARRIVE), (12620, ARRIVE)]
+# the post office's e-Reader Transfer Machine (src/actor/ac_pterminal.c on
+# the Xbox): 15854 every time, 15855 the first time (Super Mario Bros. goes
+# in the pockets), 15836 when that gift doesn't fit
+EREADER = """Welcome, <<STR_PLAYERNAME>>.<<PAUSE [0C]>>
+Thank you for using the
+<<COLORCHARS [E1 1E D7 19]>>e-Reader Transfer Machine.<<BTN>>
+<<MSGCLEAR>>...Wait a second.<<PAUSE [0A]>>
+How am I supposed to read
+a card on an Xbox?<<BTN>>
+<<MSGCLEAR>>Sorry, pal.<<PAUSE [08]>>
+That's not gonna work."""
+
+EREADER_GIFT = EREADER + """<<BTN>>
+<<MSGCLEAR>>Here, take this for
+the trouble:<<PAUSE [08]>> <<COLORCHARS [19 8C DC 10]>>Super Mario Bros!<<PAUSE [0A]>>
+Don't tell Tom Nook.
+<<MSGEND>>"""
+
+EREADER_FULL = EREADER + """<<BTN>>
+<<MSGCLEAR>>I'd give you something for
+the trouble, but your
+pockets are full.<<PAUSE [08]>>
+Come back with some room!
+<<MSGEND>>"""
+
+OVERRIDES = [(12407, SAIL), (12617, SAIL), (12410, ARRIVE), (12620, ARRIVE),
+             (15854, EREADER + "\n<<MSGEND>>"), (15855, EREADER_GIFT), (15836, EREADER_FULL)]
 
 
 def check_roundtrip(data_path):

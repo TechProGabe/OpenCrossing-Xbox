@@ -171,7 +171,14 @@ static void mChoice_Set_DisplayScaleAndDisplayPos(mChoice_c* choice) {
 }
 
 extern int mChoice_Get_ChoseNum(mChoice_c* choice) {
+#if defined(TARGET_XBOX)
+    /* a GBA choice taken out of this menu (xbox_msg.c): the game's numbering */
+    extern int xbox_choice_unmap(int idx);
+    int idx = choice->data.selected_choice_idx;
+    return idx >= 0 ? xbox_choice_unmap(idx) : idx;
+#else
     return choice->data.selected_choice_idx;
+#endif
 }
 
 extern void mChoice_Clear_ChoseNum(mChoice_c* choice) {
