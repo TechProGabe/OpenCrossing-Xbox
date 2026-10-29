@@ -455,6 +455,12 @@ static int pc_save_write_gci_ex(const char* gci_path, const char* tmp_path, int 
     }
 
     OSReport("[PC] GCI save: written successfully to %s (backups rotated)\n", gci_path);
+#ifdef TARGET_XBOX
+    {   /* gifts handed out since the last save are only kept now (xbox_msg.c) */
+        extern void xbox_gift_commit(void);
+        xbox_gift_commit();
+    }
+#endif
     return TRUE;
 }
 

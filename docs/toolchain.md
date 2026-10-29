@@ -21,8 +21,10 @@ XBOX_TARGET=objs xbox/build.sh  # compile every TU, no link (triage)
   for the inner shell). Debug knobs are listed in `renderer.md`.
 - `XBOX_BUILD_DIR=build-xbox-foo` builds in another directory, so a test
   build doesn't overwrite the release one (or two builds run at once).
-  Keep `build-xbox/` as the build of the current release: its `ac_xbox.exe`
-  and `ac_xbox.map` are what a user's `crash.log` addresses are read against.
+  Public builds are `XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata` (`pgo.md`), so
+  `build-xbox-lto-pgo/` is the release's folder: its `ac_xbox.exe` and
+  `ac_xbox.map` are what a user's `crash.log` addresses are read against
+  (or the `ac_xbox.map` attached to the GitHub release).
 - GitHub #3 troubleshooting build (`traps.md` "Something patches rdtsc", `xbox/src/xbox_diag.c`):
   `XBOX_BUILD_DIR=build-xbox-diag3 XBOX_CMAKE_ARGS="-DXBOX_DIAG_ISSUE3=ON" xbox/build.sh`.
   It adds `[DIAG]` self-tests to `boot.log`, code bytes to `crash.log` and
@@ -32,6 +34,31 @@ XBOX_TARGET=objs xbox/build.sh  # compile every TU, no link (triage)
   defines are listed in `xbox/include/xbox_diag.h`).
 - macOS with colima: Docker only sees your home directory, so keep the
   checkout under `~`. No BuildKit on colima: `DOCKER_BUILDKIT=0`.
+- After the link, `tools/xbox/xbe_payload.py` appends the boot screen's
+  pictures (`architecture.md`, "Boot screen and disc
+  check"): host `python3` with Pillow. The pictures are
+  committed PNGs; after changing `tools/xbox/splash/letter.html` or the
+  logo, run `tools/xbox/make_splash.py` (needs Edge or Chrome) and commit
+  them. `tools/disc_file_table.py <GAFE01 .iso>` regenerates the disc
+  check's table.
+
+### Windows, no Docker
+
+`tools/xbox/msys/build.sh` (from Git Bash) runs the same cmake + ninja
+natively, with the same knobs (`XBOX_BUILD_DIR`, `XBOX_TARGET`,
+`XBOX_CMAKE_ARGS`). It needs MSYS2 at `C:\msys64` and nxdk at the
+Dockerfile's `NXDK_SHA` in `C:\xdev\nxdk`, set up as Prime-X and Melee-X
+do (packages listed in the script's header); the same LLVM 21. The link
+goes through `tools/xbox/msys/lld`, which hands lld its ~4000 objects in a
+response file (`traps.md`). A full build is ~7 minutes on the dev PC.
+
+xemu on Windows: Prime-X's `tools/xbox/xemu_run.sh` boots any XBE with
+`PX_XBE`, `PX_ISO` (`none` for no image), `PX_XEMU=/c/xemu/xemu/xemu.exe`,
+`PX_XISO=/c/xdev/nxdk/tools/extract-xiso/build/extract-xiso.exe` and
+`PX_XEMU_ARGS="-config_path <a copy of C:\xemu\xemu.toml with mem_limit '64'>"`.
+Build with `-DXBOX_SPLASH_DUMP` for `[FBDUMP]`s of each boot screen and
+card, and `-DXBOX_DBG_FORCE_DISC_CHECK` to run the full disc check every
+boot.
 
 ## Run in xemu
 
@@ -94,7 +121,9 @@ has no serial port, so the game writes logs to `E:\UDATA\4f430001\`:
 | `stickN.log` | last 10 s of stick readings, written when L3 is clicked |
 
 `tools/xbox/console.py` does a round in three steps (`OCX_FTP_HOST=<ip>`,
-and `OCX_APP=<folder>` when the game isn't in `/F/Applications/OpenCrossing`):
+and `OCX_APP=<folder>` when the game isn't in `/F/Applications/OpenCrossing`;
+from Git Bash add `MSYS2_ENV_CONV_EXCL=OCX_APP`, or MSYS turns `/E/...` into
+a Windows path; the gold console keeps it in `/E/Applications/OpenCrossing`):
 `stage vNN` copies the build and its map (plus static functions) to
 `~/xemu/ochw`, `deploy vNN` pulls and deletes the console's old logs (the
 screenshots and `settings.ini` are pulled, never deleted), keeps the
@@ -128,8 +157,8 @@ attached to each GitHub release.
   3... by count of earlier betas) with `OpenCrossing-Xbox-beta-<n>.zip`
   attached (`.github/workflows/build.yml`). The release notes are a fixed
   template; edit them on GitHub afterwards for a changelog. CI builds with
-  plain `xbox/build.sh`, so public builds have no profiler or test
-  defaults (FPS counter off).
+  `XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata xbox/build.sh` and nothing else, so
+  public builds have no profiler or test defaults (FPS counter off).
 
 Release zip contents: `OpenCrossing/default.xbe`, `OpenCrossing/default.tbn`,
 and `tools/` (`make-xiso`, `gc_trim_ciso.py`, `gcs_to_gci.py`). The link map

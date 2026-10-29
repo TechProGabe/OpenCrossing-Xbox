@@ -28,6 +28,8 @@
 #include "xbox_diag.h"
 #include "xbox_code_repair.h"
 
+void xbox_disc_check(const char* image_name);
+
 SDL_Window*   g_pc_window = NULL;
 SDL_GLContext g_pc_gl_context = NULL;
 int           g_pc_running = 1;
@@ -129,6 +131,13 @@ void pc_platform_swap_buffers(void) {
     pc_gx_draw_pending();
     xbox_nv2a_present();
     s_frames++;
+#ifdef XBOX_PGO_GEN
+    /* the instrumented build's counters, cumulative (xbox_pgo.c, docs/pgo.md) */
+    {
+        void xbox_pgo_dump(const char* why);
+        if (s_frames % 1800 == 0) xbox_pgo_dump("frames");
+    }
+#endif
 #ifdef XBOX_DBG_CRASH_FRAME
     /* test the exception reporter (xbox_crash.c) */
     if (s_frames == XBOX_DBG_CRASH_FRAME) *(volatile int*)4 = 1;
@@ -227,7 +236,6 @@ static void fatal_no_disc(void) {
         "Accepted: .iso  .gcm  .ciso   (any filename)",
         "",
         "Burning a disc? Run make-xiso to pack both into one image.",
-        "Then restart the Xbox.",
         NULL,
     };
     xbox_splash_error("No disc image found", lines);
@@ -314,18 +322,19 @@ static int main_body(void* arg) {
      * (6 MB) and decompressed (15.6 MB) REL at once, then frees both. The
      * NV2A texture pool, vertex ring and framebuffers come after that peak. */
     if (!pc_disc_init()) fatal_bad_disc(disc_name);
+    xbox_disc_check(disc_name);   /* ID and files; the first boot of an image checks every byte */
     xbox_splash_progress(0.3f);
     xbox_mem_log("before assets");
     if (!pc_assets_init()) fatal_no_assets();
     xbox_mem_log("after assets");
     xbox_splash_progress(0.8f);
+    xbox_splash_finish();   /* the bar fills before the game takes the screen */
 
     xbox_logf("[XBOX] stage: nv2a init\n");
     pc_platform_init();
     xbox_settings_apply();   /* 720p is decided at GPU init: always 16:9 */
     xbox_video_log();
     xbox_mem_log("after nv2a init");
-    xbox_splash_progress(1.0f);
 
     xbox_logf("[XBOX] stage: game entry\n");
     ac_entry();

@@ -232,6 +232,8 @@ key it works without a rebuild (`architecture.md`).
 | `XBOX_AUDIO_PRIORITY` | `audio_priority` | the audio producer above the game thread |
 | `XBOX_ZBUFFER` | | the z-buffer fix ("Depth"): pbkit's w-buffer |
 | `XBOX_NES_FAST` | | the NES upload, two texels a word |
+| `XBOX_TEX_BLOCK` | | texture uploads built as 64x64 Morton tiles in a cached scratch and copied to the pool in order (texel-by-texel scattered writes into the write-combined pool) |
+| `XBOX_EFB_FAST` | | `gl_read_pixels` (EFB grabs, the screen behind every menu): a column table, each framebuffer row read once with 16-byte loads into a cached buffer, repeated rows copied (per pixel: two 64-bit divides and an uncached 16-bit read) |
 | `XBOX_VC_DELTA` | | changed vertex-constant rows only (sends all 41) |
 | `XBOX_PB_GUARD` | | mid-frame pushbuffer restart |
 | `XBOX_VBL_PACE` | | vblank pacing (`pc_vi.c`'s timer limiter) |

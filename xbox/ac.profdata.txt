@@ -1,0 +1,7 @@
+xbox/ac.profdata: PGO profile for XBOX_PGO=xbox/ac.profdata builds (docs/pgo.md)
+trained on: 725ba72 + local changes (2026-10-29)
+scenarios: demo newgame town (xemu, autopad)
+llvm: LLVM version 21.1.8
+Total functions: 16393
+Maximum function count: 184624216
+Total count: 11667020479

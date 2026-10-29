@@ -6,6 +6,35 @@ find them.
 
 ## Build and toolchain
 
+- **Windows (MSYS2) link line.** The link passes ~4000 object paths; bash
+  can exec lld with them but Windows can't ("Argument list too long", ninja
+  `code=126`). `tools/xbox/msys/lld` is put first on `PATH` and writes them
+  to a response file, turning `/c/...` into `C:/...` (MSYS converts paths
+  only in argv, and lld is native). `CMAKE_NINJA_FORCE_RESPONSE_FILE`
+  doesn't work instead: it puts the compile flags in response files too,
+  and the prelude's `-include /c/...` then isn't found. CMake treats that
+  variable as on whenever it is defined, `=OFF` included; unset it with
+  `-U`. `CMAKE_*_USE_RESPONSE_FILE_FOR_OBJECTS` is ignored by Ninja.
+- **LTO punishes mismatched prototypes.** `pc/` replaces SDK functions, and
+  a definition whose parameters differ from the header the game calls it
+  through (a `u32` for a `GXColor` struct) is undefined behaviour that a
+  normal link hides. Under ThinLTO it made every light and TEV colour
+  wrong (`pc_gx.c`, `patches.md`). Enum vs `u32` is fine (same type at the
+  ABI); structs by value, `f32` vs `f64`, and different counts are not.
+  When an `XBOX_LTO` build misbehaves, bisect with `XBOX_LTO_EXCLUDE=<regex>`
+  (those sources build without LTO) and xemu `[FBDUMP]`s.
+- **A BIOS can leave 720p's scanout wrong.** Cerbios and HDMI boards
+  replace the kernel's `AvSetDisplayMode`; for our 16-bit 1280x720 mode the
+  gold console's left the pitch at 6656 where 2560 is right, and the
+  picture came out glitched over component (Melee-X #18, the same console).
+  `xbox_video_check_scanout` (`xbox_settings.c`) logs `[VIDEO] scanout` after
+  every mode set and puts general control, CR28 and the pitch back the way
+  the stock kernel sets them (`[VIDEO] scanout set back`).
+- **Disc image layouts differ.** A rebuilt or trimmed image has the same
+  files at other offsets (the NAS image: `audiorom.img` at `0x000FE588`;
+  a Redump-layout one at `0x55C32F40`). Compare file contents, never
+  offsets, the boot block or the FST's bytes (`xbox_disc_check.c`).
+
 - **`TARGET_PC` isn't "PC".** It means "not GameCube" and guards the
   little-endian and 32-bit fixes. Removing it drops them.
 - **UB flags.** `-fno-strict-aliasing -fwrapv` are load-bearing; plain `-O2`

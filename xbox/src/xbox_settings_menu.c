@@ -83,7 +83,6 @@ static const Item tab_controls_items[] = {
 };
 static const Item tab_gameplay_items[] = {
     { "Resetti",          ITEM_RESETTI },
-    { "Shop upgrade",     ITEM_SHOP_VISITOR },
     { "Borderless acres", ITEM_BORDERLESS_ACRES },
     { "NES aspect",       ITEM_NES_ASPECT },
 };

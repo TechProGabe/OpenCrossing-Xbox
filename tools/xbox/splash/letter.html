@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- The boot screen's painted layer (tools/xbox/make_splash.py renders it
+     with a headless Edge or Chrome into xbox/assets/splash_*.png). The
+     variant is the URL hash: #welcome #letter #stamped #blank. Everything
+     the boot draws live on top (the file line, the bar, the hints, error
+     text) is left out, at the places xbox_splash.c expects:
+       stamps   10 boxes, x 98 + 47*i, y 296, 40x48 (letter, stamped)
+       lines    x 98, y 356 and 378, ink #3a4a6b
+       bar      x 98..542, y 412, 14 high
+       hint     centred, y 458, on the stripes
+     Original drawing: shapes, Fredoka (SIL OFL) and the project logo; no
+     game art. -->
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=block">
+<style>
+html,body{margin:0;width:640px;height:480px;overflow:hidden}
+.scr{position:relative;width:640px;height:480px;overflow:hidden;font-family:'Fredoka',sans-serif;
+  background:repeating-linear-gradient(45deg,#8fc7e8 0 14px,#9dd0ee 14px 28px)}
+.abs{position:absolute}
+.logo{left:50%;transform:translateX(-50%);top:4px;width:300px}
+.paper{left:40px;top:112px;width:560px;height:340px;border-radius:6px;box-shadow:0 7px 0 #24506e33;
+  background:#fffaf0 repeating-linear-gradient(#fffaf0 0 27px,#cfe3f5 27px 28px)}
+.margin{position:absolute;left:44px;top:0;bottom:0;width:2px;background:#f2a3a3}
+.tape{position:absolute;width:80px;height:24px;background:#ffd84acc}
+.body{position:absolute;left:58px;right:30px;top:10px;color:#3a4a6b;font-size:19px;line-height:28px;font-weight:500}
+.sig{position:absolute;right:40px;top:122px;color:#3a4a6b;font-size:19px;font-weight:600}
+.stamps{position:absolute;left:58px;top:184px;display:flex;gap:7px}
+.st{width:34px;height:42px;border:3px dotted #c9d7e8;border-radius:3px;background:#fff;position:relative}
+.stamped .st{border-color:#4ea83a;background:#e9f7d9}
+.st svg{position:absolute;left:3px;top:7px;width:28px;height:28px;display:none}
+.stamped .st svg{display:block}
+.pm{position:absolute;left:15px;top:1px;width:16px;height:16px;border:2px solid #e8402e99;border-radius:50%;display:none}
+.stamped .pm{display:block}
+.big{position:absolute;left:58px;top:38px;color:#3a4a6b;font-size:34px;font-weight:600}
+.sub{position:absolute;left:58px;top:94px;color:#7b8aa8;font-size:19px;font-weight:500}
+.v{display:none}
+body.welcome .w, body.letter .l, body.stamped .l, body.blank .b{display:block}
+</style></head>
+<body>
+<div class="scr">
+<img class="abs logo" src="../../../docs/logo.svg" alt="">
+<div class="abs paper">
+  <div class="margin"></div>
+  <div class="tape" style="left:-18px;top:-8px;transform:rotate(-8deg)"></div>
+  <div class="tape" style="right:-18px;top:-8px;transform:rotate(9deg)"></div>
+
+  <div class="v l">
+    <div class="body">Dear neighbor,<br>Before your first day in town, I'm checking that<br>your copy of the game arrived in one piece.<br>It only takes a moment, and only happens once!</div>
+    <div class="sig">— TechProGabe</div>
+    <div class="stamps" id="stamps"></div>
+  </div>
+
+  <div class="v w">
+    <div class="big">Welcome back to town!</div>
+    <div class="sub">Your neighbors have been expecting you.</div>
+    <div class="sig" style="top:150px">— TechProGabe</div>
+  </div>
+</div>
+</div>
+<script>
+const v = (location.hash || '#letter').slice(1);
+document.body.className = v;
+if (v === 'stamped') document.querySelector('.scr').classList.add('stamped');
+// ten stamps, one per file on the disc: fruit and town things, drawn here
+const icons = [
+  '<circle cx="14" cy="16" r="10" fill="#e8402e"/><path d="M14 6 v-4" stroke="#6b3b16" stroke-width="2.5"/><path d="M15 5 q6 -4 9 0 q-5 3 -9 0z" fill="#4ea83a"/>',
+  '<circle cx="8" cy="20" r="6" fill="#d61f3a"/><circle cx="20" cy="21" r="6" fill="#d61f3a"/><path d="M8 14 Q12 4 18 3 M20 15 Q18 8 18 3" stroke="#3f7d22" stroke-width="2" fill="none"/>',
+  '<circle cx="14" cy="16" r="11" fill="#ff9f2e"/><circle cx="10" cy="12" r="2" fill="#ffc979"/><path d="M14 5 q5 -4 8 -1 q-4 3 -8 1z" fill="#4ea83a"/>',
+  '<path d="M14 4 C10 4 10 10 9 13 C3 17 5 27 14 27 C23 27 25 17 19 13 C18 10 18 4 14 4Z" fill="#c9d94a"/><path d="M14 4 v-3" stroke="#6b3b16" stroke-width="2.5"/>',
+  '<circle cx="14" cy="16" r="11" fill="#ffb3a1"/><path d="M14 6 Q10 16 14 26" stroke="#f08a74" stroke-width="2" fill="none"/><path d="M14 5 q5 -4 8 -1 q-4 3 -8 1z" fill="#4ea83a"/>',
+  '<circle cx="14" cy="15" r="11" fill="#8a5526"/><circle cx="10" cy="11" r="1.8" fill="#4a2e14"/><circle cx="15" cy="10" r="1.8" fill="#4a2e14"/><circle cx="12.5" cy="15" r="1.8" fill="#4a2e14"/>',
+  '<path d="M4 24 C2 12 12 2 24 4 C26 16 16 26 4 24Z" fill="#7cc243"/><path d="M4 24 L18 10" stroke="#3f7d22" stroke-width="2"/>',
+  '<path d="M14 25 L3 11 Q14 0 25 11 Z" fill="#ffc2d1" stroke="#e07a96" stroke-width="1.5"/><path d="M14 25 L9 8 M14 25 L14 5 M14 25 L19 8" stroke="#e07a96" stroke-width="1.5"/>',
+  '<path d="M7 10 Q14 4 21 10 L24 22 Q14 28 4 22 Z" fill="#e8c27a" stroke="#8a5526" stroke-width="1.5"/><path d="M10 9 Q14 6 18 9" stroke="#8a5526" stroke-width="2" fill="none"/><circle cx="14" cy="17" r="3.5" fill="#ffd84a" stroke="#8a5526" stroke-width="1.2"/>',
+  '<path d="M14 2 L17.5 10.5 L26.5 11 L19.5 17 L22 26 L14 21 L6 26 L8.5 17 L1.5 11 L10.5 10.5Z" fill="#ffd84a" stroke="#d9a81e" stroke-width="1.2"/>'
+];
+const box = document.getElementById('stamps');
+if (box) icons.forEach(s => { box.insertAdjacentHTML('beforeend', `<div class="st"><svg viewBox="0 0 28 28">${s}</svg><div class="pm"></div></div>`); });
+</script>
+</body></html>
