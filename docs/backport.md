@@ -44,6 +44,13 @@ watchdog wait that could last forever, Clu Clu Land D's crash. Ours only:
 the texture cache index (`PC_TEX_CACHE_INDEX`), the CPU clock check, the
 Options menu in the game's style.
 
+2026-10-29: ThinLTO and PGO (`pgo.md`; Melee-X `XBOX_LTO` / `XBOX_PGO`,
+`xhw_pgo.c`, `pgo_raw.py`, `pgo_train.sh`), off by default until a console
+round measures them. Ours: lld-link runs the ThinLTO backends (Melee-X
+runs them by hand for its order file, which we don't have). From Prime-X:
+the first boot's disc check and the boot screen
+(`architecture.md`).
+
 ## Left
 
 Each waits for a console profile or a report that points at it:

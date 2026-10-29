@@ -50,7 +50,9 @@ pointers with the shim, so `pc/` needs no Xbox branches. Only `pc_gx_tev.c`
 | file | job |
 |---|---|
 | `xbox_main.c` | entry, finds the disc image, controllers, input events (pause, screenshots), frame counter |
-| `xbox_splash.c` | the boot splash, progress bar and error cards |
+| `xbox_splash.c` | the boot screen (welcome, the first boot's letter), its progress bar, and the error / question cards |
+| `xbox_disc_check.c` | is the disc image a good GAFE01 rev 0 (below, "Boot screen and disc check") |
+| `xbox_payload.c` | reads what `tools/xbox/xbe_payload.py` appended to `default.xbe` |
 | `xbox_io.c` | path mapping, logging, file flushing, `boot.log`, the disc image's reads (around pdclib), the CPU clock check |
 | `xbox_posix.c` | the POSIX file calls `pc/` uses (`opendir`, `stat`, `mkdir`, `strcasecmp`) on nxdk's Win32 subset |
 | `xbox_nv2a.c`, `xbox_tev_rc.c`, `xbox_gx_tev.c`, `shaders/gx.vsh` | renderer (`renderer.md`) |
@@ -116,6 +118,14 @@ The first playtest builds kept the left stick dead zone in
 
 ## Visiting another town
 
+Not on the Xbox (the user, 2026-10-29): asked for a trip, the Porter says
+there's nowhere to put a GameCube Memory Card on an Xbox and, once per
+player, gives The Legend of Zelda (`ac_station_clip.c_inc`, our text in
+`tools/xbox/make_msg_overrides.py`). Nookington's never needs a visitor
+(`disable_shop_visitor_req` forced on in `xbox_settings.c`; the Options row
+is gone). What follows is the card B path the train would take, kept for
+reference: nothing reaches it now.
+
 The station's train to another town reads the other town from
 `save/card_b` (any `.gci` whose header says GAF). With no other town there,
 or a copy of the player's own, the Porter says there's no town data: the
@@ -136,7 +146,7 @@ Quit Game) in game. Both drive the Options page in `xbox_settings_menu.c`:
 | Video | Output (Auto, the default, shown with the mode it gives, e.g. "Auto, 720p"; or 480i, or 480p where the dashboard allows it, pinned; needs a restart), Widescreen (Auto, the default, shown as "Auto, 16:9" or "Auto, 4:3"; 4:3; 16:9, which draws more of the scene and costs frame time), Texture filter, FPS counter (live), Screenshots (R-Stick; live) |
 | Audio | Master volume |
 | Controls | Stick deadzone (radial, 0-60%, 40% default, live stick meter), C-stick deadzone (40% default), Rumble (0-100%), Buttons (controller rebinding) |
-| Gameplay | Resetti, Shop upgrade (Singleplayer by default on the Xbox: the visitor Nookington's wants needs a second town in `save/card_b`; switched once on the first boot without an `[Xbox]` section), Borderless acres, NES aspect |
+| Gameplay | Resetti, Borderless acres, NES aspect (the shop upgrade never needs a visitor on the Xbox: no row) |
 
 The page is drawn in the game's own style (cream notebook sheet in a wood
 frame, a green name tag, speech-bubble prompts, the selected row on a
@@ -200,6 +210,48 @@ The GL shim scales viewports, scissors and read-backs onto the real
 framebuffer: 854x480 onto 640x480 is the anamorphic squeeze a 16:9 TV
 undoes; 720p is 1280x720 and always 16:9 (`renderer.md`). NES games are 4:3
 between black bars inside it (`nes_aspect`, `pc_nes_fixnes.c`).
+
+## Boot screen and disc check
+
+The user's design (2026-10-29): a cute, Animal Crossing-styled boot screen,
+and a one-time disc validation like Prime-X's (its `docs/boot-safety.md`).
+It had intro music at first; removed after the first hardware run
+(2026-10-29): the check takes about a second, too short for it.
+
+- **Screens.** A letter on ruled paper under the logo
+  (`tools/xbox/splash/letter.html`, rendered by `tools/xbox/make_splash.py`
+  into `xbox/assets/splash_*.png`; the PNGs are committed, the build only
+  palettizes them). Every boot: "Welcome back to town!" signed
+  TechProGabe, "Loading your town..." and a bar. The first boot of an image: a letter from TechProGabe
+  explaining the check, ten stamp boxes (one per file on the disc) stamped
+  as each file passes, the file and its CRC under them, then the bar for
+  the rest of the load. Errors and the mismatch question use the same
+  paper. The bar eases towards the boot's progress and
+  `xbox_splash_finish` waits for it to fill and hold (300 ms) before the
+  GPU takes the screen: it never jumps or stops short.
+- **Cost.** The painted layer is a 256-colour picture (300 KB) read once
+  and blitted once; a low-priority thread redraws only the bar span, a text
+  line or a stamp box that changed, ~30 times a second. The welcome screen
+  holds 1.5 s (`XBOX_SPLASH_MS`, any button skips; USB needs that long for
+  safe video anyway); the finished bar adds at most ~1.3 s.
+- **Checks** (`xbox_disc_check.c`, table `xbox/src/disc_table.inc` from
+  `tools/disc_file_table.py`). Every boot: ID and revision (other releases
+  named on the error card), every file at its size, the DOL's CRC
+  (~0.1 s). The first boot of an image, or Y + both triggers held at boot:
+  the CRC32 of all ten files (~27 MB, ~1 s on the console), then the full
+  letter holds 0.7 s (`XBOX_DISC_CHECK_HOLD_MS`); B skips it
+  for that boot. A pass is kept in `E:\UDATA\4f430001\disc.ini` (name,
+  size, write time). A wrong ID, a missing or resized file, or a changed
+  DOL stop with a card; files that differ ask "A: play anyway, B: quit".
+  Contents, not layout: scrubbed, trimmed (`.ciso`) and rebuilt images
+  hold the same files at other offsets, so offsets and the FST's bytes are
+  never compared. Before this, `pc_disc_init` took any GameCube image.
+  The table came from a rebuilt-layout image (NAS, 2026-10-29) and matches
+  the trimmed `.ciso` the playtest consoles ran; still to confirm against a
+  Redump-layout image on hardware (its `[DISC] full check` line).
+- **Payload.** `tools/xbox/xbe_payload.py` appends the four pictures after the XBE's last byte with a footer table (`OCPK`). The
+  kernel never loads it, so it costs no RAM until read; the code repair's
+  `.text` compare and the dashboard don't see it.
 
 ## Distribution
 

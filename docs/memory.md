@@ -23,6 +23,13 @@ Measured in xemu at 64 MB (title demo 2026-09-27, town 2026-10-03):
 Order matters: `pc_assets_init` (the REL and its Yaz0 peak) runs before
 GPU init, so the peak and the framebuffers never overlap.
 
+The boot screen takes 300 KB for its picture (600 KB while the first
+boot's letter and its stamped copy are both up), the disc check a 256 KB
+read buffer. The check's buffer is freed before the assets load; the pictures stay through the REL's
+peak (~36 MB free then) and are freed before GPU init
+(`xbox_splash_finish`), so they never meet the framebuffers. The pictures appended to `default.xbe` are never
+loaded by the kernel: the image size above doesn't change.
+
 The release after beta-3 started with ~385 KB less free than beta-3 (the
 image grew: a 2 × 128 KB log queue, the bigger texture table, the texture
 cache index, code). The queue went to 2 × 64 KB (no hardware log has ever

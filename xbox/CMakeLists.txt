@@ -32,6 +32,13 @@ set(XBOX_DIR    "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Kill switch for the whole-tree level (docs/perf.md). Default = upstream-proven -O2.
 set(XBOX_OPT "-O2" CACHE STRING "Optimization level for the whole tree")
+# ThinLTO and profile-guided optimization (docs/pgo.md); see ac_xbox below
+option(XBOX_LTO "ThinLTO over the whole image" OFF)
+set(XBOX_LTO_EXCLUDE "" CACHE STRING "XBOX_LTO: regex of source paths built without LTO")
+set(XBOX_PGO "" CACHE STRING "PGO: empty, gen (instrumented), or a .profdata path")
+if(XBOX_PGO AND NOT XBOX_PGO STREQUAL "gen")
+    get_filename_component(XBOX_PGO "${XBOX_PGO}" ABSOLUTE BASE_DIR "${DECOMP_ROOT}")
+endif()
 
 add_compile_definitions(
     TARGET_PC          # "not GameCube": LE/32-bit fixes. Must stay.
@@ -310,6 +317,45 @@ else()
     # -include:_automount_d_drive pulls in nxdk's D: -> XBE-folder mount
     # (the nxdk Makefile does this; without it D:\ lists nothing).
     target_link_options(ac_xbox PRIVATE -stack:1048576 -include:_automount_d_drive -map:${CMAKE_BINARY_DIR}/ac_xbox.map)
+    # XBOX_LTO / XBOX_PGO (docs/perf.md "LTO and PGO", docs/pgo.md), from
+    # Melee-X. Both off by default: a plain build is what CI and releases
+    # ship until the console measures them.
+    if(XBOX_LTO)
+        # ThinLTO in lld-link. Cross-module imports capped at 10
+        # instructions: LLVM's default 100 grew Melee-X's .text by 30%,
+        # which the 16 KB code cache pays for; 10 kept most of the gain
+        target_compile_options(ac_xbox PRIVATE -flto=thin)
+        target_link_options(ac_xbox PRIVATE -mllvm:-import-instr-limit=10)
+        # sources whose path matches XBOX_LTO_EXCLUDE (a regex) stay native
+        # objects: for bisecting a miscompile (known-issues.md)
+        if(XBOX_LTO_EXCLUDE)
+            set(_lto_out "")
+            foreach(_src ${ALL_SOURCES})
+                if(_src MATCHES "${XBOX_LTO_EXCLUDE}")
+                    list(APPEND _lto_out "${_src}")
+                endif()
+            endforeach()
+            # appended: some sources carry their own options (pc_m_card.c's -U_WIN32)
+            set_property(SOURCE ${_lto_out} APPEND PROPERTY COMPILE_OPTIONS "-fno-lto")
+            list(LENGTH _lto_out _n)
+            message(STATUS "XBOX_LTO_EXCLUDE: ${_n} sources without LTO")
+        endif()
+    endif()
+    if(XBOX_PGO STREQUAL "gen")
+        # counters only: no compiler-rt in the image, xbox_pgo.c dumps them
+        target_compile_options(ac_xbox PRIVATE -fprofile-generate "SHELL:-mllvm -disable-vp"
+                               "SHELL:-mllvm -static-func-full-module-prefix=false")
+        target_compile_definitions(ac_xbox PRIVATE XBOX_PGO_GEN=1)
+        # nothing refers to the version word; tools/xbox/pgo_raw.py reads it.
+        # The MSVC-style target asks for compiler-rt's profile library by a
+        # /DEFAULTLIB in every object; xbox_pgo.c is all of it we need
+        target_link_options(ac_xbox PRIVATE -include:___llvm_profile_raw_version
+                            -nodefaultlib:clang_rt.profile.lib)
+    elseif(XBOX_PGO)
+        # -disable-vp as in training: the profile has no value sites
+        target_compile_options(ac_xbox PRIVATE -fprofile-use=${XBOX_PGO} "SHELL:-mllvm -disable-vp"
+                               "SHELL:-mllvm -static-func-full-module-prefix=false")
+    endif()
     add_custom_command(TARGET ac_xbox POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/xbe
         COMMAND $ENV{NXDK_DIR}/tools/cxbe/cxbe "-OUT:${CMAKE_BINARY_DIR}/xbe/default.xbe"
