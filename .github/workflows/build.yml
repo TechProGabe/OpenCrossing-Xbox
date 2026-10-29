@@ -41,7 +41,12 @@ jobs:
       - name: Pillow (dashboard icon, boot screen)
         run: python3 -m pip install pillow
 
+      # public builds are ThinLTO + PGO with the committed profile
+      # (docs/pgo.md); xbox/build.sh puts them in build-xbox-lto-pgo
       - name: Build
+        env:
+          XBOX_LTO: "1"
+          XBOX_PGO: xbox/ac.profdata
         run: xbox/build.sh
 
       # "[release vX]" in the pushed commit's message makes a full release
@@ -68,11 +73,11 @@ jobs:
           fi
           out="$RUNNER_TEMP/$name"
           mkdir -p "$out/OpenCrossing" "$out/tools"
-          cp build-xbox/xbe/default.xbe build-xbox/xbe/default.tbn "$out/OpenCrossing/"
+          cp build-xbox-lto-pgo/xbe/default.xbe build-xbox-lto-pgo/xbe/default.tbn "$out/OpenCrossing/"
           cp tools/make-xiso tools/gc_trim_ciso.py tools/gcs_to_gci.py "$out/tools/"
           chmod +x "$out/tools/"*
           (cd "$out" && zip -qr "$RUNNER_TEMP/$name.zip" OpenCrossing tools)
-          cp build-xbox/ac_xbox.map "$RUNNER_TEMP/ac_xbox.map"
+          cp build-xbox-lto-pgo/ac_xbox.map "$RUNNER_TEMP/ac_xbox.map"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "n=$n" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"

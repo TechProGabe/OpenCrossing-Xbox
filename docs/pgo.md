@@ -1,8 +1,8 @@
 # LTO and PGO
 
-Two build-level optimizations from Melee-X (its `docs/pgo.md`), off by
-default until the console measures them (`CLAUDE.md`: every optimization
-gets a kill switch). Asked for on 2026-10-29 to steady 720p, where busy
+Two build-level optimizations from Melee-X (its `docs/pgo.md`). On in every
+public build (below); a local build without the knobs is the kill switch
+(`CLAUDE.md`). Asked for on 2026-10-29 to steady 720p, where busy
 scenes spend 10-12 ms a frame in the game and emu64 (`perf.md`).
 
 | knob | what | folder |
@@ -75,7 +75,11 @@ the GX colour setters with a `u32` where the game passes a `GXColor`, which
 ThinLTO turned into garbage (`traps.md`, `patches.md`). Fixed; bisected
 with `XBOX_LTO_EXCLUDE=<regex>`, which builds matching sources without LTO.
 
-Plain until a console round compares the two (perf.log's `min` lines in
-the same busy rooms, both outputs). Then CI's `build.yml` gets
-`XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata`, and `build-xbox-lto-pgo` holds the
-release's `ac_xbox.map` for `crash.log` reports.
+Since 2026-10-29 (the user, after the fixed build passed on the console)
+CI's `build.yml` builds with `XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata`, and
+`build-xbox-lto-pgo` holds the release's `ac_xbox.map` for `crash.log`
+reports. Leaving both knobs out is the kill switch: a plain build. The
+profile is from xemu runs on 2026-10-29 (`xbox/ac.profdata.txt`);
+retrain before a release when hot code has changed a lot. Still to
+measure: the same acre route on the plain and the LTO+PGO build (the
+first console session showed +556 KB free RAM, the code being smaller).
