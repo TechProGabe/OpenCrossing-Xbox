@@ -21,8 +21,10 @@ XBOX_TARGET=objs xbox/build.sh  # compile every TU, no link (triage)
   for the inner shell). Debug knobs are listed in `renderer.md`.
 - `XBOX_BUILD_DIR=build-xbox-foo` builds in another directory, so a test
   build doesn't overwrite the release one (or two builds run at once).
-  Keep `build-xbox/` as the build of the current release: its `ac_xbox.exe`
-  and `ac_xbox.map` are what a user's `crash.log` addresses are read against.
+  Public builds are `XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata` (`pgo.md`), so
+  `build-xbox-lto-pgo/` is the release's folder: its `ac_xbox.exe` and
+  `ac_xbox.map` are what a user's `crash.log` addresses are read against
+  (or the `ac_xbox.map` attached to the GitHub release).
 - GitHub #3 troubleshooting build (`traps.md` "Something patches rdtsc", `xbox/src/xbox_diag.c`):
   `XBOX_BUILD_DIR=build-xbox-diag3 XBOX_CMAKE_ARGS="-DXBOX_DIAG_ISSUE3=ON" xbox/build.sh`.
   It adds `[DIAG]` self-tests to `boot.log`, code bytes to `crash.log` and
@@ -153,8 +155,8 @@ attached to each GitHub release.
   3... by count of earlier betas) with `OpenCrossing-Xbox-beta-<n>.zip`
   attached (`.github/workflows/build.yml`). The release notes are a fixed
   template; edit them on GitHub afterwards for a changelog. CI builds with
-  plain `xbox/build.sh`, so public builds have no profiler or test
-  defaults (FPS counter off).
+  `XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata xbox/build.sh` and nothing else, so
+  public builds have no profiler or test defaults (FPS counter off).
 
 Release zip contents: `OpenCrossing/default.xbe`, `OpenCrossing/default.tbn`,
 and `tools/` (`make-xiso`, `gc_trim_ciso.py`, `gcs_to_gci.py`). The link map
