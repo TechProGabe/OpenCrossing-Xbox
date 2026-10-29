@@ -22,7 +22,7 @@ msys="${MSYS2_ROOT:-/c/msys64}"
 [ -x "$msys/usr/bin/bash" ] || { echo "no MSYS2 at $msys"; exit 1; }
 # Git Bash's environment doesn't reach MSYS2's bash: hand the knobs over as arguments
 knobs=()
-for v in XBOX_LTO XBOX_PGO XBOX_BUILD_DIR XBOX_TARGET XBOX_CMAKE_ARGS XBOX_NINJA_ARGS XBOX_NO_ICON XBOX_NO_INTRO NXDK_DIR; do
+for v in XBOX_LTO XBOX_PGO XBOX_BUILD_DIR XBOX_TARGET XBOX_CMAKE_ARGS XBOX_NINJA_ARGS XBOX_NO_ICON NXDK_DIR; do
   [ -n "${!v:-}" ] && knobs+=("$v=${!v}")
 done
 exec "$msys/usr/bin/bash" -lc '
@@ -44,5 +44,5 @@ exec "$msys/usr/bin/bash" -lc '
   if [ -z "${XBOX_NO_ICON:-}" ] && [ -f "$xbe" ]; then
     python3 tools/xbox/xbe_title_image.py "$xbe" xbox/assets/logo.png "$bdir/xbe/default.tbn"
   fi
-  [ -f "$xbe" ] && python3 tools/xbox/xbe_payload.py "$xbe"   # boot screen art + music
+  [ -f "$xbe" ] && python3 tools/xbox/xbe_payload.py "$xbe"   # boot screen art
   true' _ "$root" "${knobs[@]}"

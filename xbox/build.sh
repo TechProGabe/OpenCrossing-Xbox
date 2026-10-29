@@ -28,8 +28,7 @@ xbe="$root/$bdir/xbe/default.xbe"
 if [ -z "${XBOX_NO_ICON:-}" ] && [ -f "$xbe" ] && python3 -c "import PIL" 2>/dev/null; then
   python3 "$root/tools/xbox/xbe_title_image.py" "$xbe" "$root/xbox/assets/logo.png" "$root/$bdir/xbe/default.tbn"
 fi
-# Boot screen art and music appended past the XBE's end (host python3 with
-# Pillow, and ffmpeg for the music; XBOX_NO_INTRO=1 leaves the music out).
+# Boot screen art appended past the XBE's end (host python3 with Pillow).
 if [ -f "$xbe" ]; then
   python3 "$root/tools/xbox/xbe_payload.py" "$xbe"
 fi

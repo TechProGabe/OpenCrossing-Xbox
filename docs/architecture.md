@@ -52,7 +52,6 @@ pointers with the shim, so `pc/` needs no Xbox branches. Only `pc_gx_tev.c`
 | `xbox_main.c` | entry, finds the disc image, controllers, input events (pause, screenshots), frame counter |
 | `xbox_splash.c` | the boot screen (welcome, the first boot's letter), its progress bar, and the error / question cards |
 | `xbox_disc_check.c` | is the disc image a good GAFE01 rev 0 (below, "Boot screen and disc check") |
-| `xbox_intro.c` | the first boot's music, streamed from the end of `default.xbe` |
 | `xbox_payload.c` | reads what `tools/xbox/xbe_payload.py` appended to `default.xbe` |
 | `xbox_io.c` | path mapping, logging, file flushing, `boot.log`, the disc image's reads (around pdclib), the CPU clock check |
 | `xbox_posix.c` | the POSIX file calls `pc/` uses (`opendir`, `stat`, `mkdir`, `strcasecmp`) on nxdk's Win32 subset |
@@ -207,15 +206,15 @@ between black bars inside it (`nes_aspect`, `pc_nes_fixnes.c`).
 ## Boot screen and disc check
 
 The user's design (2026-10-29): a cute, Animal Crossing-styled boot screen,
-a one-time disc validation like Prime-X's (its `docs/boot-safety.md`), and
-intro music during it, carried in the XBE and cheap to stream.
+and a one-time disc validation like Prime-X's (its `docs/boot-safety.md`).
+It had intro music at first; removed after the first hardware run
+(2026-10-29): the check takes about a second, too short for it.
 
 - **Screens.** A letter on ruled paper under the logo
   (`tools/xbox/splash/letter.html`, rendered by `tools/xbox/make_splash.py`
   into `xbox/assets/splash_*.png`; the PNGs are committed, the build only
   palettizes them). Every boot: "Welcome back to town!" signed
-  TechProGabe, "Loading your town..." and a bar, no music (the user: the
-  music is for the first boot only). The first boot of an image: a letter from TechProGabe
+  TechProGabe, "Loading your town..." and a bar. The first boot of an image: a letter from TechProGabe
   explaining the check, ten stamp boxes (one per file on the disc) stamped
   as each file passes, the file and its CRC under them, then the bar for
   the rest of the load. Errors and the mismatch question use the same
@@ -231,7 +230,8 @@ intro music during it, carried in the XBE and cheap to stream.
   `tools/disc_file_table.py`). Every boot: ID and revision (other releases
   named on the error card), every file at its size, the DOL's CRC
   (~0.1 s). The first boot of an image, or Y + both triggers held at boot:
-  the CRC32 of all ten files (~27 MB, seconds), with the music; B skips it
+  the CRC32 of all ten files (~27 MB, ~1 s on the console), then the full
+  letter holds 0.7 s (`XBOX_DISC_CHECK_HOLD_MS`); B skips it
   for that boot. A pass is kept in `E:\UDATA\4f430001\disc.ini` (name,
   size, write time). A wrong ID, a missing or resized file, or a changed
   DOL stop with a card; files that differ ask "A: play anyway, B: quit".
@@ -241,14 +241,7 @@ intro music during it, carried in the XBE and cheap to stream.
   The table came from a rebuilt-layout image (NAS, 2026-10-29) and matches
   the trimmed `.ciso` the playtest consoles ran; still to confirm against a
   Redump-layout image on hardware (its `[DISC] full check` line).
-- **Music** (`xbox_intro.c`). `xbox/assets/intro.mp3` (the user's track,
-  every tag stripped) becomes 32 kHz stereo IMA ADPCM at 75% volume in the
-  payload (~32 KB a second, 6 MB). A thread reads 8.5 KB at a time,
-  decodes into the game's own 32 kHz ring and AC97 pump (`AIInit` runs
-  early; the game's call later finds it running), loops, and fades out over
-  a second when the check ends.
-- **Payload.** `tools/xbox/xbe_payload.py` appends the music and the four
-  pictures after the XBE's last byte with a footer table (`OCPK`). The
+- **Payload.** `tools/xbox/xbe_payload.py` appends the four pictures after the XBE's last byte with a footer table (`OCPK`). The
   kernel never loads it, so it costs no RAM until read; the code repair's
   `.text` compare and the dashboard don't see it.
 

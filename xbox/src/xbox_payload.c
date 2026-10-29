@@ -1,8 +1,8 @@
 /* xbox_payload.c — what tools/xbox/xbe_payload.py appended to default.xbe:
- * the boot music (INTR) and the boot screen's painted layers (SP..). The
+ * the boot screen's painted layers (SP..). The
  * kernel never loads it; this reads the footer's table once and hands out
- * offsets. Each user opens its own handle (the music thread reads while
- * the splash does), so nothing here is shared but the table. */
+ * offsets. Each user opens its own handle; nothing here is shared but
+ * the table. */
 #include <windows.h>
 #include <string.h>
 #include "xbox_io.h"

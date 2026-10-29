@@ -48,7 +48,7 @@ Options menu in the game's style.
 `xhw_pgo.c`, `pgo_raw.py`, `pgo_train.sh`), off by default until a console
 round measures them. Ours: lld-link runs the ThinLTO backends (Melee-X
 runs them by hand for its order file, which we don't have). From Prime-X:
-the first boot's disc check, its music and the boot screen
+the first boot's disc check and the boot screen
 (`architecture.md`).
 
 ## Left

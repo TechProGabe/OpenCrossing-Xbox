@@ -7,8 +7,8 @@
  * Every boot (well under a second): the ID and revision; every file the
  * game needs is in the FST at its size; the DOL's CRC.
  * The first boot of an image (or Y + both triggers held at boot): the CRC32
- * of every file against xbox/src/disc_table.inc, behind the splash with the
- * intro music (xbox_intro.c), B skipping it for that boot. A pass is
+ * of every file against xbox/src/disc_table.inc, behind the splash, B
+ * skipping it for that boot. A pass is
  * remembered in E:\UDATA\4f430001\disc.ini by the image's name, size and
  * write time; a skip or a mismatch checks again next boot.
  *
@@ -23,16 +23,15 @@
 #include "pc_disc.h"
 #include "xbox_io.h"
 #include "xbox_splash.h"
-#include "xbox_intro.h"
 
 #ifndef XBOX_DISC_CHECK
 #define XBOX_DISC_CHECK 1
 #endif
 
-/* with the music: the check's minimum length, so a fast console still
- * gets a moment of it rather than a blip (any button cuts it short) */
-#ifndef XBOX_DISC_CHECK_MIN_MS
-#define XBOX_DISC_CHECK_MIN_MS 4000
+/* the full letter, every stamp on it, stays this long after the last file
+ * (any button cuts it short): the check itself takes about a second */
+#ifndef XBOX_DISC_CHECK_HOLD_MS
+#define XBOX_DISC_CHECK_HOLD_MS 700
 #endif
 
 void xbox_quit_to_dashboard(void);
@@ -192,7 +191,6 @@ static int full_check(unsigned char* buf, unsigned* first_bad) {
     for (i = 0; i < DISC_FILE_COUNT; i++) total += k_disc_files[i].size;
     xbox_splash_letter(1);
     xbox_splash_text("Checking your copy of the game...", "");
-    xbox_intro_start();
     for (i = 0; i < DISC_FILE_COUNT; i++) {
         const DiscFile* df = &k_disc_files[i];
         unsigned off, size, pos, c = 0;
@@ -201,7 +199,6 @@ static int full_check(unsigned char* buf, unsigned* first_bad) {
             unsigned n = size - pos < CHUNK ? size - pos : CHUNK;
             if (!pc_disc_read(off + pos, buf, n)) {
                 static char l0[96];
-                xbox_intro_stop();
                 xbox_logf("[DISC] read error in %s at %u\n", df->path, pos);
                 snprintf(l0, sizeof l0, "Reading %s failed at byte %u.", df->path, pos);
                 fatal("Could not read the disc image", l0, "A hard drive or disc fault, or a copy cut short.", NULL);
@@ -211,7 +208,6 @@ static int full_check(unsigned char* buf, unsigned* first_bad) {
             snprintf(task, sizeof task, "Checking your copy of the game... %u%%", (unsigned)((double)done * 100 / total));
             xbox_splash_text(task, NULL);
             if (xbox_splash_button(SDL_CONTROLLER_BUTTON_B)) {
-                xbox_intro_stop();
                 xbox_logf("[DISC] full check skipped (B) at %s\n", df->path);
                 xbox_splash_text("Check skipped: it runs again next time.", "Loading your town...");
                 xbox_splash_letter(0);
@@ -227,9 +223,11 @@ static int full_check(unsigned char* buf, unsigned* first_bad) {
         }
     }
     xbox_splash_text(bad ? "Some files don't match a good copy." : "All stamped! Your game is in one piece.", NULL);
-    /* let the last stamp land and the music be heard; any button moves on */
-    while (GetTickCount() - t0 < XBOX_DISC_CHECK_MIN_MS && !xbox_splash_button(-1)) Sleep(16);
-    xbox_intro_stop();
+    /* let the last stamp land; any button moves on */
+    {
+        DWORD t1 = GetTickCount();
+        while (GetTickCount() - t1 < XBOX_DISC_CHECK_HOLD_MS && !xbox_splash_button(-1)) Sleep(16);
+    }
     xbox_logf("[DISC] full check: %u files, %d differ, %lu ms\n", DISC_FILE_COUNT, bad,
               (unsigned long)(GetTickCount() - t0));
     xbox_splash_text(NULL, "Loading your town...");
