@@ -35,13 +35,10 @@ was checked in xemu (it relaunches into the game at the new output).
 - A save under another `.gci` name in `save/card_a` (Dolphin's
   `01-GAFE-DobutsunomoriP_MURA.gci`; `pc_card.c` built `-U_WIN32`,
   `patches.md`).
-- Visiting another town (a second town's `.gci` in `save/card_b`): the
-  scan never worked on the Xbox before `pc_card.c -U_WIN32`, so the trip
-  has never run on one. A failed trip now cancels before home is touched,
-  and with no other town the Porter says there's no town data (v13 on
-  hardware took the GameCube's passport trip instead: back to the title;
-  `patches.md`). Check: no `card_b`, a copy of your own town there (refused
-  as the same town), another town (the trip, and the way back).
+- The Porter's apology (2026-10-29, not run yet): ask him for a trip; his
+  lines fit their boxes, the first time The Legend of Zelda lands in the
+  pockets (full pockets: the come-back line, then the gift next time),
+  later only the joke; Nook's upgrades to Nookington's with no visitor.
 - The splash and the no-disc screen at 480i when `progressive = 0`
   (`xbox_settings_early`).
 - Video auto-detection (`XBOX_VIDEO_AUTO`, `opt_version` 4; xemu only so
