@@ -70,6 +70,9 @@ counter section (`.lprfc`) as `[PGOC]` lines every 1800 frames
 
 ## Release builds
 
+**Not shippable yet:** on the console the LTO + PGO build drew wrong colours
+(boot screen and game; plain build right; `known-issues.md`, 2026-10-29).
+
 Plain until a console round compares the two (perf.log's `min` lines in
 the same busy rooms, both outputs). Then CI's `build.yml` gets
 `XBOX_LTO=1 XBOX_PGO=xbox/ac.profdata`, and `build-xbox-lto-pgo` holds the
