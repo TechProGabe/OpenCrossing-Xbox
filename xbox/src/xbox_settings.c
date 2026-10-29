@@ -14,6 +14,7 @@
 #include <hal/xbox.h>
 #include <windows.h>
 #include <xboxkrnl/xboxkrnl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -337,7 +338,71 @@ int xbox_video_set_480(void) {
     if (!XVideoSetMode(640, 480, 32, REFRESH_DEFAULT)) return 0;
     if (!g_xbox_settings_boot.progressive && xbox_video_480p_allowed())
         XVideoInit(MODE_640x480I_HDTV, 640, 480, 32);
+    xbox_video_check_scanout(640, 32);
     return 1;
+}
+
+/* The scanout format, checked after each mode set (from Melee-X, its GitHub
+ * #18): the gold console's 720p came up glitched over component, as
+ * Melee-X's had (its kernel left the pitch at 6656 where 1280 x 16-bit
+ * wants 2560). Cerbios and HDMI boards replace the kernel's AvSetDisplayMode
+ * with their own setup, written for the retail games' modes; the 16-bit
+ * 720p mode is one retail games rarely use. The stock kernel sets, for the
+ * format and pitch it is given: PRAMDAC general control's ALT_MODE_SEL (bit
+ * 12) for R5G6B5, CR28's depth (2 = 16, 3 = 32 bits) and the pitch in 8-byte
+ * units in CR13, CR19[7:5] and CR25[5] (Cxbx-Reloaded's AvSetDisplayMode;
+ * nouveau's NV_CIO_* names). Each is logged ([VIDEO] scanout:) and, where
+ * it differs, put back the way the stock kernel leaves it; on a stock
+ * kernel nothing changes. Kill switch: -DXBOX_SCANOUT_CHECK=0. */
+#ifndef XBOX_SCANOUT_CHECK
+#define XBOX_SCANOUT_CHECK 1
+#endif
+#define PRAMDAC_GENERAL_CONTROL 0x00680600
+#define GC_ALT_MODE_SEL 0x00001000u
+#define PRMCIO_CRX 0x006013D4
+#define PRMCIO_CR 0x006013D5
+#define CIO_SR_LOCK 0x1F
+#define CIO_SR_UNLOCK_RW 0x57
+#define PCRTC_START 0x00600800
+
+static unsigned crtc_rd(unsigned i) {
+    VIDEOREG8(PRMCIO_CRX) = (unsigned char)i;
+    return VIDEOREG8(PRMCIO_CR);
+}
+
+static void crtc_wr(unsigned i, unsigned v) {
+    VIDEOREG8(PRMCIO_CRX) = (unsigned char)i;
+    VIDEOREG8(PRMCIO_CR) = (unsigned char)v;
+}
+
+void xbox_video_check_scanout(int width, int bpp) {
+    unsigned want_depth = bpp == 16 ? 2 : 3, want_pitch = (unsigned)(width * (bpp / 8)) / 8;
+    unsigned crx, lock, cr13, cr19, cr25, cr28, pitch;
+    uint32_t gc, gc_want;
+    if (!XBOX_SCANOUT_CHECK) return;
+    crx = VIDEOREG8(PRMCIO_CRX);
+    gc = VIDEOREG(PRAMDAC_GENERAL_CONTROL);
+    lock = crtc_rd(CIO_SR_LOCK);
+    crtc_wr(CIO_SR_LOCK, CIO_SR_UNLOCK_RW);   /* left unlocked, as the kernel's AvSetDisplayMode leaves it */
+    cr13 = crtc_rd(0x13);
+    cr19 = crtc_rd(0x19);
+    cr25 = crtc_rd(0x25);
+    cr28 = crtc_rd(0x28);
+    pitch = cr13 | ((cr19 & 0xE0u) << 3) | ((cr25 & 0x20u) << 6);
+    gc_want = bpp == 16 ? (gc | GC_ALT_MODE_SEL) : (gc & ~GC_ALT_MODE_SEL);
+    xbox_logf("[VIDEO] scanout %dx%d %d-bit: general control %08x, CR28 %02x, pitch %u (want %u), CR19 %02x CR25 %02x, "
+              "lock %02x, start %08x\n", width, width == 1280 ? 720 : 480, bpp, (unsigned)gc, cr28, pitch * 8,
+              want_pitch * 8, cr19, cr25, lock, (unsigned)VIDEOREG(PCRTC_START));
+    if (gc != gc_want || (cr28 & 0x7Fu) != want_depth || pitch != want_pitch) {
+        VIDEOREG(PRAMDAC_GENERAL_CONTROL) = gc_want;
+        crtc_wr(0x28, 0x80u | want_depth);
+        crtc_wr(0x13, want_pitch & 0xFFu);
+        crtc_wr(0x19, (cr19 & 0x1Fu) | ((want_pitch & 0x700u) >> 3));
+        crtc_wr(0x25, (cr25 & ~0x20u) | ((want_pitch & 0x800u) >> 6));
+        xbox_logf("[VIDEO] scanout set back: general control %08x, CR28 %02x, pitch %u\n",
+                  (unsigned)VIDEOREG(PRAMDAC_GENERAL_CONTROL), crtc_rd(0x28), want_pitch * 8);
+    }
+    VIDEOREG8(PRMCIO_CRX) = (unsigned char)crx;
 }
 
 int xbox_video_720p_allowed(void) {
