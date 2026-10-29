@@ -130,6 +130,12 @@ byte-wise flip and a scattered swizzle into the write-combined pool; four
 such 1 MB copies also fill the 5 MB 720p pool, and `tex_alloc` then drops
 the whole cache. Scene changes cost ~50 ms of game code.
 
+2026-10-29: the grab is cheaper (`XBOX_EFB_FAST`: no per-pixel divides,
+cached row reads; `XBOX_TEX_BLOCK`: uploads in Morton tiles copied in
+order). The plain build's 480i session before it: ~400 ms frames with
+`tex 1 / 68 ms` at every menu open. Console numbers after it: still to
+measure (the `[HITCH]` lines at menu opens).
+
 Candidates from Melee-X and Prime-X, by fps per effort: a cheap EFB grab
 (row tables, no classify, cached-scratch swizzle, row-swap flip), LRU
 eviction instead of drop-all (Melee-X `gx_tex_make_room`), ThinLTO + PGO
