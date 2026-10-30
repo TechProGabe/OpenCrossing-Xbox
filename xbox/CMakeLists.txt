@@ -36,6 +36,11 @@ set(XBOX_OPT "-O2" CACHE STRING "Optimization level for the whole tree")
 option(XBOX_LTO "ThinLTO over the whole image" OFF)
 set(XBOX_LTO_EXCLUDE "" CACHE STRING "XBOX_LTO: regex of source paths built without LTO")
 set(XBOX_PGO "" CACHE STRING "PGO: empty, gen (instrumented), or a .profdata path")
+# The training never plays an NES game: under the profile the emulator is all
+# zero counts, cold, and optimized for size (v1.2 candidate on the console:
+# fixNES 14.7 ms an NES frame, 52 fps). Sources matching this build at plain
+# -O2 under XBOX_PGO; empty puts them back under the profile.
+set(XBOX_PGO_EXCLUDE "/lib/fixnes/|pc_nes_fixnes[.]c" CACHE STRING "XBOX_PGO: regex of source paths built without the profile")
 if(XBOX_PGO AND NOT XBOX_PGO STREQUAL "gen")
     get_filename_component(XBOX_PGO "${XBOX_PGO}" ABSOLUTE BASE_DIR "${DECOMP_ROOT}")
 endif()
@@ -355,6 +360,26 @@ else()
         # -disable-vp as in training: the profile has no value sites
         target_compile_options(ac_xbox PRIVATE -fprofile-use=${XBOX_PGO} "SHELL:-mllvm -disable-vp"
                                "SHELL:-mllvm -static-func-full-module-prefix=false")
+        # a new profile rebuilds everything: objects from two profiles carry
+        # different ProfileSummary flags, and ThinLTO refuses to link them
+        set_property(SOURCE ${ALL_SOURCES} APPEND PROPERTY OBJECT_DEPENDS "${XBOX_PGO}")
+        if(XBOX_PGO_EXCLUDE)
+            set(_pgo_out "")
+            foreach(_src ${ALL_SOURCES})
+                if(_src MATCHES "${XBOX_PGO_EXCLUDE}")
+                    list(APPEND _pgo_out "${_src}")
+                endif()
+            endforeach()
+            # after the target's -fprofile-use, so it wins. Under ThinLTO a
+            # module without the profile can't be linked with the rest
+            # (conflicting ProfileSummary flags): those sources leave LTO too
+            set_property(SOURCE ${_pgo_out} APPEND PROPERTY COMPILE_OPTIONS "-fno-profile-instr-use")
+            if(XBOX_LTO)
+                set_property(SOURCE ${_pgo_out} APPEND PROPERTY COMPILE_OPTIONS "-fno-lto")
+            endif()
+            list(LENGTH _pgo_out _n)
+            message(STATUS "XBOX_PGO_EXCLUDE: ${_n} sources without the profile")
+        endif()
     endif()
     add_custom_command(TARGET ac_xbox POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/xbe

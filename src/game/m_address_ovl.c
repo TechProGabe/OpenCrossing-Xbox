@@ -403,6 +403,30 @@ static void mAD_move_Play(Submenu* submenu, mSM_MenuInfo_c* menu_info) {
         // clang-format on
     };
 
+#if defined(TARGET_PC)
+    // The page turn is a frame-counted state machine: scaled by a dt above
+    // 1 (a hitch), TURN_PAGE2's slowdown can stop short of pos_x 0 and the
+    // menu never takes input again (GitHub #4). Run it in fixed 60Hz ticks.
+    {
+        static float turn_accum;
+        mAD_Ovl_c* adrs_ovl = submenu->overlay->address_ovl;
+
+        if (adrs_ovl->proc_idx == mAD_PROC_TURN_PAGE || adrs_ovl->proc_idx == mAD_PROC_TURN_PAGE2) {
+            double saved_dt = gamePT->graph->dt_num_60fps_frames;
+            int ticks = graph_dt_60hz_ticks(gamePT, &turn_accum);
+            int tick;
+
+            gamePT->graph->dt_num_60fps_frames = 1.0;
+            for (tick = 0; tick < ticks && (adrs_ovl->proc_idx == mAD_PROC_TURN_PAGE ||
+                                            adrs_ovl->proc_idx == mAD_PROC_TURN_PAGE2); tick++) {
+                (*play_process[adrs_ovl->proc_idx])(submenu, menu_info);
+            }
+            gamePT->graph->dt_num_60fps_frames = saved_dt;
+            return;
+        }
+        turn_accum = 0.0f;
+    }
+#endif
     (*play_process[submenu->overlay->address_ovl->proc_idx])(submenu, menu_info);
 }
 
