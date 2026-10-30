@@ -42,6 +42,16 @@ sides (static functions keyed by file name, since the two builds' object
 folders differ). Value profiling is off (`-mllvm -disable-vp`): the image
 has no compiler-rt.
 
+Code the training never runs is worse than unprofiled: zero counts mark it
+cold and LLVM optimizes it for size. The scenarios never play an NES game,
+and the first release candidate (2026-10-29) ran fixNES at 14.7 ms an NES
+frame, 52 fps on the console (v1, plain -O2: ~59 fps). `XBOX_PGO_EXCLUDE`
+(a regex, default `/lib/fixnes/|pc_nes_fixnes[.]c`) builds matching sources
+without the profile, and without LTO (ThinLTO won't import between modules
+with and without a profile: "linking module flags 'ProfileSummary': IDs
+have conflicting values"), as v1 built them; anything else the training skips that has to be fast
+belongs in it, or in a scenario.
+
 ## Regenerating it
 
 ```sh

@@ -11,6 +11,10 @@ As of v14 (2026-10-03). Everything else ran on the playtest consoles:
 (64 MB, composite cable, 480i only) from v13. Restart from the Options menu
 was checked in xemu (it relaunches into the game at the new output).
 
+- The address book's page turn in fixed ticks (`m_address_ovl.c`, GitHub
+  #4, 2026-10-29): write a letter, flip the address pages back and forth
+  quickly for a while (the bug needed a slow frame mid-turn); it should never stop taking
+  input.
 - The gifts kept only at a save (`xbox_gift_commit`, 2026-10-29): get
   Zelda from the Porter or Super Mario Bros. from the e-Reader machine,
   quit without saving, and ask again; it should come back. After a save,
